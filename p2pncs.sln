@@ -1,0 +1,32 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 10.00
+# Visual Studio 2008
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "p2pncs.core", "p2pncs.core\p2pncs.core.csproj", "{40F04D04-CCA2-4B39-B521-2CDC20C20621}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "p2pncs.simulation", "p2pncs.simulation\p2pncs.simulation.csproj", "{A7ABCCD1-20B9-41A7-8C54-7E2B4C958B23}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "p2pncs.tests", "p2pncs.tests\p2pncs.tests.csproj", "{5E78FE72-A8DC-4039-912B-573257134988}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{40F04D04-CCA2-4B39-B521-2CDC20C20621}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{40F04D04-CCA2-4B39-B521-2CDC20C20621}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{40F04D04-CCA2-4B39-B521-2CDC20C20621}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{40F04D04-CCA2-4B39-B521-2CDC20C20621}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A7ABCCD1-20B9-41A7-8C54-7E2B4C958B23}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A7ABCCD1-20B9-41A7-8C54-7E2B4C958B23}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A7ABCCD1-20B9-41A7-8C54-7E2B4C958B23}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A7ABCCD1-20B9-41A7-8C54-7E2B4C958B23}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5E78FE72-A8DC-4039-912B-573257134988}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5E78FE72-A8DC-4039-912B-573257134988}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5E78FE72-A8DC-4039-912B-573257134988}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5E78FE72-A8DC-4039-912B-573257134988}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
