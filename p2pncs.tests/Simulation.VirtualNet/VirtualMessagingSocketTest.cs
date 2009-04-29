@@ -15,40 +15,30 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using System;
 using System.Net;
 using NUnit.Framework;
 using p2pncs.Net;
+using p2pncs.Simulation.VirtualNet;
 
-namespace p2pncs.tests.Net
+namespace p2pncs.tests.Simulation.VirtualNet
 {
 	[TestFixture]
-	public class MessagingSocketTest : IMessagingSocketTest
+	public class VirtualMessagingSocketTest : p2pncs.tests.Net.IMessagingSocketTest
 	{
+		VirtualNetwork _net;
+
 		[TestFixtureSetUp]
 		public override void Init ()
 		{
 			base.Init ();
+			_net = new VirtualNetwork (20, 20, 5, 2);
 		}
 
 		[TestFixtureTearDown]
 		public override void Dispose ()
 		{
 			base.Dispose ();
-		}
-
-		protected override void CreateMessagingSockets (int count, out IMessagingSocket[] sockets, out EndPoint[] endPoints, out EndPoint noRouteEP)
-		{
-			UdpSocket[] udpSockets = new UdpSocket[count];
-			sockets = new MessagingSocket[count];
-			endPoints = new IPEndPoint[count];
-			noRouteEP = new IPEndPoint (IPAddress.Loopback, ushort.MaxValue);
-			for (int i = 0; i < sockets.Length; i++) {
-				udpSockets[i] = UdpSocket.CreateIPv4 (1000);
-				endPoints[i] = new IPEndPoint (IPAddress.Loopback, 10000 + i);
-				udpSockets[i].Bind (endPoints[i]);
-				sockets[i] = new MessagingSocket (udpSockets[i], true, null, _formatter, null, _interrupter, DefaultTimeout, DefaultRetryCount, 1024);
-			}
+			_net.Close ();
 		}
 
 		[Test]
@@ -61,6 +51,19 @@ namespace p2pncs.tests.Net
 		public override void TimeoutTest ()
 		{
 			base.TimeoutTest ();
+		}
+
+		protected override void CreateMessagingSockets (int count, out IMessagingSocket[] sockets, out EndPoint[] endPoints, out EndPoint noRouteEP)
+		{
+			sockets = new IMessagingSocket[count];
+			endPoints = new IPEndPoint[count];
+			noRouteEP = new IPEndPoint (IPAddress.Parse ("192.168.255.254"), 10000);
+			for (int i = 0; i < count; i++) {
+				endPoints[i] = new IPEndPoint (IPAddress.Parse ("10.0.0." + (i + 1).ToString ()), 10000);
+				VirtualDatagramEventSocket sock = new VirtualDatagramEventSocket (_net, ((IPEndPoint)endPoints[i]).Address);
+				sock.Bind (endPoints[i]);
+				sockets[i] = new VirtualMessagingSocket (_net, sock, true, _interrupter, DefaultTimeout, DefaultRetryCount, 1024);
+			}
 		}
 	}
 }

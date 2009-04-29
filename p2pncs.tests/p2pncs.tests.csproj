@@ -51,10 +51,14 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Net\IDatagramEventSocketTest.cs" />
+    <Compile Include="Net\IMessagingSocketTest.cs" />
     <Compile Include="Net\MessagingSocketTest.cs" />
     <Compile Include="Net\UdpSocketTest.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Security.Cryptography\SymmetricKeyTest.cs" />
+    <Compile Include="Simulation.VirtualNet\VirtualDatagramEventSocketTest.cs" />
+    <Compile Include="Simulation.VirtualNet\VirtualMessagingSocketTest.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

@@ -39,8 +39,15 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="VirtualNet\VirtualDatagramEventSocket.cs" />
+    <Compile Include="VirtualNet\VirtualMessagingSocket.cs" />
+    <Compile Include="VirtualNet\VirtualNetwork.cs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\openCrypto.NET\openCrypto.NET.csproj">
+      <Project>{59AD989B-7DD7-400B-B2D5-EFBD0004A749}</Project>
+      <Name>openCrypto.NET</Name>
+    </ProjectReference>
     <ProjectReference Include="..\p2pncs.core\p2pncs.core.csproj">
       <Project>{40F04D04-CCA2-4B39-B521-2CDC20C20621}</Project>
       <Name>p2pncs.core</Name>

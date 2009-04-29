@@ -1,0 +1,104 @@
+﻿/*
+ * Copyright (C) 2009 Kazuki Oikawa
+ * 
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+using System;
+using System.Collections.Generic;
+using System.Net;
+using p2pncs.Net;
+
+namespace p2pncs.Simulation.VirtualNet
+{
+	public class VirtualDatagramEventSocket : IDatagramEventSocket
+	{
+		VirtualNetwork _vnet;
+		VirtualNetwork.VirtualNetworkNode _vnet_node = null;
+		IPEndPoint _bindEP;
+		IPAddress _pubIP;
+
+		public VirtualDatagramEventSocket (VirtualNetwork vnet, IPAddress publicIPAddress)
+		{
+			if (vnet == null)
+				throw new ArgumentNullException ();
+			_vnet = vnet;
+			_pubIP = publicIPAddress;
+		}
+
+		internal VirtualNetwork.VirtualNetworkNode VirtualNetworkNodeInfo {
+			get { return _vnet_node; }
+		}
+
+		public IPAddress PublicIPAddress {
+			get { return _pubIP; }
+		}
+
+		public IPEndPoint BindEndPoint {
+			get { return _bindEP; }
+		}
+
+		#region IDatagramEventSocket Members
+
+		public void Bind (EndPoint bindEP)
+		{
+			_bindEP = new IPEndPoint (_pubIP, ((IPEndPoint)bindEP).Port);
+			_vnet_node = _vnet.AddVirtualNode (this, _bindEP);
+		}
+
+		public void Close ()
+		{
+			if (_vnet != null) {
+				_vnet.RemoveVirtualNode (_vnet_node);
+				_vnet_node = null;
+				_vnet = null;
+				_pubIP = IPAddress.None;
+			}
+		}
+
+		public void SendTo (byte[] buffer, EndPoint remoteEP)
+		{
+			SendTo (buffer, 0, buffer.Length, remoteEP);
+		}
+
+		public void SendTo (byte[] buffer, int offset, int size, EndPoint remoteEP)
+		{
+			if (_vnet == null)
+				return;
+			_vnet.AddSendQueue (_bindEP, (IPEndPoint)remoteEP, buffer, offset, size);
+		}
+
+		public event DatagramReceiveEventHandler Received;
+
+		internal void InvokeReceivedEvent (object sender, DatagramReceiveEventArgs e)
+		{
+			if (Received != null) {
+				try {
+					Received (sender, e);
+				} catch {}
+			}
+		}
+
+		#endregion
+
+		#region IDisposable Members
+
+		public void Dispose ()
+		{
+			Close ();
+		}
+
+		#endregion
+	}
+}
