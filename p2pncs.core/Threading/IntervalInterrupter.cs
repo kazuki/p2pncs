@@ -26,12 +26,14 @@ namespace p2pncs.Threading
 		TimeSpan _interval;
 		Thread _thread;
 		bool _active = false, _disposed = false, _loadEqualizing = false;
+		string _name;
 
 		List<InterruptHandler> _list = new List<InterruptHandler> ();
 
-		public IntervalInterrupter (TimeSpan interval)
+		public IntervalInterrupter (TimeSpan interval, string name)
 		{
 			_interval = interval;
+			_name = name;
 		}
 
 		public void Start ()
@@ -43,6 +45,7 @@ namespace p2pncs.Threading
 
 			_active = true;
 			_thread = new Thread (Worker);
+			_thread.Name = _name;
 			_thread.Start ();
 		}
 

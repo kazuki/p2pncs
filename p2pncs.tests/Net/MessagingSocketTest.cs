@@ -36,7 +36,7 @@ namespace p2pncs.tests.Net
 		public void Init ()
 		{
 			_formatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter ();
-			_interrupter = new IntervalInterrupter (TimeSpan.FromMilliseconds (10.0));
+			_interrupter = new IntervalInterrupter (TimeSpan.FromMilliseconds (10.0), "Test IntervalInterrupter");
 			_interrupter.Start ();
 			_eps = new EndPoint[MAX_SOCKETS];
 			for (int i = 0; i < _eps.Length; i++)
