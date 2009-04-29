@@ -23,7 +23,7 @@ namespace p2pncs.Net
 	/// <summary>
 	/// リモートエンドポイントに対して、リクエストとレスポンスで構成される問い合わせを行うソケット
 	/// </summary>
-	public interface IMessagingSocket
+	public interface IMessagingSocket : IDisposable
 	{
 		/// <summary>
 		/// 非同期問い合わせを開始します

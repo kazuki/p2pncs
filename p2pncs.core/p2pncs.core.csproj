@@ -46,6 +46,18 @@
     <Compile Include="Net\IMessagingSocket.cs" />
     <Compile Include="Net\InquiredEventArgs.cs" />
     <Compile Include="Net\InquiredEventHandler.cs" />
+    <Compile Include="Net\MessagingSocket.cs" />
+    <Compile Include="Net\UdpSocket.cs" />
+    <Compile Include="Security.Cryptography\SymmetricAlgorithmType.cs" />
+    <Compile Include="Security.Cryptography\SymmetricKey.cs" />
+    <Compile Include="Threading\InterruptHandler.cs" />
+    <Compile Include="Threading\IntervalInterrupter.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\openCrypto.NET\openCrypto.NET.csproj">
+      <Project>{59AD989B-7DD7-400B-B2D5-EFBD0004A749}</Project>
+      <Name>openCrypto.NET</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
