@@ -51,6 +51,7 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Net.Overlay.DHT\DHTTest.cs" />
     <Compile Include="Net.Overlay\KeyTest.cs" />
     <Compile Include="Net.Overlay\SimpleKBRTest.cs" />
     <Compile Include="Net\IDatagramEventSocketTest.cs" />

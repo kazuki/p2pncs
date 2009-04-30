@@ -23,7 +23,7 @@ using p2pncs.Threading;
 
 namespace p2pncs.Net.Overlay.DHT
 {
-	class OnMemoryLocalHashTable : ILocalHashTable
+	public class OnMemoryLocalHashTable : ILocalHashTable
 	{
 		Dictionary<Key, object> _dic = new Dictionary<Key, object> ();
 
