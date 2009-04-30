@@ -19,7 +19,7 @@ using System;
 
 namespace p2pncs.Net.Overlay.DHT
 {
-	public interface IHashTable : IDisposable
+	public interface ILocalHashTable : IDisposable
 	{
 		void Put (Key key, DateTime expires, object value);
 		object Get (Key key);
