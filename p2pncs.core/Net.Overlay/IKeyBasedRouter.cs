@@ -22,10 +22,10 @@ namespace p2pncs.Net.Overlay
 {
 	public interface IKeyBasedRouter
 	{
-		void Join (IPEndPoint[] initialNodes);
+		void Join (EndPoint[] initialNodes);
 		void Close ();
 
-		IAsyncResult BeginRoute (Key dest, IPEndPoint[] firstHops, int numOfCandidates, int numOfSimultaneous, AsyncCallback callback, object state);
+		IAsyncResult BeginRoute (Key dest, EndPoint[] firstHops, int numOfCandidates, int numOfSimultaneous, AsyncCallback callback, object state);
 		RoutingResult EndRoute (IAsyncResult ar);
 
 		IKeyBasedRoutingAlgorithm RoutingAlgorithm { get; }

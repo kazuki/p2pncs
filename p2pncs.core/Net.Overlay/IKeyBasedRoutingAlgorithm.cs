@@ -22,7 +22,7 @@ namespace p2pncs.Net.Overlay
 {
 	public interface IKeyBasedRoutingAlgorithm
 	{
-		void Join (IPEndPoint[] initialNodes);
+		void Join (EndPoint[] initialNodes);
 		void Close ();
 
 		Key ComputeDistance (Key x, Key y);
