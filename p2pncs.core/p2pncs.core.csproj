@@ -45,6 +45,7 @@
     <Compile Include="Net.Overlay\Key.cs" />
     <Compile Include="Net.Overlay\NodeHandle.cs" />
     <Compile Include="Net.Overlay\RoutingResult.cs" />
+    <Compile Include="Net.Overlay\SimpleRoutingAlgorithm.cs" />
     <Compile Include="Net\DatagramReceiveEventArgs.cs" />
     <Compile Include="Net\DatagramReceiveEventHandler.cs" />
     <Compile Include="Net\IDatagramEventSocket.cs" />
