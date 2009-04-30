@@ -36,10 +36,7 @@ namespace p2pncs.Net.Overlay
 		void Touch (NodeHandle node);
 		void Fail (NodeHandle node);
 
-		void Setup (Key selfNodeId, IKeyBasedAlgorithmUpcall upcall);
+		void Setup (Key selfNodeId, IKeyBasedRouter router);
 		void Stabilize ();
-
-		string DumpRoutingTable (HashSet<Key> aliveNodes);
-		void GetRoutingTableInfo (HashSet<Key> aliveNodes, out int aliveMainEntries, out int deadMainEntries, out int aliveSubEntries, out int deadSubEntries);
 	}
 }

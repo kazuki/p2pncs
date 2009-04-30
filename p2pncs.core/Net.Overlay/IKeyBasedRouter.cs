@@ -26,7 +26,6 @@ namespace p2pncs.Net.Overlay
 		void Close ();
 
 		IAsyncResult BeginRoute (Key dest, IPEndPoint[] firstHops, int numOfCandidates, int numOfSimultaneous, AsyncCallback callback, object state);
-		IAsyncResult BeginRoute (Key dest, int numOfCandidates, int numOfSimultaneous, AsyncCallback callback, object state);
 		RoutingResult EndRoute (IAsyncResult ar);
 
 		IKeyBasedRoutingAlgorithm RoutingAlgorithm { get; }
