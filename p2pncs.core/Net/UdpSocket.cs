@@ -87,7 +87,7 @@ namespace p2pncs.Net
 						try {
 							EndPoint remoteEP = new IPEndPoint (usock._receiveAdrs, 0);
 							int receiveSize = usock._sock.ReceiveFrom (usock._receiveBuffer, ref remoteEP);
-							DatagramReceiveEventArgs e = new DatagramReceiveEventArgs (usock._receiveBuffer, receiveSize, (IPEndPoint)remoteEP);
+							DatagramReceiveEventArgs e = new DatagramReceiveEventArgs (usock._receiveBuffer, receiveSize, remoteEP);
 							ThreadPool.QueueUserWorkItem (new InvokeHelper (usock, e).Invoke, null);
 						} catch {}
 					}

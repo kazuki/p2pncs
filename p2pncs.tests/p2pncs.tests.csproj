@@ -52,6 +52,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Net.Overlay\KeyTest.cs" />
+    <Compile Include="Net.Overlay\SimpleKBRTest.cs" />
     <Compile Include="Net\IDatagramEventSocketTest.cs" />
     <Compile Include="Net\IMessagingSocketTest.cs" />
     <Compile Include="Net\MessagingSocketTest.cs" />

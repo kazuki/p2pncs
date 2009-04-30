@@ -15,11 +15,13 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+using System;
 using System.Net;
 using System.IO;
 
 namespace p2pncs.Net.Overlay
 {
+	[Serializable]
 	public class NodeHandle
 	{
 		EndPoint _ep;
@@ -31,7 +33,7 @@ namespace p2pncs.Net.Overlay
 			_ep = ep;
 		}
 
-		public EndPoint IPEndPoint {
+		public EndPoint EndPoint {
 			get { return _ep; }
 		}
 

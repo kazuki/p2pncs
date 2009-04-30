@@ -385,6 +385,7 @@ MessageError:
 			}
 		}
 
+		[Serializable]
 		class NullObject
 		{
 			static NullObject _instance = new NullObject ();
