@@ -40,6 +40,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="Net.Overlay.DHT\GetResult.cs" />
+    <Compile Include="Net.Overlay.DHT\IDistributedHashTable.cs" />
+    <Compile Include="Net.Overlay.DHT\ILocalHashTable.cs" />
     <Compile Include="Net.Overlay\IKeyBasedRouter.cs" />
     <Compile Include="Net.Overlay\IKeyBasedRoutingAlgorithm.cs" />
     <Compile Include="Net.Overlay\Key.cs" />
