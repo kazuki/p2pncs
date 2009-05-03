@@ -24,14 +24,34 @@ namespace p2pncs.Security.Cryptography
 	public class SymmetricKey
 	{
 		SymmetricAlgorithmType _type;
-		SymmetricAlgorithm _algo;
+		SymmetricAlgorithmPlus _algo;
 		byte[] _iv;
 		byte[] _key;
+		bool _ivShuffle = true;
 		static byte[] EmptyByteArray = new byte[0];
 		public static readonly SymmetricKey NoneKey = new SymmetricKey (SymmetricAlgorithmType.None, null, null);
 
 		#region Constructor
 		public SymmetricKey (SymmetricAlgorithmType type, byte[] iv, byte[] key)
+			: this (type, iv, key, CipherModePlus.CBC, PaddingMode.ISO10126, true)
+		{
+		}
+		public SymmetricKey (SymmetricAlgorithmPlus algo, byte[] iv, byte[] key, bool enableIVShuffle)
+		{
+			if (algo == null)
+				_type = SymmetricAlgorithmType.None;
+			else if (algo is openCrypto.CamelliaManaged)
+				_type = SymmetricAlgorithmType.Camellia;
+			else if (algo is openCrypto.RijndaelManaged)
+				_type = SymmetricAlgorithmType.Rijndael;
+			else
+				throw new NotSupportedException ();
+			_algo = algo;
+			_iv = iv;
+			_key = key;
+			_ivShuffle = enableIVShuffle;
+		}
+		public SymmetricKey (SymmetricAlgorithmType type, byte[] iv, byte[] key, CipherModePlus cipherMode, PaddingMode paddingMode, bool enableIVShuffle)
 		{
 			_type = type;
 			switch (type) {
@@ -48,13 +68,14 @@ namespace p2pncs.Security.Cryptography
 					throw new ArgumentOutOfRangeException ();
 			}
 
-			_algo.Mode = CipherMode.CBC;
-			_algo.Padding = PaddingMode.ISO10126;
+			_algo.ModePlus = cipherMode;
+			_algo.Padding = paddingMode;
 			_algo.KeySize = key.Length << 3;
 			_algo.BlockSize = iv.Length << 3;
 			_algo.FeedbackSize = iv.Length << 3;
 			_iv = iv;
 			_key = key;
+			_ivShuffle = enableIVShuffle;
 		}
 		#endregion
 
@@ -115,17 +136,21 @@ namespace p2pncs.Security.Cryptography
 
 			using (ICryptoTransform ct = CreateEncryptor ()) {
 				int diff = inputCount % _iv.Length;
-				int outputCount = (diff == 0 ? inputCount + _iv.Length * 2 : (inputCount / _iv.Length + 2) * _iv.Length);
+				int shuffleSize = (_ivShuffle ? _iv.Length : 0);
+				int outputCount = (diff == 0 ? inputCount + shuffleSize : (inputCount / _iv.Length) * _iv.Length + shuffleSize);
+				if (_algo.Padding != PaddingMode.None)
+					outputCount += _iv.Length;
 				byte[] output = new byte[outputCount];
-				ct.TransformBlock (RNG.GetRNGBytes (_iv.Length), 0, _iv.Length, output, 0);
+				if (_ivShuffle)
+					ct.TransformBlock (RNG.GetRNGBytes (_iv.Length), 0, _iv.Length, output, 0);
 				for (int i = 0; i <= inputCount - _iv.Length; i += _iv.Length)
-					ct.TransformBlock (input, inputOffset + i, _iv.Length, output, _iv.Length + i);
+					ct.TransformBlock (input, inputOffset + i, _iv.Length, output, shuffleSize + i);
 				if (diff == 0) {
 					byte[] tail = ct.TransformFinalBlock (EmptyByteArray, 0, 0);
-					Buffer.BlockCopy (tail, 0, output, inputCount + _iv.Length, tail.Length);
+					Buffer.BlockCopy (tail, 0, output, inputCount + shuffleSize, tail.Length);
 				} else {
 					byte[] tail = ct.TransformFinalBlock (input, inputCount - diff, diff);
-					Buffer.BlockCopy (tail, 0, output, inputCount + _iv.Length - diff, tail.Length);
+					Buffer.BlockCopy (tail, 0, output, inputCount + shuffleSize - diff, tail.Length);
 				}
 				return output;
 			}
@@ -140,23 +165,20 @@ namespace p2pncs.Security.Cryptography
 			}
 
 			using (ICryptoTransform ct = CreateDecryptor ()) {
-				byte[] temp = new byte[inputCount + _iv.Length];
-				int total = 0, readPos = 0, check = 0;
-				while (readPos < inputCount - _iv.Length) {
-					int ret = ct.TransformBlock (input, inputOffset + readPos, _iv.Length, temp, total - check);
-					readPos += _iv.Length;
-					total += ret;
-					if (check == 0 && total == _iv.Length)
-						check = _iv.Length;
+				byte[] temp = new byte[inputCount];
+				if (_ivShuffle) {
+					ct.TransformBlock (input, inputOffset, _iv.Length, temp, 0);
+					inputOffset += _iv.Length;
+					inputCount -= _iv.Length;
 				}
-				byte[] tail = ct.TransformFinalBlock (input, inputOffset + readPos, _iv.Length);
-				if (total == 0) {
-					Buffer.BlockCopy (tail, _iv.Length, temp, 0, tail.Length - _iv.Length);
-					Array.Resize<byte> (ref temp, tail.Length - _iv.Length);
-				} else {
-					Buffer.BlockCopy (tail, 0, temp, total - check, tail.Length);
-					Array.Resize<byte> (ref temp, total - check + tail.Length);
+				int pos = 0;
+				if (inputCount > _iv.Length) {
+					ct.TransformBlock (input, inputOffset, inputCount - _iv.Length, temp, 0);
+					pos += inputCount - _iv.Length;
 				}
+				byte[] tail = ct.TransformFinalBlock (input, inputOffset + pos, _iv.Length);
+				Buffer.BlockCopy (tail, 0, temp, pos, tail.Length);
+				Array.Resize<byte> (ref temp, pos + tail.Length);
 				return temp;
 			}
 		}
