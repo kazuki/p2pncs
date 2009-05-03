@@ -40,6 +40,14 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="Net.Overlay.Anonymous\AcceptedEventArgs.cs" />
+    <Compile Include="Net.Overlay.Anonymous\AcceptedEventHandler.cs" />
+    <Compile Include="Net.Overlay.Anonymous\AcceptingEventArgs.cs" />
+    <Compile Include="Net.Overlay.Anonymous\AcceptingEventHandler.cs" />
+    <Compile Include="Net.Overlay.Anonymous\IAnonymousRouter.cs" />
+    <Compile Include="Net.Overlay.Anonymous\IAnonymousSocket.cs" />
+    <Compile Include="Net.Overlay.Anonymous\ReceiveEventArgs.cs" />
+    <Compile Include="Net.Overlay.Anonymous\ReceiveEventHandler.cs" />
     <Compile Include="Net.Overlay.DHT\GetResult.cs" />
     <Compile Include="Net.Overlay.DHT\IDistributedHashTable.cs" />
     <Compile Include="Net.Overlay.DHT\ILocalHashTable.cs" />
