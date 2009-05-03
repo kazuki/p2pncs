@@ -46,8 +46,6 @@
     <Compile Include="Net.Overlay.Anonymous\AcceptingEventHandler.cs" />
     <Compile Include="Net.Overlay.Anonymous\IAnonymousRouter.cs" />
     <Compile Include="Net.Overlay.Anonymous\IAnonymousSocket.cs" />
-    <Compile Include="Net.Overlay.Anonymous\ReceiveEventArgs.cs" />
-    <Compile Include="Net.Overlay.Anonymous\ReceiveEventHandler.cs" />
     <Compile Include="Net.Overlay.DHT\GetResult.cs" />
     <Compile Include="Net.Overlay.DHT\IDistributedHashTable.cs" />
     <Compile Include="Net.Overlay.DHT\ILocalHashTable.cs" />
@@ -67,6 +65,8 @@
     <Compile Include="Net\InquiredEventArgs.cs" />
     <Compile Include="Net\InquiredEventHandler.cs" />
     <Compile Include="Net\MessagingSocket.cs" />
+    <Compile Include="Net\ReceivedEventArgs.cs" />
+    <Compile Include="Net\ReceivedEventHandler.cs" />
     <Compile Include="Net\UdpSocket.cs" />
     <Compile Include="Security.Cryptography\SymmetricAlgorithmType.cs" />
     <Compile Include="Security.Cryptography\SymmetricKey.cs" />

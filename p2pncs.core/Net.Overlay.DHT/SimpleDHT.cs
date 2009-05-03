@@ -46,7 +46,7 @@ namespace p2pncs.Net.Overlay.DHT
 				return;
 
 			if (getReq != null) {
-				_sock.StartResponse (e, new GetResponse (_lht.Get (getReq.Key)), true);
+				_sock.StartResponse (e, new GetResponse (_lht.Get (getReq.Key)));
 			} else {
 				_lht.Put (putReq.Key, DateTime.Now + putReq.LifeTime, putReq.Value);
 			}

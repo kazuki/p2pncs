@@ -62,5 +62,11 @@ namespace p2pncs.tests.Net
 		{
 			base.TimeoutTest ();
 		}
+
+		[Test]
+		public override void SendTest ()
+		{
+			base.SendTest ();
+		}
 	}
 }

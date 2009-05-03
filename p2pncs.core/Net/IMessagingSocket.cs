@@ -21,10 +21,20 @@ using System.Net;
 namespace p2pncs.Net
 {
 	/// <summary>
-	/// リモートエンドポイントに対して、リクエストとレスポンスで構成される問い合わせを行うソケット
+	/// リモートエンドポイントに対して、メッセージを送信したり、
+	/// リクエストとレスポンスで構成される問い合わせを行うソケット
 	/// </summary>
 	public interface IMessagingSocket : IDisposable
 	{
+		/// <summary>
+		/// メッセージを送信します (到達保証なし)
+		/// </summary>
+		/// <param name="obj">送信するメッセージ</param>
+		/// <param name="remoteEP">送信先のエンドポイント</param>
+		void Send (object obj, EndPoint remoteEP);
+
+		event ReceivedEventHandler Received;
+
 		/// <summary>
 		/// 非同期問い合わせを開始します
 		/// </summary>
@@ -43,7 +53,7 @@ namespace p2pncs.Net
 		object EndInquire (IAsyncResult ar);
 
 		event InquiredEventHandler Inquired;
-		void StartResponse (InquiredEventArgs args, object response, bool throwWhenAlreadySent);
+		void StartResponse (InquiredEventArgs args, object response);
 
 		event InquiredEventHandler InquiryFailure;
 		event InquiredEventHandler InquirySuccess;

@@ -36,6 +36,11 @@ namespace p2pncs.Simulation.VirtualNet
 		VirtualDatagramEventSocket _sock;
 		bool _ownSocket, _active = true;
 
+		public event ReceivedEventHandler Received;
+		public event InquiredEventHandler Inquired;
+		public event InquiredEventHandler InquiryFailure;
+		public event InquiredEventHandler InquirySuccess;
+
 		public VirtualMessagingSocket (VirtualNetwork vnet,
 			VirtualDatagramEventSocket baseSock, bool ownSocket,
 			IntervalInterrupter interrupter,
@@ -53,7 +58,7 @@ namespace p2pncs.Simulation.VirtualNet
 			interrupter.AddInterruption (TimeoutCheck);
 		}
 
-		internal void Received (IPEndPoint remoteEP, object obj)
+		internal void Deliver (IPEndPoint remoteEP, object obj)
 		{
 			if (!_active)
 				return;
@@ -66,8 +71,6 @@ namespace p2pncs.Simulation.VirtualNet
 						Inquired (this, args);
 					} catch {}
 				}
-				if (!(args as InquiredResponseState).SentFlag)
-					throw new ApplicationException ();
 			} else if (obj is ResponseWrapper) {
 				ResponseWrapper res = (ResponseWrapper)obj;
 				InquiredAsyncResult ar = RemoveFromRetryList (res.ID, remoteEP.Address);
@@ -77,19 +80,22 @@ namespace p2pncs.Simulation.VirtualNet
 				if (InquirySuccess != null) {
 					InquirySuccess (this, new InquiredEventArgs (ar.Request, res.Message, remoteEP));
 				}
+			} else if (obj is OneWayMessage) {
+				if (Received != null) {
+					try {
+						Received (this, new ReceivedEventArgs ((obj as OneWayMessage).Message, remoteEP));
+					} catch {}
+				}
 			}
 		}
 
-		public void StartResponse (InquiredEventArgs args, object response, bool throwWhenAlreadySent)
+		public void StartResponse (InquiredEventArgs args, object response)
 		{
 			InquiredResponseState state = args as InquiredResponseState;
 			if (state == null)
 				throw new ArgumentException ();
-			if (state.SentFlag) {
-				if (throwWhenAlreadySent)
-					throw new ApplicationException ();
-				return;
-			}
+			if (state.SentFlag)
+				throw new ApplicationException ();
 			state.SentFlag = true;
 			_vnet.AddSendQueue (_srcEP, (IPEndPoint)state.EndPoint, new ResponseWrapper (response, state.ID));
 		}
@@ -122,6 +128,14 @@ namespace p2pncs.Simulation.VirtualNet
 		}
 
 		#region IMessagingSocket Members
+
+		public void Send (object obj, EndPoint remoteEP)
+		{
+			if (obj == null || remoteEP == null)
+				throw new ArgumentNullException ();
+
+			_vnet.AddSendQueue (_srcEP, (IPEndPoint)remoteEP, new OneWayMessage (obj));
+		}
 
 		public IAsyncResult BeginInquire (object obj, EndPoint remoteEP, AsyncCallback callback, object state)
 		{
@@ -157,12 +171,6 @@ namespace p2pncs.Simulation.VirtualNet
 			ar.AsyncWaitHandle.Close ();
 			return ar.Response;
 		}
-
-		public event InquiredEventHandler Inquired;
-
-		public event InquiredEventHandler InquiryFailure;
-
-		public event InquiredEventHandler InquirySuccess;
 
 		public IDatagramEventSocket BaseSocket {
 			get { return _sock; }
@@ -249,6 +257,19 @@ namespace p2pncs.Simulation.VirtualNet
 
 			public ushort ID {
 				get { return _id; }
+			}
+		}
+		class OneWayMessage
+		{
+			object _msg;
+
+			public OneWayMessage (object msg)
+			{
+				_msg = msg;
+			}
+
+			public object Message {
+				get { return _msg; }
 			}
 		}
 		class InquiredAsyncResult : IAsyncResult

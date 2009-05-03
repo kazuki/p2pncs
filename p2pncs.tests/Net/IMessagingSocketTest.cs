@@ -56,7 +56,7 @@ namespace p2pncs.tests.Net
 			CreateMessagingSockets (count, out sockets, out endPoints, out noRouteEP);
 			for (int i = 0; i < sockets.Length; i++) {
 				sockets[i].Inquired += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
-					(sender as IMessagingSocket).StartResponse (e, ((string)e.InquireMessage) + ":Responsed", true);
+					(sender as IMessagingSocket).StartResponse (e, ((string)e.InquireMessage) + ":Responsed");
 				});
 			}
 		}
@@ -157,6 +157,49 @@ namespace p2pncs.tests.Net
 							Assert.Fail ("Timeout #2");
 						Assert.AreEqual (2, count);
 					}
+				} finally {
+					DisposeAll (msockets);
+				}
+			}
+		}
+
+		public virtual void SendTest ()
+		{
+			using (AutoResetEvent done = new AutoResetEvent (false)) {
+				IMessagingSocket[] msockets;
+				EndPoint[] endPoints;
+				EndPoint noRouteEP;
+				CreateMessagingSockets_Internal (2, out msockets, out endPoints, out noRouteEP);
+
+				try {
+					msockets[0].Received += new ReceivedEventHandler(delegate (object sender, ReceivedEventArgs e) {
+						Assert.Fail ();
+					});
+					msockets[0].Inquired += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+						Assert.Fail ();
+					});
+					msockets[0].InquirySuccess += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+						Assert.Fail ();
+					});
+					msockets[0].InquiryFailure += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+						Assert.Fail ();
+					});
+					msockets[1].Received += new ReceivedEventHandler (delegate (object sender, ReceivedEventArgs e) {
+						Assert.AreEqual ("HELLO", e.Message as string);
+						done.Set ();
+					});
+					msockets[1].Inquired += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+						Assert.Fail ();
+					});
+					msockets[1].InquirySuccess += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+						Assert.Fail ();
+					});
+					msockets[1].InquiryFailure += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+						Assert.Fail ();
+					});
+
+					msockets[0].Send ("HELLO", endPoints[1]);
+					Assert.IsTrue (done.WaitOne (2000));
 				} finally {
 					DisposeAll (msockets);
 				}

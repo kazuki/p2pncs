@@ -40,6 +40,7 @@ namespace p2pncs.Net
 		List<InquiredAsyncResult> _retryList = new List<InquiredAsyncResult> ();
 		IntervalInterrupter _interrupter;
 
+		public event ReceivedEventHandler Received;
 		public event InquiredEventHandler Inquired;
 		public event InquiredEventHandler InquiryFailure;
 		public event InquiredEventHandler InquirySuccess;
@@ -77,10 +78,12 @@ namespace p2pncs.Net
 					if ((tmp = strm.ReadByte ()) < 0)
 						goto MessageError;
 					type = (MessageType)tmp;
-					for (int i = 0; i < 16; i += 8) {
-						if ((tmp = strm.ReadByte ()) < 0)
-							goto MessageError;
-						id |= (ushort)(tmp << i);
+					if (type != MessageType.OneWay) {
+						for (int i = 0; i < 16; i += 8) {
+							if ((tmp = strm.ReadByte ()) < 0)
+								goto MessageError;
+							id |= (ushort)(tmp << i);
+						}
 					}
 					obj = _formatter.Deserialize (strm);
 					if (obj == null)
@@ -108,6 +111,13 @@ namespace p2pncs.Net
 						InquirySuccess (this, new InquiredEventArgs (ar.Request, obj, e.RemoteEndPoint));
 					}
 					break;
+				case MessageType.OneWay:
+					if (Received != null) {
+						try {
+							Received (this, new ReceivedEventArgs (obj, e.RemoteEndPoint));
+						} catch {}
+					}
+					break;
 				default:
 					goto MessageError;
 			}
@@ -117,7 +127,7 @@ MessageError:
 			return;
 		}
 
-		public void StartResponse (InquiredEventArgs args, object response, bool throwWhenAlreadySent)
+		public void StartResponse (InquiredEventArgs args, object response)
 		{
 			InquiredResponseState state = args as InquiredResponseState;
 			if (state == null)
@@ -125,7 +135,7 @@ MessageError:
 			if (response == null)
 				response = _nullObject;
 			byte[] raw = SerializeTransmitData (MessageType.Response, state.ID, response);
-			state.Send (_sock, raw, throwWhenAlreadySent);
+			state.Send (_sock, raw);
 		}
 
 		void TimeoutCheck ()
@@ -156,6 +166,15 @@ MessageError:
 		}
 
 		#region IMessagingSocket Members
+
+		public void Send (object obj, EndPoint remoteEP)
+		{
+			if (obj == null || remoteEP == null)
+				throw new ArgumentNullException ();
+
+			byte[] raw = SerializeTransmitData (MessageType.OneWay, 0, obj);
+			_sock.SendTo (raw, remoteEP);
+		}
 
 		public IAsyncResult BeginInquire (object obj, EndPoint remoteEP, AsyncCallback callback, object state)
 		{
@@ -230,8 +249,10 @@ MessageError:
 		{
 			using (MemoryStream strm = new MemoryStream ()) {
 				strm.WriteByte ((byte)type);
-				strm.WriteByte ((byte)(id));
-				strm.WriteByte ((byte)(id >> 8));
+				if (type != MessageType.OneWay) {
+					strm.WriteByte ((byte)(id));
+					strm.WriteByte ((byte)(id >> 8));
+				}
 				_formatter.Serialize (strm, obj);
 				strm.Close ();
 				byte[] raw = strm.ToArray ();
@@ -258,7 +279,8 @@ MessageError:
 		enum MessageType : byte
 		{
 			Request = 0,
-			Response = 1
+			Response = 1,
+			OneWay = 2
 		}
 
 		class InquiredAsyncResult : IAsyncResult
@@ -369,13 +391,10 @@ MessageError:
 				_id = id;
 			}
 
-			public void Send (IDatagramEventSocket sock, byte[] raw, bool throwWhenAlreadySent)
+			public void Send (IDatagramEventSocket sock, byte[] raw)
 			{
-				if (_sentFlag) {
-					if (throwWhenAlreadySent)
-						throw new ApplicationException ();
-					return;
-				}
+				if (_sentFlag)
+					throw new ApplicationException ();
 				sock.SendTo (raw, 0, raw.Length, this.EndPoint);
 				_sentFlag = true;
 			}

@@ -71,7 +71,7 @@ namespace p2pncs.Net.Overlay
 				} else {
 					rndNodes = _algo.GetRandomNodes (numOfRands);
 				}
-				_sock.StartResponse (e, new NextHopQueryResponse (_selfId, isRoot, nextHops, rndNodes), true);
+				_sock.StartResponse (e, new NextHopQueryResponse (_selfId, isRoot, nextHops, rndNodes));
 				_algo.Touch (new NodeHandle (req.Sender, e.EndPoint));
 			}
 		}
@@ -108,6 +108,10 @@ namespace p2pncs.Net.Overlay
 
 		public IKeyBasedRoutingAlgorithm RoutingAlgorithm {
 			get { return _algo; }
+		}
+
+		public IMessagingSocket MessagingSocket {
+			get { return _sock; }
 		}
 
 		public Key SelftNodeId {

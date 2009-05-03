@@ -29,6 +29,7 @@ namespace p2pncs.Net.Overlay
 		RoutingResult EndRoute (IAsyncResult ar);
 
 		IKeyBasedRoutingAlgorithm RoutingAlgorithm { get; }
+		IMessagingSocket MessagingSocket { get; }
 		Key SelftNodeId { get; }
 	}
 }

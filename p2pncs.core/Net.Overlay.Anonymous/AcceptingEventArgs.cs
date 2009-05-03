@@ -23,7 +23,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 	{
 		protected Key _recipiendId;
 		protected object _payload, _state = null;
-		protected ReceiveEventHandler _handler = null;
+		protected DatagramReceiveEventHandler _handler = null;
 
 		public AcceptingEventArgs (Key recipientId, object payload)
 		{
@@ -39,7 +39,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			get { return _payload; }
 		}
 
-		public ReceiveEventHandler ReceiveEventHandler {
+		public DatagramReceiveEventHandler ReceiveEventHandler {
 			get { return _handler; }
 		}
 
@@ -47,7 +47,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			get { return _state; }
 		}
 
-		public void Accept (ReceiveEventHandler handler, object state)
+		public void Accept (DatagramReceiveEventHandler handler, object state)
 		{
 			if (handler == null)
 				throw new ArgumentNullException ();

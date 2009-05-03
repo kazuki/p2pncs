@@ -15,27 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using System;
-
-namespace p2pncs.Net.Overlay.Anonymous
+namespace p2pncs.Net
 {
-	public class ReceiveEventArgs : EventArgs
-	{
-		byte[] _buf;
-		int _size;
-
-		public ReceiveEventArgs (byte[] buffer, int size)
-		{
-			_buf = buffer;
-			_size = size;
-		}
-
-		public byte[] Buffer {
-			get { return _buf; }
-		}
-
-		public int Size {
-			get { return _size; }
-		}
-	}
+	public delegate void ReceivedEventHandler (object sender, ReceivedEventArgs args);
 }

@@ -16,6 +16,7 @@
  */
 
 using System;
+using openCrypto.EllipticCurve;
 
 namespace p2pncs.Net.Overlay.Anonymous
 {
@@ -24,7 +25,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 		event AcceptingEventHandler Accepting;
 		event AcceptedEventHandler Accepted;
 
-		void SubscribeRecipient (Key recipientId);
+		void SubscribeRecipient (Key recipientId, ECKeyPair privateKey);
 		void UnsubscribeRecipient (Key recipientId);
 
 		IAsyncResult BeginEstablishRoute (Key recipientId, Key destinationId, AsyncCallback callback, object state);

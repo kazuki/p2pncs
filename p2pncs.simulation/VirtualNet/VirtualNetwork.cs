@@ -138,7 +138,7 @@ namespace p2pncs.Simulation.VirtualNet
 						node.DatagramSocket.InvokeReceivedEvent (node.DatagramSocket, eventArgs);
 						Interlocked.Add (ref _totalTraffic, dgram.Datagram.Length);
 					} else {
-						node.MessagingSocket.Received (dgram.SourceEndPoint, dgram.Message);
+						node.MessagingSocket.Deliver (dgram.SourceEndPoint, dgram.Message);
 					}
 				}
 				_invokeEndHandles[idx].Set ();

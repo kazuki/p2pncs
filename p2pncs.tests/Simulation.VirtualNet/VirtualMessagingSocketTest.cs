@@ -53,6 +53,12 @@ namespace p2pncs.tests.Simulation.VirtualNet
 			base.TimeoutTest ();
 		}
 
+		[Test]
+		public override void SendTest ()
+		{
+			base.SendTest ();
+		}
+
 		protected override void CreateMessagingSockets (int count, out IMessagingSocket[] sockets, out EndPoint[] endPoints, out EndPoint noRouteEP)
 		{
 			sockets = new IMessagingSocket[count];
