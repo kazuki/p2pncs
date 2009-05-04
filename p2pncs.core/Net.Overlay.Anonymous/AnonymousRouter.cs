@@ -43,14 +43,15 @@ namespace p2pncs.Net.Overlay.Anonymous
 		const int DefaultSubscribeRoutes = 3;
 		const int DefaultRealyNodes = 5;
 
-		static TimeSpan MultipleCipherRouteMaxRoundtripTime = TimeSpan.FromMilliseconds (200 * DefaultRealyNodes);
+		static TimeSpan MaxRRT = TimeSpan.FromMilliseconds (1000); // included cost of cryptography
+		static TimeSpan MultipleCipherRouteMaxRoundtripTime = new TimeSpan (MaxRRT.Ticks * DefaultRealyNodes);
 		static int MultipleCipherRouteMaxRetry = 1;
-		static TimeSpan MultipleCipherRelayTimeout = TimeSpan.FromMilliseconds (200 * (DefaultRealyNodes - 1));
+		static TimeSpan MultipleCipherRelayTimeout = new TimeSpan (MaxRRT.Ticks * (DefaultRealyNodes - 1));
 		static int MultipleCipherRelayMaxRetry = 1;
-		static TimeSpan MultipleCipherReverseRelayTimeout = TimeSpan.FromMilliseconds (200);
+		static TimeSpan MultipleCipherReverseRelayTimeout = MaxRRT;
 		static int MultipleCipherReverseRelayMaxRetry = 1;
 
-		static TimeSpan RelayRouteTimeout = TimeSpan.FromSeconds (30);
+		static TimeSpan RelayRouteTimeout = TimeSpan.FromSeconds (5);
 		static TimeSpan RelayRouteTimeoutWithMargin = RelayRouteTimeout + (MultipleCipherRouteMaxRoundtripTime + MultipleCipherRouteMaxRoundtripTime);
 		static IFormatter DefaultFormatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter ();
 		#endregion
