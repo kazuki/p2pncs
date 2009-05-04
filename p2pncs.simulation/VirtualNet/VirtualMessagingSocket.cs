@@ -106,9 +106,9 @@ namespace p2pncs.Simulation.VirtualNet
 			DateTime now = DateTime.Now;
 			lock (_retryList) {
 				for (int i = 0; i < _retryList.Count; i ++) {
-					if (_retryList[i].Timeout <= now) {
+					if (_retryList[i].Expiry <= now) {
 						timeoutList.Add (_retryList[i]);
-						if (_retryList[i].RetryCount >= _maxRetries) {
+						if (_retryList[i].RetryCount >= _retryList[i].MaxRetry) {
 							_retryList.RemoveAt (i);
 							i --;
 						}
@@ -117,12 +117,12 @@ namespace p2pncs.Simulation.VirtualNet
 			}
 			for (int i = 0; i < timeoutList.Count; i ++) {
 				InquiredAsyncResult iar = timeoutList[i];
-				if (iar.RetryCount >= _maxRetries) {
+				if (iar.RetryCount >= iar.MaxRetry) {
 					iar.Fail ();
 					if (InquiryFailure != null)
 						InquiryFailure (this, new InquiredEventArgs (iar.Request, iar.Response, iar.RemoteEndPoint));
 				} else {
-					iar.Retry (_vnet, _inquiryTimeout, _srcEP);
+					iar.Retry (_vnet, _srcEP);
 				}
 			}
 		}
@@ -139,12 +139,17 @@ namespace p2pncs.Simulation.VirtualNet
 
 		public IAsyncResult BeginInquire (object obj, EndPoint remoteEP, AsyncCallback callback, object state)
 		{
+			return BeginInquire (obj, remoteEP, _inquiryTimeout, _maxRetries, callback, state);
+		}
+
+		public IAsyncResult BeginInquire (object obj, EndPoint remoteEP, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state)
+		{
 			if (obj == null || remoteEP == null)
 				throw new ArgumentNullException ();
 
 			ushort id = CreateMessageID ();
-			InquiredAsyncResult ar = new InquiredAsyncResult (obj, (IPEndPoint)remoteEP, id, callback, state);
-			ar.Transmit (_vnet, _inquiryTimeout, _srcEP);
+			InquiredAsyncResult ar = new InquiredAsyncResult (obj, (IPEndPoint)remoteEP, id, timeout, maxRetry, callback, state);
+			ar.Transmit (_vnet, _srcEP);
 
 			InquiredAsyncResult overflow = null;
 			lock (_retryList) {
@@ -280,30 +285,33 @@ namespace p2pncs.Simulation.VirtualNet
 			ManualResetEvent _waitHandle = new ManualResetEvent (false);
 			object _req, _response = null;
 			bool _isCompleted = false;
-			DateTime _dt, _timeout;
+			DateTime _dt, _expiry;
+			TimeSpan _timeout;
 			ushort _id;
-			int _retries = 0;
+			int _retries = 0, _maxRetry;
 
-			public InquiredAsyncResult (object req, IPEndPoint remoteEP, ushort id, AsyncCallback callback, object state)
+			public InquiredAsyncResult (object req, IPEndPoint remoteEP, ushort id, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state)
 			{
 				_req = req;
 				_remoteEP = remoteEP;
 				_callback = callback;
 				_state = state;
 				_id = id;
+				_timeout = timeout;
+				_maxRetry = maxRetry;
 			}
 
-			public void Transmit (VirtualNetwork vnet, TimeSpan timeout, IPEndPoint srcEP)
+			public void Transmit (VirtualNetwork vnet, IPEndPoint srcEP)
 			{
 				_dt = DateTime.Now;
-				_timeout = _dt + timeout;
+				_expiry = _dt + _timeout;
 				vnet.AddSendQueue (srcEP, _remoteEP, new RequestWrapper (_req, _id));
 			}
 
-			public void Retry (VirtualNetwork vnet, TimeSpan timeout, IPEndPoint srcEP)
+			public void Retry (VirtualNetwork vnet, IPEndPoint srcEP)
 			{
 				_retries++;
-				Transmit (vnet, timeout, srcEP);
+				Transmit (vnet, srcEP);
 			}
 
 			public object Request {
@@ -318,8 +326,8 @@ namespace p2pncs.Simulation.VirtualNet
 				get { return _dt; }
 			}
 
-			public DateTime Timeout {
-				get { return _timeout; }
+			public DateTime Expiry {
+				get { return _expiry; }
 			}
 
 			public ushort ID {
@@ -332,6 +340,14 @@ namespace p2pncs.Simulation.VirtualNet
 
 			public IPEndPoint RemoteEndPoint {
 				get { return _remoteEP; }
+			}
+
+			public TimeSpan Timeout {
+				get { return _timeout; }
+			}
+
+			public int MaxRetry {
+				get { return _maxRetry; }
 			}
 
 			public void Complete (object obj)
