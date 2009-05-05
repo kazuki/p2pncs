@@ -51,7 +51,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 		static TimeSpan MultipleCipherReverseRelayTimeout = MaxRRT;
 		static int MultipleCipherReverseRelayMaxRetry = 1;
 
-		static TimeSpan RelayRouteTimeout = TimeSpan.FromSeconds (5);
+		static TimeSpan RelayRouteTimeout = TimeSpan.FromSeconds (30);
 		static TimeSpan RelayRouteTimeoutWithMargin = RelayRouteTimeout + (MultipleCipherRouteMaxRoundtripTime + MultipleCipherRouteMaxRoundtripTime);
 		static IFormatter DefaultFormatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter ();
 		#endregion
@@ -121,7 +121,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			} else {
 				Key key = new Key (payload.NextHopPayload);
 				Console.WriteLine ("{0}: Received {1} -> (end)\r\n: Subcribe {2}", _kbr.SelftNodeId, msg.Label, key);
-				sock.StartResponse (e, "OK");
+				sock.StartResponse (e, new AcknowledgeMessage (MultipleCipherHelper.CreateRoutedPayload (payload.SharedKey, "ACK")));
 				BoundaryInfo boundaryInfo = new BoundaryInfo (payload.SharedKey, new AnonymousEndPoint (e.EndPoint, msg.Label));
 				RouteInfo info = new RouteInfo (boundaryInfo.Previous, boundaryInfo, payload.SharedKey);
 				using (IDisposable cookie = _routingMapLock.EnterWriteLock ()) {
@@ -148,8 +148,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 			EstablishRouteMessage msg = (EstablishRouteMessage)state[2];
 			EstablishRoutePayload payload = (EstablishRoutePayload)state[3];
 			EstablishRouteMessage msg2 = (EstablishRouteMessage)state[4];
-			object ret = sock.EndInquire (ar);
-			sock.StartResponse (e, ret);
+			AcknowledgeMessage ack = (AcknowledgeMessage)sock.EndInquire (ar);
+			sock.StartResponse (e, new AcknowledgeMessage (MultipleCipherHelper.EncryptRoutedPayload (payload.SharedKey, ack.Payload)));
 
 			RouteInfo info = new RouteInfo (new AnonymousEndPoint (e.EndPoint, msg.Label),
 				new AnonymousEndPoint (payload.NextHopEndPoint, msg2.Label), payload.SharedKey);
@@ -170,9 +170,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			if (routeInfo != null) {
 				bool direction = (routeInfo.Previous != null && routeInfo.Previous.EndPoint.Equals (e.EndPoint));
-				int offset = -1, size = -1;
 				byte[] payload;
 				if (direction) {
+					// direction: prev -> ! -> next
 					routeInfo.ReceiveMessageFromPreviousNode ();
 					if (routeInfo.BoundaryInfo == null) {
 						payload = MultipleCipherHelper.DecryptRoutedPayload (routeInfo.Key, msg.Payload);
@@ -181,11 +181,15 @@ namespace p2pncs.Net.Overlay.Anonymous
 							MessagingSocket_Inquired_RoutedMessage_Callback, new object[] {e, routeInfo});
 						Console.WriteLine ("{0}: Received RoutedMessage", _kbr.SelftNodeId);
 					} else {
-						payload = MultipleCipherHelper.DecryptRoutedPayloadAtEnd (routeInfo.Key, msg.Payload, out offset, out size);
-						Console.WriteLine ("{0}: Received RoutedMessage (end)", _kbr.SelftNodeId);
-						_sock.StartResponse (e, "OK");
+						object routedMsg = MultipleCipherHelper.DecryptRoutedPayloadAtEnd (routeInfo.Key, msg.Payload);
+						Console.WriteLine ("{0}: Received RoutedMessage (end) : {1}", _kbr.SelftNodeId, routedMsg);
+
+						// Response "ACK" message
+						payload = MultipleCipherHelper.CreateRoutedPayload (routeInfo.Key, "ACK");
+						_sock.StartResponse (e, new AcknowledgeMessage (payload));
 					}
 				} else {
+					// direction: next -> ! -> prev
 					routeInfo.ReceiveMessageFromNextNode ();
 					if (routeInfo.StartPointInfo == null) {
 						payload = MultipleCipherHelper.EncryptRoutedPayload (routeInfo.Key, msg.Payload);
@@ -193,10 +197,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 							MultipleCipherReverseRelayTimeout, MultipleCipherReverseRelayMaxRetry, null, null);
 						Console.WriteLine ("{0}: Received RoutedMessage", _kbr.SelftNodeId);
 					} else {
-						payload = MultipleCipherHelper.DecryptRoutedPayload (routeInfo.StartPointInfo.RelayNodeKeys, msg.Payload, out offset, out size);
-						Console.WriteLine ("{0}: Received RoutedMessage (start)", _kbr.SelftNodeId);
+						object routedMsg = MultipleCipherHelper.DecryptRoutedPayload (routeInfo.StartPointInfo.RelayNodeKeys, msg.Payload);
+						Console.WriteLine ("{0}: Received RoutedMessage (start) : {1}", _kbr.SelftNodeId, routedMsg);
 					}
-					_sock.StartResponse (e, "OK");
+					_sock.StartResponse (e, "ACK");
 				}
 			} else {
 				Console.WriteLine ("{0}: No Route ({1}@{2})", _kbr.SelftNodeId, e.EndPoint, msg.Label);
@@ -206,9 +210,11 @@ namespace p2pncs.Net.Overlay.Anonymous
 		void MessagingSocket_Inquired_RoutedMessage_Callback (IAsyncResult ar)
 		{
 			object[] state = (object[])ar.AsyncState;
-			object obj = _sock.EndInquire (ar);
+			AcknowledgeMessage ack = (AcknowledgeMessage)_sock.EndInquire (ar);
 			InquiredEventArgs e = (InquiredEventArgs)state[0];
-			_sock.StartResponse (e, obj);
+			RouteInfo routeInfo = (RouteInfo)state[1];
+			ack = new AcknowledgeMessage (MultipleCipherHelper.EncryptRoutedPayload (routeInfo.Key, ack.Payload));
+			_sock.StartResponse (e, ack);
 		}
 
 		void MessagingSocket_Success (object sender, InquiredEventArgs e)
@@ -415,15 +421,15 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			void EstablishRoute_Callback (IAsyncResult ar)
 			{
-				object result = _kbr.MessagingSocket.EndInquire (ar);
+				AcknowledgeMessage ack = _kbr.MessagingSocket.EndInquire (ar) as AcknowledgeMessage;
 				StartPointInfo startInfo = (StartPointInfo)ar.AsyncState;
 				lock (_establishingList) {
 					_establishingList.Remove (startInfo);
 				}
-				Console.WriteLine (result == null ? "ESTABLISH FAILED" : "ESTABLISHED !!");
+				Console.WriteLine (ack == null ? "ESTABLISH FAILED" : "ESTABLISHED !!");
 
 				if (!_active) return;
-				if (result == null) {
+				if (ack == null) {
 					startInfo.Close ();
 					if (_establishedList.Count < _numOfRoutes) {
 						int expectedCount = (int)Math.Ceiling ((_numOfRoutes - _establishedList.Count) * FACTOR);
@@ -432,6 +438,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 							StartEstablishingRoute ();
 					}
 				} else {
+					object msg = MultipleCipherHelper.DecryptRoutedPayload (startInfo.RelayNodeKeys, ack.Payload);
 					RouteInfo routeInfo = new RouteInfo (startInfo, new AnonymousEndPoint (startInfo.RelayNodes[0].EndPoint, startInfo.Label), null);
 					lock (_establishedList) {
 						_establishedList.Add (startInfo);
@@ -449,12 +456,16 @@ namespace p2pncs.Net.Overlay.Anonymous
 					_establishedList.Remove (start);
 				}
 				// DEBUG
-				StartEstablishingRoute ();
+				//StartEstablishingRoute ();
 			}
 
 			public void Close ()
 			{
 				_active = false;
+			}
+
+			public Key RecipientID {
+				get { return _recipientId; }
 			}
 		}
 		#endregion
@@ -495,7 +506,22 @@ namespace p2pncs.Net.Overlay.Anonymous
 			{
 				byte[] payload = MultipleCipherHelper.CreateRoutedPayload (_relayKeys, msg);
 				_lastSendTime = DateTime.Now;
-				sock.BeginInquire (new RoutedMessage (_label, payload), _relayNodes[0].EndPoint, MultipleCipherRouteMaxRoundtripTime, MultipleCipherRouteMaxRetry, null, null);
+				sock.BeginInquire (new RoutedMessage (_label, payload), _relayNodes[0].EndPoint,
+					MultipleCipherRouteMaxRoundtripTime, MultipleCipherRouteMaxRetry,
+					SendMessage_Callback, sock);
+			}
+
+			void SendMessage_Callback (IAsyncResult ar)
+			{
+				IMessagingSocket sock = (IMessagingSocket)ar.AsyncState;
+				AcknowledgeMessage ack = sock.EndInquire (ar) as AcknowledgeMessage;
+				if (ack == null) {
+					Timeout ();
+					return;
+				}
+
+				object msg = MultipleCipherHelper.DecryptRoutedPayload (_relayKeys, ack.Payload);
+				Console.WriteLine ("{0}: ACK: {1}", _subscribe.RecipientID, msg);
 			}
 
 			public byte[] CreateEstablishData (Key recipientId, ECDomainNames domain)
@@ -724,10 +750,11 @@ namespace p2pncs.Net.Overlay.Anonymous
 						Buffer.BlockCopy (decrypted, 1, rawKey, 0, rawKey.Length);
 						return new EstablishRoutePayload (null, rawKey, sharedKey);
 					case 1:
-						RNG.Instance.GetBytes (payload);
+						byte[] new_payload = new byte[PayloadFixedSize];
+						RNG.Instance.GetBytes (new_payload);
 						EndPoint nextHop = DeserializeEndPoint (decrypted, 1, out len);
-						Buffer.BlockCopy (decrypted, 1 + len, payload, 0, decrypted.Length - 1 - len);
-						return new EstablishRoutePayload (nextHop, payload, sharedKey);
+						Buffer.BlockCopy (decrypted, 1 + len, new_payload, 0, decrypted.Length - 1 - len);
+						return new EstablishRoutePayload (nextHop, new_payload, sharedKey);
 					default:
 						throw new FormatException ();
 				}
@@ -742,7 +769,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				}
 			}
 
-			public static byte[] CreateRoutedPayload (SymmetricKey[] relayKeys, byte[] msg)
+			static byte[] CreateRoutedPayload (SymmetricKey[] relayKeys, byte[] msg)
 			{
 				int iv_size = DefaultSymmetricBlockBits / 8;
 				int payload_size = msg.Length + 2;
@@ -774,7 +801,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				}
 			}
 
-			public static byte[] CreateRoutedPayload (SymmetricKey key, byte[] msg)
+			static byte[] CreateRoutedPayload (SymmetricKey key, byte[] msg)
 			{
 				int iv_size = DefaultSymmetricBlockBits / 8;
 				int payload_size = msg.Length + 2;
@@ -800,7 +827,16 @@ namespace p2pncs.Net.Overlay.Anonymous
 				return key.Decrypt (payload, 0, payload.Length);
 			}
 
-			public static byte[] DecryptRoutedPayloadAtEnd (SymmetricKey key, byte[] payload, out int offset, out int size)
+			public static object DecryptRoutedPayloadAtEnd (SymmetricKey key, byte[] payload)
+			{
+				int offset, size;
+				payload = DecryptRoutedPayloadAtEnd (key, payload, out offset, out size);
+				using (MemoryStream ms = new MemoryStream (payload, offset, size)) {
+					return DefaultFormatter.Deserialize (ms);
+				}
+			}
+
+			static byte[] DecryptRoutedPayloadAtEnd (SymmetricKey key, byte[] payload, out int offset, out int size)
 			{
 				byte[] ret = key.Decrypt (payload, 0, payload.Length);
 				offset = 2;
@@ -813,7 +849,16 @@ namespace p2pncs.Net.Overlay.Anonymous
 				return key.Encrypt (payload, 0, payload.Length);
 			}
 
-			public static byte[] DecryptRoutedPayload (SymmetricKey[] relayKeys, byte[] payload, out int offset, out int size)
+			public static object DecryptRoutedPayload (SymmetricKey[] relayKeys, byte[] payload)
+			{
+				int offset, size;
+				payload = DecryptRoutedPayload (relayKeys, payload, out offset, out size);
+				using (MemoryStream ms = new MemoryStream (payload, offset, size)) {
+					return DefaultFormatter.Deserialize (ms);
+				}
+			}
+
+			static byte[] DecryptRoutedPayload (SymmetricKey[] relayKeys, byte[] payload, out int offset, out int size)
 			{
 				for (int i = 0; i < relayKeys.Length; i ++) {
 					byte[] decrypted = relayKeys[i].Decrypt (payload, 0, payload.Length);
@@ -945,6 +990,21 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public RouteLabel Label {
 				get { return _label; }
+			}
+
+			public byte[] Payload {
+				get { return _payload; }
+			}
+		}
+
+		[Serializable]
+		class AcknowledgeMessage
+		{
+			byte[] _payload;
+
+			public AcknowledgeMessage (byte[] payload)
+			{
+				_payload = payload;
 			}
 
 			public byte[] Payload {
