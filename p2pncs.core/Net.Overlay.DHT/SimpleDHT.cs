@@ -15,10 +15,13 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+// TODO: 複数のストア候補ノードからの結果をマージする機能を実装する
+// TODO: PutするオブジェクトがIPutterEndPointStoreインターフェイスを実装していた場合の動作が、IterativeなKBR専用となっているので、汎用性を持たせる
+// TODO: 複数候補へのGet/Put時、どのタイミングで停止するかを制御する機能を実装する (現状では1つでも応答があれば他の応答を無視している)
+
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using System.Net;
 using System.Threading;
 
 namespace p2pncs.Net.Overlay.DHT
@@ -48,11 +51,15 @@ namespace p2pncs.Net.Overlay.DHT
 		void MessagingSocket_Inquired_PutRequest (object sender, InquiredEventArgs e)
 		{
 			PutRequest putReq = (PutRequest)e.InquireMessage;
-			LocalPut (putReq.Key, putReq.LifeTime, putReq.Value);
+			LocalPut (putReq.Key, putReq.LifeTime, putReq.Value, e.EndPoint);
 			_sock.StartResponse (e, new PutResponse ());
 		}
-		void LocalPut (Key key, TimeSpan lifeTime, object value)
+		void LocalPut (Key key, TimeSpan lifeTime, object value, EndPoint remoteEP)
 		{
+			IPutterEndPointStore epStore = value as IPutterEndPointStore;
+			if (epStore != null)
+				epStore.EndPoint = remoteEP;
+
 			int typeId;
 			if (_typeMap.TryGetValue (value.GetType (), out typeId)) {
 				_lht.Put (key, typeId, DateTime.Now + lifeTime, value);
@@ -206,16 +213,18 @@ namespace p2pncs.Net.Overlay.DHT
 								}
 							}
 						} else {
-							_dht.LocalPut (_putReq.Key, _putReq.LifeTime, _putReq.Value);
+							_dht.LocalPut (_putReq.Key, _putReq.LifeTime, _putReq.Value, null);
+							Done ();
 						}
 					} else {
-						_dht.MessagingSocket.BeginInquire (msg, rr.RootCandidates[i].EndPoint, callback, null);
+						_dht.MessagingSocket.BeginInquire (msg, rr.RootCandidates[i].EndPoint, callback, rr.RootCandidates[i].EndPoint);
 					}
 				}
 			}
 
 			void GetRequest_Callback (IAsyncResult ar)
 			{
+				EndPoint remoteEP = (EndPoint)ar.AsyncState;
 				GetResponse res = _dht.MessagingSocket.EndInquire (ar) as GetResponse;
 				lock (_getLock) {
 					if (_result != null)
@@ -226,6 +235,11 @@ namespace p2pncs.Net.Overlay.DHT
 							return;
 						_result = new GetResult (_key, null, _hops);
 					} else {
+						for (int i = 0; i < res.Values.Length; i ++) {
+							IPutterEndPointStore epStore = res.Values[i] as IPutterEndPointStore;
+							if (epStore != null && epStore.EndPoint == null)
+								epStore.EndPoint = remoteEP;
+						}
 						_result = new GetResult (_key, res.Values, _hops);
 					}
 				}
