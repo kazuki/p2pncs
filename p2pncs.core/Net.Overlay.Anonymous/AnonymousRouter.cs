@@ -17,9 +17,10 @@
 
 using System;
 using System.Collections.Generic;
-using System.Net;
-using System.Security.Cryptography;
 using System.IO;
+using System.Net;
+using System.Runtime.Serialization;
+using System.Security.Cryptography;
 using openCrypto;
 using openCrypto.EllipticCurve;
 using p2pncs.Net.Overlay.DHT;
@@ -27,7 +28,6 @@ using p2pncs.Security.Cryptography;
 using p2pncs.Threading;
 using ECDiffieHellman = openCrypto.EllipticCurve.KeyAgreement.ECDiffieHellman;
 using RouteLabel = System.Int32;
-using System.Runtime.Serialization;
 
 namespace p2pncs.Net.Overlay.Anonymous
 {
@@ -50,6 +50,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 		static int MultipleCipherRelayMaxRetry = 1;
 		static TimeSpan MultipleCipherReverseRelayTimeout = MaxRRT;
 		static int MultipleCipherReverseRelayMaxRetry = 1;
+
+		static TimeSpan DHTPutInterval = TimeSpan.FromSeconds (60);
+		static TimeSpan DHTPutValueLifeTime = DHTPutInterval + TimeSpan.FromSeconds (5);
 
 		static TimeSpan RelayRouteTimeout = TimeSpan.FromSeconds (30);
 		static TimeSpan RelayRouteTimeoutWithMargin = RelayRouteTimeout + (MultipleCipherRouteMaxRoundtripTime + MultipleCipherRouteMaxRoundtripTime);
@@ -88,6 +91,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			_ecdh = new ECDiffieHellman (privateNodeKey);
 			_interrupter = interrupter;
 
+			dht.RegisterTypeID (typeof (DHTEntry), 1);
 			_sock.AddInquiredHandler (typeof (EstablishRouteMessage), MessagingSocket_Inquired_EstablishRouteMessage);
 			_sock.AddInquiredHandler (typeof (RoutedMessage), MessagingSocket_Inquired_RoutedMessage);
 			_sock.InquirySuccess += new InquiredEventHandler (MessagingSocket_Success);
@@ -111,7 +115,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				Key key = new Key (payload.NextHopPayload);
 				Console.WriteLine ("{0}: Received {1} -> (end)\r\n: Subcribe {2}", _kbr.SelftNodeId, msg.Label, key);
 				sock.StartResponse (e, new AcknowledgeMessage (MultipleCipherHelper.CreateRoutedPayload (payload.SharedKey, "ACK")));
-				BoundaryInfo boundaryInfo = new BoundaryInfo (payload.SharedKey, new AnonymousEndPoint (e.EndPoint, msg.Label));
+				BoundaryInfo boundaryInfo = new BoundaryInfo (payload.SharedKey, new AnonymousEndPoint (e.EndPoint, msg.Label), key);
 				RouteInfo info = new RouteInfo (boundaryInfo.Previous, boundaryInfo, payload.SharedKey);
 				using (IDisposable cookie = _routingMapLock.EnterWriteLock ()) {
 					_routingMap.Add (info.Previous, info);
@@ -124,8 +128,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					}
 					list.Add (boundaryInfo);
 				}
-
-				/// TODO: DHTにキー情報を登録
+				boundaryInfo.PutToDHT (_dht);
 			}
 		}
 
@@ -284,6 +287,11 @@ namespace p2pncs.Net.Overlay.Anonymous
 							info.Previous == null ? "(null)" : info.Previous.Label.ToString(),
 							_kbr.SelftNodeId,
 							info.Next == null ? "(null)" : info.Next.Label.ToString ());
+					} else {
+						if (info.BoundaryInfo != null) {
+							if (info.BoundaryInfo.NextPutToDHTTime <= DateTime.Now)
+								info.BoundaryInfo.PutToDHT (_dht);
+						}
 					}
 				}
 			}
@@ -553,11 +561,16 @@ namespace p2pncs.Net.Overlay.Anonymous
 			SymmetricKey _key;
 			AnonymousEndPoint _prevEP;
 			bool _closed = false;
+			DateTime _nextPutToDHTTime = DateTime.Now + DHTPutInterval;
+			RouteLabel _label;
+			Key _recipientKey;
 
-			public BoundaryInfo (SymmetricKey key, AnonymousEndPoint prev)
+			public BoundaryInfo (SymmetricKey key, AnonymousEndPoint prev, Key recipientKey)
 			{
 				_key = key;
 				_prevEP = prev;
+				_recipientKey = recipientKey;
+				_label = GenerateRouteLabel ();
 			}
 
 			public void SendMessage (IMessagingSocket sock, object msg)
@@ -568,12 +581,22 @@ namespace p2pncs.Net.Overlay.Anonymous
 					MultipleCipherReverseRelayTimeout, MultipleCipherReverseRelayMaxRetry, null, null);
 			}
 
+			public void PutToDHT (IDistributedHashTable dht)
+			{
+				_nextPutToDHTTime = DateTime.Now + DHTPutInterval;
+				dht.BeginPut (_recipientKey, DHTPutValueLifeTime, new DHTEntry (_label), null, null);
+			}
+
 			public SymmetricKey SharedKey {
 				get { return _key; }
 			}
 
 			public AnonymousEndPoint Previous {
 				get { return _prevEP; }
+			}
+
+			public DateTime NextPutToDHTTime {
+				get { return _nextPutToDHTTime; }
 			}
 
 			public void Timeout ()
@@ -918,6 +941,63 @@ namespace p2pncs.Net.Overlay.Anonymous
 			public override string ToString ()
 			{
 				return _ep.ToString () + "@" + _label.ToString ("x");
+			}
+		}
+		#endregion
+
+		#region DHT Entry
+		[Serializable]
+		class DHTEntry : IPutterEndPointStore, IEquatable<DHTEntry>
+		{
+			RouteLabel _label;
+			EndPoint _ep = null;
+
+			public DHTEntry (RouteLabel label)
+			{
+				_label = label;
+			}
+
+			public EndPoint EndPoint {
+				get { return _ep; }
+			}
+
+			public RouteLabel Label {
+				get { return _label; }
+			}
+
+			EndPoint IPutterEndPointStore.EndPoint {
+				get { return _ep; }
+				set { _ep = value;}
+			}
+
+			public override bool Equals (object obj)
+			{
+				DHTEntry entry = obj as DHTEntry;
+				if (entry == null)
+					return false;
+				return Equals (entry);
+			}
+
+			public override int GetHashCode ()
+			{
+				int hash = _label.GetHashCode ();
+				if (_ep != null)
+					hash ^= _ep.GetHashCode ();
+				return hash;
+			}
+
+			public override string ToString ()
+			{
+				return (_ep == null ? "localhost" : _ep.ToString ()) + "@" + _label.ToString ();
+			}
+
+			public bool Equals (DHTEntry other)
+			{
+				if (_label != other._label)
+					return false;
+				if (_ep == null)
+					return other._ep == null;
+				return _ep.Equals (other._ep);
 			}
 		}
 		#endregion
