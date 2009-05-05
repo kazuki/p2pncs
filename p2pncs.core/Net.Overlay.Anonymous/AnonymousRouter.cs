@@ -15,12 +15,21 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+/*
+ * ToDo:
+ * - Acceptedイベントや、EndEstablishRoute経由でソケットを取得し、それを利用して通信できるようにする
+ * - 複数経路を利用したコネクションの確立・メッセージのやりとりに対応させる
+ * - ConnectionMessageにおいて終端ノードの情報が平文でやりとりされているが、コネクション鍵で暗号化を施すようにする
+ * - コネクション間メッセージにはHMACを付けるほか、再送攻撃にも耐えられるようにする
+ */
+
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Runtime.Serialization;
 using System.Security.Cryptography;
+using System.Threading;
 using openCrypto;
 using openCrypto.EllipticCurve;
 using p2pncs.Net.Overlay.DHT;
@@ -34,13 +43,15 @@ namespace p2pncs.Net.Overlay.Anonymous
 	public class AnonymousRouter : IAnonymousRouter
 	{
 		#region Static Parameters
-		static readonly SymmetricAlgorithmPlus DefaultSymmetricAlgorithm;
+		const SymmetricAlgorithmType DefaultSymmetricAlgorithmType = SymmetricAlgorithmType.Camellia;
+		static readonly SymmetricAlgorithmPlus DefaultSymmetricAlgorithm = new CamelliaManaged ();
 		const int DefaultSymmetricKeyBits = 128;
 		const int DefaultSymmetricBlockBits = 128;
 
-		const int PayloadFixedSize = (DefaultSymmetricKeyBits / 8) * 56; // 896 bytes
+		//const int PayloadFixedSize = (DefaultSymmetricKeyBits / 8) * 56; // 896 bytes
+		const int PayloadFixedSize = 5120; // TODO: シリアライザを見直して896バイト未満に収まるように調整する
 
-		const int DefaultSubscribeRoutes = 3;
+		const int DefaultSubscribeRoutes = 1;
 		const int DefaultRealyNodes = 3;
 
 		static TimeSpan MaxRRT = TimeSpan.FromMilliseconds (1000); // included cost of cryptography
@@ -57,6 +68,14 @@ namespace p2pncs.Net.Overlay.Anonymous
 		static TimeSpan RelayRouteTimeout = TimeSpan.FromSeconds (30);
 		static TimeSpan RelayRouteTimeoutWithMargin = RelayRouteTimeout + (MultipleCipherRouteMaxRoundtripTime + MultipleCipherRouteMaxRoundtripTime);
 		static IFormatter DefaultFormatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter ();
+
+		static EndPoint DummyEndPoint = new IPEndPoint (IPAddress.Loopback, 0);
+
+		const int DHT_TYPEID = 1;
+
+		static object DummyAckMsg = "ACK";
+
+		const int ConnectionEstablishSharedInfoBytes = 16;
 		#endregion
 
 		#region Variables
@@ -74,11 +93,12 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 		Dictionary<Key, List<BoundaryInfo>> _boundMap = new Dictionary<Key, List<BoundaryInfo>> ();
 		ReaderWriterLockWrapper _boundMapLock = new ReaderWriterLockWrapper ();
+
+		List<ConnectionInfo> _connections = new List<ConnectionInfo> ();
 		#endregion
 
 		static AnonymousRouter ()
 		{
-			DefaultSymmetricAlgorithm = new CamelliaManaged ();
 			DefaultSymmetricAlgorithm.Mode = CipherMode.CBC;
 			DefaultSymmetricAlgorithm.Padding = PaddingMode.None;
 		}
@@ -91,9 +111,12 @@ namespace p2pncs.Net.Overlay.Anonymous
 			_ecdh = new ECDiffieHellman (privateNodeKey);
 			_interrupter = interrupter;
 
-			dht.RegisterTypeID (typeof (DHTEntry), 1);
+			dht.RegisterTypeID (typeof (DHTEntry), DHT_TYPEID);
+			(dht as SimpleDHT).NumberOfReplicas = 1;
 			_sock.AddInquiredHandler (typeof (EstablishRouteMessage), MessagingSocket_Inquired_EstablishRouteMessage);
 			_sock.AddInquiredHandler (typeof (RoutedMessage), MessagingSocket_Inquired_RoutedMessage);
+			_sock.AddInquiredHandler (typeof (ConnectionEstablishMessage), MessagingSocket_Inquired_ConnectionEstablishMessage);
+			_sock.AddInquiredHandler (typeof (ConnectionMessage), MessagingSocket_Inquired_ConnectionMessage);
 			_sock.InquirySuccess += new InquiredEventHandler (MessagingSocket_Success);
 			interrupter.AddInterruption (RouteTimeoutCheck);
 		}
@@ -113,12 +136,14 @@ namespace p2pncs.Net.Overlay.Anonymous
 					MessagingSocket_Inquired_EstablishRouteMessage_Callback, new object[] {sock, e, msg, payload, msg2});
 			} else {
 				Key key = new Key (payload.NextHopPayload);
-				Console.WriteLine ("{0}: Received {1} -> (end)\r\n: Subcribe {2}", _kbr.SelftNodeId, msg.Label, key);
-				sock.StartResponse (e, new AcknowledgeMessage (MultipleCipherHelper.CreateRoutedPayload (payload.SharedKey, "ACK")));
 				BoundaryInfo boundaryInfo = new BoundaryInfo (payload.SharedKey, new AnonymousEndPoint (e.EndPoint, msg.Label), key);
+				Console.WriteLine ("{0}: Received {1} -> (end)\r\n: Subcribe {2}", _kbr.SelftNodeId, msg.Label, key);
+				EstablishedMessage ack = new EstablishedMessage (boundaryInfo.LabelOnlyAnonymousEndPoint.Label);
+				sock.StartResponse (e, new AcknowledgeMessage (MultipleCipherHelper.CreateRoutedPayload (payload.SharedKey, ack)));
 				RouteInfo info = new RouteInfo (boundaryInfo.Previous, boundaryInfo, payload.SharedKey);
 				using (IDisposable cookie = _routingMapLock.EnterWriteLock ()) {
 					_routingMap.Add (info.Previous, info);
+					_routingMap.Add (boundaryInfo.LabelOnlyAnonymousEndPoint, info);
 				}
 				using (IDisposable cookie = _boundMapLock.EnterWriteLock ()) {
 					List<BoundaryInfo> list;
@@ -171,10 +196,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 						_sock.BeginInquire (new RoutedMessage (routeInfo.Next.Label, payload), routeInfo.Next.EndPoint,
 							MultipleCipherRelayTimeout, MultipleCipherRelayMaxRetry,
 							MessagingSocket_Inquired_RoutedMessage_Callback, new object[] {e, routeInfo});
-						Console.WriteLine ("{0}: Received RoutedMessage", _kbr.SelftNodeId);
+						Console.WriteLine ("{0}: -> Recv RoutedMessage", _kbr.SelftNodeId);
 					} else {
 						object routedMsg = MultipleCipherHelper.DecryptRoutedPayloadAtEnd (routeInfo.Key, msg.Payload);
-						Console.WriteLine ("{0}: Received RoutedMessage (end) : {1}", _kbr.SelftNodeId, routedMsg);
+						Console.WriteLine ("{0}: -> Recv RoutedMessage (end) : {1}", _kbr.SelftNodeId, routedMsg);
 
 						object ack = ProcessMessage (routedMsg, routeInfo.BoundaryInfo);
 						payload = MultipleCipherHelper.CreateRoutedPayload (routeInfo.Key, ack);
@@ -187,13 +212,13 @@ namespace p2pncs.Net.Overlay.Anonymous
 						payload = MultipleCipherHelper.EncryptRoutedPayload (routeInfo.Key, msg.Payload);
 						_sock.BeginInquire (new RoutedMessage (routeInfo.Previous.Label, payload), routeInfo.Previous.EndPoint,
 							MultipleCipherReverseRelayTimeout, MultipleCipherReverseRelayMaxRetry, null, null);
-						Console.WriteLine ("{0}: Received RoutedMessage", _kbr.SelftNodeId);
+						Console.WriteLine ("{0}: <- Recv RoutedMessage", _kbr.SelftNodeId);
 					} else {
 						object routedMsg = MultipleCipherHelper.DecryptRoutedPayload (routeInfo.StartPointInfo.RelayNodeKeys, msg.Payload);
-						Console.WriteLine ("{0}: Received RoutedMessage (start) : {1}", _kbr.SelftNodeId, routedMsg);
+						Console.WriteLine ("{0}: <- Recv RoutedMessage (start) : {1}", _kbr.SelftNodeId, routedMsg);
 						ProcessMessage (routedMsg, routeInfo.StartPointInfo);
 					}
-					_sock.StartResponse (e, "ACK");
+					_sock.StartResponse (e, DummyAckMsg);
 				}
 			} else {
 				Console.WriteLine ("{0}: No Route ({1}@{2})", _kbr.SelftNodeId, e.EndPoint, msg.Label);
@@ -208,6 +233,36 @@ namespace p2pncs.Net.Overlay.Anonymous
 			RouteInfo routeInfo = (RouteInfo)state[1];
 			ack = new AcknowledgeMessage (MultipleCipherHelper.EncryptRoutedPayload (routeInfo.Key, ack.Payload));
 			_sock.StartResponse (e, ack);
+		}
+
+		void MessagingSocket_Inquired_ConnectionEstablishMessage (object sender, InquiredEventArgs e)
+		{
+			ConnectionEstablishMessage msg = (ConnectionEstablishMessage)e.InquireMessage;
+			RouteInfo routeInfo;
+			_sock.StartResponse (e, DummyAckMsg);
+			using (IDisposable cookie = _routingMapLock.EnterReadLock ()) {
+				if (!_routingMap.TryGetValue (new AnonymousEndPoint (DummyEndPoint, msg.Label), out routeInfo))
+					routeInfo = null;
+			}
+			if (routeInfo == null)
+				return;
+
+			routeInfo.BoundaryInfo.SendMessage (_sock, msg);
+		}
+
+		void MessagingSocket_Inquired_ConnectionMessage (object sender, InquiredEventArgs e)
+		{
+			ConnectionMessage msg = (ConnectionMessage)e.InquireMessage;
+			RouteInfo routeInfo;
+			_sock.StartResponse (e, DummyAckMsg);
+			using (IDisposable cookie = _routingMapLock.EnterReadLock ()) {
+				if (!_routingMap.TryGetValue (new AnonymousEndPoint (DummyEndPoint, msg.Label), out routeInfo))
+					routeInfo = null;
+			}
+			if (routeInfo == null)
+				return;
+
+			routeInfo.BoundaryInfo.SendMessage (_sock, msg);
 		}
 
 		void MessagingSocket_Success (object sender, InquiredEventArgs e)
@@ -230,13 +285,117 @@ namespace p2pncs.Net.Overlay.Anonymous
 		#endregion
 
 		#region Message Handlers
-		void ProcessMessage (object msg, StartPointInfo info)
+		void ProcessMessage (object msg_obj, StartPointInfo info)
 		{
+			{
+				ConnectionEstablishMessage msg = msg_obj as ConnectionEstablishMessage;
+				if (msg != null) {
+					SubscribeInfo subscribeInfo;
+					using (IDisposable cookie = _subscribeMapLock.EnterReadLock ()) {
+						if (!_subscribeMap.TryGetValue (msg.RecipientID, out subscribeInfo))
+							return;
+					}
+					ConnectionEstablishInfo establishInfo = msg.Decrypt (subscribeInfo.DiffieHellman);
+					AcceptingEventArgs args = new AcceptingEventArgs (subscribeInfo.RecipientID, establishInfo.Initiator);
+					if (Accepting != null) {
+						try {
+							Accepting (this, args);
+						} catch {}
+					}
+					if (args.ReceiveEventHandler == null)
+						return; // Reject
+
+					byte[] sharedInfo2 = RNG.GetRNGBytes (ConnectionEstablishSharedInfoBytes);
+					byte[] sharedInfo = new byte[establishInfo.SharedInfo.Length + ConnectionEstablishSharedInfoBytes];
+					Buffer.BlockCopy (establishInfo.SharedInfo, 0, sharedInfo, 0, establishInfo.SharedInfo.Length);
+					Buffer.BlockCopy (sharedInfo2, 0, sharedInfo, establishInfo.SharedInfo.Length, sharedInfo2.Length);
+					ECDiffieHellman ecdh = new ECDiffieHellman (subscribeInfo.DiffieHellman.Parameters);
+					ecdh.SharedInfo = sharedInfo;
+					byte[] iv = new byte[DefaultSymmetricBlockBits / 8];
+					byte[] key = new byte[DefaultSymmetricKeyBits / 8];
+					byte[] shared = ecdh.PerformKeyAgreement (establishInfo.Initiator.GetByteArray (), iv.Length + key.Length);
+					Buffer.BlockCopy (shared, 0, iv, 0, iv.Length);
+					Buffer.BlockCopy (shared, iv.Length, key, 0, key.Length);
+					SymmetricKey key2 = new SymmetricKey (DefaultSymmetricAlgorithmType, iv, key);
+					ConnectionInfo connection = new ConnectionInfo (this, subscribeInfo, establishInfo.Initiator, establishInfo.ConnectionId, key2);
+					connection.DestinationSideTerminalNodes = establishInfo.EndPoints;
+					lock (_connections) {
+						_connections.Add (connection);
+					}
+					subscribeInfo.SendToAllRoutes (new ConnectionMessageBeforeBoundary (subscribeInfo.GetRouteEndPoints(),
+						establishInfo.EndPoints,establishInfo.ConnectionId, sharedInfo2), null, null);
+					return;
+				}
+			}
+			{
+				ConnectionMessage msg = msg_obj as ConnectionMessage;
+				if (msg != null) {
+					ConnectionInfo connection = null;
+					lock (_connections) {
+						for (int i = 0; i < _connections.Count; i ++)
+							if (_connections[i].ConnectionID == msg.ConnectionId) {
+								connection = _connections[i];
+								break;
+							}
+					}
+					if (connection == null)
+						return;
+					if (connection.IsInitiator && !connection.IsConnected) {
+						connection.ReceiveFirstConnectionMessage (msg);
+					} else {
+						connection.Receive (msg);
+					}
+				}
+			}
 		}
 
-		object ProcessMessage (object msg, BoundaryInfo info)
+		object ProcessMessage (object msg_obj, BoundaryInfo info)
 		{
-			return "ACK";
+			{
+				LookupRecipientProxyMessage msg = msg_obj as LookupRecipientProxyMessage;
+				if (msg != null) {
+					_dht.BeginGet (msg.RecipientKey, DHT_TYPEID, Process_LookupRecipientProxyMessage_Callback, msg);
+					return DummyAckMsg;
+				}
+			}
+			{
+				ConnectionMessageBeforeBoundary msg = msg_obj as ConnectionMessageBeforeBoundary;
+				if (msg != null) {
+					for (int i = 0; i < msg.OtherSideTerminalEndPoints.Length; i ++) {
+						ConnectionMessage msg2 = new ConnectionMessage (msg.MySideTerminalEndPoints, msg.OtherSideTerminalEndPoints[i].Label, msg.ConnectionId, msg.Payload);
+						_sock.BeginInquire (msg2, msg.OtherSideTerminalEndPoints[i].EndPoint, null, null);
+					}
+				}
+			}
+			return DummyAckMsg;
+		}
+
+		void Process_LookupRecipientProxyMessage_Callback (IAsyncResult ar)
+		{
+			LookupRecipientProxyMessage msg = (LookupRecipientProxyMessage)ar.AsyncState;
+			GetResult result = _dht.EndGet (ar);
+			if (result == null || result.Values == null || result.Values.Length == 0)
+				return;
+			string temp = "";
+			for (int i = 0; i < result.Values.Length; i ++) {
+				DHTEntry entry = result.Values[i] as DHTEntry;
+				if (entry == null) continue;
+				_sock.BeginInquire (msg.Message.Copy (entry.Label), entry.EndPoint, delegate (IAsyncResult ar2) {
+					object res = _sock.EndInquire (ar2);
+					if (res == null)
+						Console.WriteLine ("{0}: FAIL", _kbr.SelftNodeId);
+					else
+						Console.WriteLine ("{0}: OK", _kbr.SelftNodeId);
+				}, null);
+				temp += entry.ToString () + ", ";
+			}
+			if (temp.Length > 0) {
+				temp = temp.Substring (0, temp.Length - 2);
+				temp = _kbr.SelftNodeId.ToString() + ": Send ConnectionEstablishMessage to " + temp;
+				Console.WriteLine (temp);
+			} else {
+				Console.WriteLine ("{0}: DHT Lookup Failed", _kbr.SelftNodeId);
+			}
 		}
 		#endregion
 
@@ -281,8 +440,11 @@ namespace p2pncs.Net.Overlay.Anonymous
 						}
 						if (info.Previous != null) timeoutRoutes.Add (info.Previous);
 						if (info.Next != null) timeoutRoutes.Add (info.Next);
-						if (info.StartPointInfo != null || info.BoundaryInfo != null)
+						if (info.StartPointInfo != null || info.BoundaryInfo != null) {
+							if (info.BoundaryInfo != null)
+								timeoutRoutes.Add (info.BoundaryInfo.LabelOnlyAnonymousEndPoint);
 							timeoutRouteEnds.Add (info);
+						}
 						Console.WriteLine ("Timeout: {0} <- {1} -> {2}",
 							info.Previous == null ? "(null)" : info.Previous.Label.ToString(),
 							_kbr.SelftNodeId,
@@ -341,18 +503,31 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 		public IAsyncResult BeginEstablishRoute (Key recipientId, Key destinationId, AsyncCallback callback, object state)
 		{
-			throw new NotImplementedException ();
+			SubscribeInfo subscribeInfo;
+			using (IDisposable cookie = _subscribeMapLock.EnterReadLock ()) {
+				if (!_subscribeMap.TryGetValue (recipientId, out subscribeInfo))
+					throw new KeyNotFoundException ();
+			}
+
+			ConnectionInfo info = new ConnectionInfo (this, subscribeInfo, destinationId, callback, state);
+			lock (_connections) {
+				_connections.Add (info);
+			}
+			return info.AsyncResult;
 		}
 
 		public IAnonymousSocket EndEstablishRoute (IAsyncResult ar)
 		{
-			throw new NotImplementedException ();
+			ar.AsyncWaitHandle.WaitOne ();
+			return null;
 		}
 
 		public void Close ()
 		{
 			_sock.RemoveInquiredHandler (typeof (EstablishRouteMessage), MessagingSocket_Inquired_EstablishRouteMessage);
 			_sock.RemoveInquiredHandler (typeof (RoutedMessage), MessagingSocket_Inquired_RoutedMessage);
+			_sock.RemoveInquiredHandler (typeof (ConnectionEstablishMessage), MessagingSocket_Inquired_ConnectionEstablishMessage);
+			_sock.RemoveInquiredHandler (typeof (ConnectionMessage), MessagingSocket_Inquired_ConnectionMessage);
 			_sock.InquirySuccess -= MessagingSocket_Success;
 			_interrupter.RemoveInterruption (RouteTimeoutCheck);
 
@@ -381,7 +556,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			int _numOfRoutes = DefaultSubscribeRoutes;
 			Key _recipientId;
 			IKeyBasedRouter _kbr;
-			ECKeyPair _privateKey;
+			ECDiffieHellman _ecdh;
 			AnonymousRouter _router;
 			object _listLock = new object ();
 			List<StartPointInfo> _establishedList = new List<StartPointInfo> ();
@@ -391,7 +566,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			{
 				_router = router;
 				_recipientId = id;
-				_privateKey = privateKey;
+				_ecdh = new ECDiffieHellman (privateKey);
 				_kbr = kbr;
 			}
 
@@ -406,7 +581,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				lock (_listLock) {
 					for (int i = 0; i < _establishedList.Count; i ++) {
 						if (_establishedList[i].LastSendTime < border)
-							_establishedList[i].SendMessage (_kbr.MessagingSocket, Ping.Instance);
+							_establishedList[i].SendMessage (_kbr.MessagingSocket, Ping.Instance, null, null);
 					}
 				}
 
@@ -428,7 +603,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 							}
 							StartPointInfo info = new StartPointInfo (this, relays);
 							_establishingList.Add (info);
-							byte[] payload = info.CreateEstablishData (_recipientId, _privateKey.DomainName);
+							byte[] payload = info.CreateEstablishData (_recipientId, _ecdh.Parameters.DomainName);
 							EstablishRouteMessage msg = new EstablishRouteMessage (info.Label, payload);
 							_kbr.MessagingSocket.BeginInquire (msg, info.RelayNodes[0].EndPoint,
 								MultipleCipherRouteMaxRoundtripTime, MultipleCipherRouteMaxRetry, EstablishRoute_Callback, info);
@@ -444,14 +619,17 @@ namespace p2pncs.Net.Overlay.Anonymous
 				lock (_listLock) {
 					_establishingList.Remove (startInfo);
 				}
-				Console.WriteLine (ack == null ? "ESTABLISH FAILED" : "ESTABLISHED !!");
 
 				if (!_active) return;
-				if (ack == null) {
+				EstablishedMessage msg = (ack == null ? null : MultipleCipherHelper.DecryptRoutedPayload (startInfo.RelayNodeKeys, ack.Payload) as EstablishedMessage);
+
+				if (ack == null || msg == null) {
 					startInfo.Close ();
+					Console.WriteLine ("ESTABLISH FAILED");
 					CheckNumberOfEstablishedRoutes ();
 				} else {
-					object msg = MultipleCipherHelper.DecryptRoutedPayload (startInfo.RelayNodeKeys, ack.Payload);
+					Console.WriteLine ("ESTABLISHED !!");
+					startInfo.Established (msg);
 					RouteInfo routeInfo = new RouteInfo (startInfo, new AnonymousEndPoint (startInfo.RelayNodes[0].EndPoint, startInfo.Label), null);
 					lock (_listLock) {
 						_establishedList.Add (startInfo);
@@ -459,6 +637,24 @@ namespace p2pncs.Net.Overlay.Anonymous
 					using (IDisposable cookie = _router._routingMapLock.EnterWriteLock ()) {
 						_router._routingMap.Add (routeInfo.Next, routeInfo);
 					}
+				}
+			}
+
+			public AnonymousEndPoint[] GetRouteEndPoints ()
+			{
+				lock (_establishedList) {
+					AnonymousEndPoint[] endPoints = new AnonymousEndPoint[_establishedList.Count];
+					for (int i = 0; i < _establishedList.Count; i ++)
+						endPoints[i] = _establishedList[i].TerminalEndPoint;
+					return endPoints;
+				}
+			}
+
+			public void SendToAllRoutes (object msg, AckMessageHandler handler, object state)
+			{
+				lock (_establishedList) {
+					for (int i = 0; i < _establishedList.Count; i ++)
+						_establishedList[i].SendMessage (_router._sock, msg, handler, state);
 				}
 			}
 
@@ -479,15 +675,21 @@ namespace p2pncs.Net.Overlay.Anonymous
 			public Key RecipientID {
 				get { return _recipientId; }
 			}
+
+			public ECDiffieHellman DiffieHellman {
+				get { return _ecdh; }
+			}
 		}
 		#endregion
 
 		#region StartPointInfo
+		delegate void AckMessageHandler (object msg);
 		class StartPointInfo
 		{
 			NodeHandle[] _relayNodes;
 			SymmetricKey[] _relayKeys = null;
 			RouteLabel _label;
+			AnonymousEndPoint _termEP = null;
 			DateTime _lastSendTime = DateTime.Now;
 			SubscribeInfo _subscribe;
 
@@ -510,22 +712,29 @@ namespace p2pncs.Net.Overlay.Anonymous
 				get { return _label; }
 			}
 
+			public AnonymousEndPoint TerminalEndPoint {
+				get { return _termEP; }
+			}
+
 			public DateTime LastSendTime {
 				get { return _lastSendTime; }
 			}
 
-			public void SendMessage (IMessagingSocket sock, object msg)
+			public void SendMessage (IMessagingSocket sock, object msg, AckMessageHandler ackHandler, object state)
 			{
 				byte[] payload = MultipleCipherHelper.CreateRoutedPayload (_relayKeys, msg);
 				_lastSendTime = DateTime.Now;
 				sock.BeginInquire (new RoutedMessage (_label, payload), _relayNodes[0].EndPoint,
 					MultipleCipherRouteMaxRoundtripTime, MultipleCipherRouteMaxRetry,
-					SendMessage_Callback, sock);
+					SendMessage_Callback, new object[] {sock, ackHandler, state});
 			}
 
 			void SendMessage_Callback (IAsyncResult ar)
 			{
-				IMessagingSocket sock = (IMessagingSocket)ar.AsyncState;
+				object[] states = (object[])ar.AsyncState;
+				IMessagingSocket sock = (IMessagingSocket)states[0];
+				AckMessageHandler handler = (AckMessageHandler)states[1];
+				object state = states[2];
 				AcknowledgeMessage ack = sock.EndInquire (ar) as AcknowledgeMessage;
 				if (ack == null) {
 					Timeout ();
@@ -533,6 +742,11 @@ namespace p2pncs.Net.Overlay.Anonymous
 				}
 
 				object msg = MultipleCipherHelper.DecryptRoutedPayload (_relayKeys, ack.Payload);
+				if (handler != null) {
+					try {
+						handler (msg);
+					} catch {}
+				}
 				Console.WriteLine ("{0}: ACK: {1}", _subscribe.RecipientID, msg);
 			}
 
@@ -542,6 +756,11 @@ namespace p2pncs.Net.Overlay.Anonymous
 					throw new Exception ();
 				_relayKeys = new SymmetricKey[_relayNodes.Length];
 				return MultipleCipherHelper.CreateEstablishPayload (_relayNodes, _relayKeys, recipientId, domain);
+			}
+
+			public void Established (EstablishedMessage msg)
+			{
+				_termEP = new AnonymousEndPoint (_relayNodes[_relayNodes.Length - 1].EndPoint, msg.Label);
 			}
 
 			public void Timeout ()
@@ -562,7 +781,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			AnonymousEndPoint _prevEP;
 			bool _closed = false;
 			DateTime _nextPutToDHTTime = DateTime.Now + DHTPutInterval;
-			RouteLabel _label;
+			AnonymousEndPoint _dummyEP;
 			Key _recipientKey;
 
 			public BoundaryInfo (SymmetricKey key, AnonymousEndPoint prev, Key recipientKey)
@@ -570,7 +789,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_key = key;
 				_prevEP = prev;
 				_recipientKey = recipientKey;
-				_label = GenerateRouteLabel ();
+				_dummyEP = new AnonymousEndPoint (DummyEndPoint, GenerateRouteLabel ());
 			}
 
 			public void SendMessage (IMessagingSocket sock, object msg)
@@ -584,7 +803,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			public void PutToDHT (IDistributedHashTable dht)
 			{
 				_nextPutToDHTTime = DateTime.Now + DHTPutInterval;
-				dht.BeginPut (_recipientKey, DHTPutValueLifeTime, new DHTEntry (_label), null, null);
+				dht.BeginPut (_recipientKey, DHTPutValueLifeTime, new DHTEntry (_dummyEP.Label), null, null);
 			}
 
 			public SymmetricKey SharedKey {
@@ -597,6 +816,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public DateTime NextPutToDHTTime {
 				get { return _nextPutToDHTTime; }
+			}
+
+			public AnonymousEndPoint LabelOnlyAnonymousEndPoint {
+				get { return _dummyEP; }
 			}
 
 			public void Timeout ()
@@ -678,6 +901,166 @@ namespace p2pncs.Net.Overlay.Anonymous
 			public bool IsExpiry ()
 			{
 				return _nextExpiry < DateTime.Now || _prevExpiry < DateTime.Now;
+			}
+		}
+		#endregion
+
+		#region ConnectionInfo
+		class ConnectionInfo
+		{
+			bool _initiator;
+			bool _connected = false;
+			EstablishRouteAsyncResult _ar;
+			AnonymousRouter _router;
+			SubscribeInfo _subscribeInfo;
+			ConnectionEstablishInfo _establishInfo;
+			ConnectionEstablishMessage _establishMsg;
+			LookupRecipientProxyMessage _lookupMsg;
+			Key _destKey;
+			ECKeyPair _destPubKey;
+			int _connectionId;
+			SymmetricKey _key = null;
+			AnonymousEndPoint[] _destSideTermEPs;
+
+			public ConnectionInfo (AnonymousRouter router, SubscribeInfo subscribeInfo, Key destKey, AsyncCallback callback, object state)
+			{
+				_initiator = true;
+				_router = router;
+				_subscribeInfo = subscribeInfo;
+				_destKey = destKey;
+				_destPubKey = destKey.ToECPublicKey (_subscribeInfo.DiffieHellman.Parameters.DomainName);
+				_connectionId = BitConverter.ToInt32 (RNG.GetRNGBytes (4), 0);
+				_ar = new EstablishRouteAsyncResult (this, callback, state);
+
+				// Create connection establish message
+				_establishInfo = new ConnectionEstablishInfo (subscribeInfo.RecipientID, subscribeInfo.GetRouteEndPoints (),
+					RNG.GetRNGBytes (ConnectionEstablishSharedInfoBytes), _connectionId);
+				_establishMsg = new ConnectionEstablishMessage (_establishInfo, _destPubKey, destKey);
+				_lookupMsg = new LookupRecipientProxyMessage (destKey, _establishMsg);
+
+				_subscribeInfo.SendToAllRoutes (_lookupMsg, AckLookup, null);
+			}
+
+			public ConnectionInfo (AnonymousRouter router, SubscribeInfo subscribeInfo, Key destKey, int connectionId, SymmetricKey key)
+			{
+				_initiator = false;
+				_connected = true;
+				_router = router;
+				_subscribeInfo = subscribeInfo;
+				_destKey = destKey;
+				_connectionId = connectionId;
+				_key = key;
+			}
+
+			void AckLookup (object ack)
+			{
+				Console.WriteLine (ack);
+			}
+
+			public bool IsInitiator {
+				get { return _initiator; }
+			}
+
+			public bool IsConnected {
+				get { return _connected; }
+			}
+
+			public int ConnectionID {
+				get { return _connectionId; }
+			}
+
+			public AnonymousEndPoint[] DestinationSideTerminalNodes {
+				get { return _destSideTermEPs; }
+				set { _destSideTermEPs = value;}
+			}
+
+			public Key RecipientID {
+				get { return _subscribeInfo.RecipientID; }
+			}
+
+			public Key DestinationID {
+				get { return _destKey; }
+			}
+
+			public void Send (object obj)
+			{
+				byte[] payload;
+				using (MemoryStream ms = new MemoryStream ()) {
+					DefaultFormatter.Serialize (ms, obj);
+					ms.Close ();
+					payload = ms.ToArray ();
+				}
+				payload = _key.Encrypt (payload, 0, payload.Length);
+				ConnectionMessageBeforeBoundary msg = new ConnectionMessageBeforeBoundary (_subscribeInfo.GetRouteEndPoints (),
+					_destSideTermEPs, _connectionId, payload);
+				_subscribeInfo.SendToAllRoutes (msg, null, null);
+			}
+
+			public void Receive (ConnectionMessage msg)
+			{
+				_destSideTermEPs = msg.EndPoints;
+				byte[] payload = _key.Decrypt (msg.Payload, 0, msg.Payload.Length);
+				object obj;
+				using (MemoryStream ms = new MemoryStream (payload)) {
+					obj = DefaultFormatter.Deserialize (ms);
+				}
+				Console.WriteLine ("{0}@{1}: Conn.Recv {2}", RecipientID, ConnectionID, obj);
+				if ("HELLO" == (obj as string))
+					Send ("HELLO, I'M OK");
+			}
+
+			public void ReceiveFirstConnectionMessage (ConnectionMessage msg)
+			{
+				_connected = true;
+				byte[] sharedInfo = new byte[msg.Payload.Length + _establishInfo.SharedInfo.Length];
+				Buffer.BlockCopy (_establishInfo.SharedInfo, 0, sharedInfo, 0, _establishInfo.SharedInfo.Length);
+				Buffer.BlockCopy (msg.Payload, 0, sharedInfo, _establishInfo.SharedInfo.Length, msg.Payload.Length);
+				ECDiffieHellman ecdh = new ECDiffieHellman (_subscribeInfo.DiffieHellman.Parameters);
+				ecdh.SharedInfo = sharedInfo;
+				byte[] iv = new byte[DefaultSymmetricBlockBits / 8];
+				byte[] key = new byte[DefaultSymmetricKeyBits / 8];
+				byte[] shared = ecdh.PerformKeyAgreement (_destPubKey, iv.Length + key.Length);
+				Buffer.BlockCopy (shared, 0, iv, 0, iv.Length);
+				Buffer.BlockCopy (shared, iv.Length, key, 0, key.Length);
+				_key = new SymmetricKey (DefaultSymmetricAlgorithmType, iv, key);
+				_destSideTermEPs = msg.EndPoints;
+				Send ("HELLO");
+			}
+
+			public IAsyncResult AsyncResult {
+				get { return _ar; }
+			}
+
+			class EstablishRouteAsyncResult : IAsyncResult
+			{
+				ConnectionInfo _owner;
+				object _state;
+				AsyncCallback _callback;
+				bool _completed = false;
+				ManualResetEvent _done = new ManualResetEvent (false);
+
+				public EstablishRouteAsyncResult (ConnectionInfo owner, AsyncCallback callback, object state)
+				{
+					_owner = owner;
+					_state = state;
+					_callback = callback;
+				}
+
+				public object AsyncState {
+					get { return _state; }
+				}
+
+				public WaitHandle AsyncWaitHandle {
+					get { return _done; }
+				}
+
+				public bool CompletedSynchronously {
+					get { return false; }
+				}
+
+				public bool IsCompleted {
+					get { return _completed; }
+				}
 			}
 		}
 		#endregion
@@ -1051,6 +1434,21 @@ namespace p2pncs.Net.Overlay.Anonymous
 		}
 
 		[Serializable]
+		class EstablishedMessage
+		{
+			RouteLabel _label;
+
+			public EstablishedMessage (RouteLabel label)
+			{
+				_label = label;
+			}
+
+			public RouteLabel Label {
+				get { return _label; }
+			}
+		}
+
+		[Serializable]
 		class Ping
 		{
 			static Ping _instance = new Ping ();
@@ -1089,6 +1487,190 @@ namespace p2pncs.Net.Overlay.Anonymous
 			public AcknowledgeMessage (byte[] payload)
 			{
 				_payload = payload;
+			}
+
+			public byte[] Payload {
+				get { return _payload; }
+			}
+		}
+
+		[Serializable]
+		class LookupRecipientProxyMessage
+		{
+			Key _recipientKey;
+			ConnectionEstablishMessage _msg;
+
+			public LookupRecipientProxyMessage (Key recipientKey, ConnectionEstablishMessage msg)
+			{
+				_recipientKey = recipientKey;
+				_msg = msg;
+			}
+
+			public Key RecipientKey {
+				get { return _recipientKey; }
+			}
+
+			public ConnectionEstablishMessage Message {
+				get { return _msg; }
+			}
+		}
+
+		[Serializable]
+		class ConnectionEstablishMessage
+		{
+			byte[] _tempPubKey;
+			byte[] _encryptedInfo;
+			Key _recipientId;
+			RouteLabel _label = 0;
+
+			ConnectionEstablishMessage (byte[] tempPubKey, byte[] encryptedInfo, RouteLabel label, Key recipientID)
+			{
+				_tempPubKey = tempPubKey;
+				_encryptedInfo = encryptedInfo;
+				_label = label;
+				_recipientId = recipientID;
+			}
+
+			public ConnectionEstablishMessage (ConnectionEstablishInfo info, ECKeyPair pubKey, Key recipientID)
+			{
+				ECDiffieHellman dh = new ECDiffieHellman (pubKey.DomainName);
+				byte[] key_bytes = new byte[DefaultSymmetricKeyBits / 8];
+				byte[] iv_bytes = new byte[DefaultSymmetricBlockBits / 8];
+				byte[] shared = dh.PerformKeyAgreement (pubKey, key_bytes.Length + iv_bytes.Length);
+				Buffer.BlockCopy (shared, 0, iv_bytes, 0, iv_bytes.Length);
+				Buffer.BlockCopy (shared, iv_bytes.Length, key_bytes, 0, key_bytes.Length);
+				SymmetricKey key = new SymmetricKey (DefaultSymmetricAlgorithmType, iv_bytes, key_bytes);
+				using (MemoryStream ms = new MemoryStream ()) {
+					DefaultFormatter.Serialize (ms, info);
+					ms.Close ();
+					byte[] raw = ms.ToArray ();
+					_encryptedInfo = key.Encrypt (raw, 0, raw.Length);
+				}
+				_tempPubKey = dh.Parameters.ExportPublicKey (true);
+				_recipientId = recipientID;
+			}
+
+			public ConnectionEstablishInfo Decrypt (ECDiffieHellman dh)
+			{
+				ECKeyPair pair = ECKeyPair.CreatePublic (dh.Parameters.DomainName, _tempPubKey);
+				byte[] key_bytes = new byte[DefaultSymmetricKeyBits / 8];
+				byte[] iv_bytes = new byte[DefaultSymmetricBlockBits / 8];
+				byte[] shared = dh.PerformKeyAgreement (pair, key_bytes.Length + iv_bytes.Length);
+				Buffer.BlockCopy (shared, 0, iv_bytes, 0, iv_bytes.Length);
+				Buffer.BlockCopy (shared, iv_bytes.Length, key_bytes, 0, key_bytes.Length);
+				SymmetricKey key = new SymmetricKey (DefaultSymmetricAlgorithmType, iv_bytes, key_bytes);
+				byte[] raw = key.Decrypt (_encryptedInfo, 0, _encryptedInfo.Length);
+				using (MemoryStream ms = new MemoryStream (raw)) {
+					return (ConnectionEstablishInfo)DefaultFormatter.Deserialize (ms);
+				}
+			}
+
+			public ConnectionEstablishMessage Copy (RouteLabel label)
+			{
+				return new ConnectionEstablishMessage (_tempPubKey, _encryptedInfo, label, _recipientId);
+			}
+
+			public RouteLabel Label {
+				get { return _label; }
+			}
+
+			public Key RecipientID {
+				get { return _recipientId; }
+			}
+		}
+
+		[Serializable]
+		class ConnectionEstablishInfo
+		{
+			byte[] _sharedInfo;
+			Key _initiator;
+			int _connectionId;
+			AnonymousEndPoint[] _endPoints;
+
+			public ConnectionEstablishInfo (Key initiator, AnonymousEndPoint[] eps, byte[] sharedInfo, int connectionId)
+			{
+				_initiator = initiator;
+				_endPoints = eps;
+				_sharedInfo = sharedInfo;
+				_connectionId = connectionId;
+			}
+
+			public byte[] SharedInfo {
+				get { return _sharedInfo; }
+			}
+
+			public Key Initiator {
+				get { return _initiator; }
+			}
+
+			public AnonymousEndPoint[] EndPoints {
+				get { return _endPoints; }
+			}
+
+			public int ConnectionId {
+				get { return _connectionId; }
+			}
+		}
+
+		[Serializable]
+		class ConnectionMessageBeforeBoundary
+		{
+			AnonymousEndPoint[] _mySideTermEPs;
+			AnonymousEndPoint[] _otherSideTermEPs;
+			byte[] _payload;
+			int _connectionId;
+
+			public ConnectionMessageBeforeBoundary (AnonymousEndPoint[] mySideTermEPs, AnonymousEndPoint[] otherSideTermEPs, int connectionId, byte[] payload)
+			{
+				_mySideTermEPs = mySideTermEPs;
+				_otherSideTermEPs = otherSideTermEPs;
+				_connectionId = connectionId;
+				_payload = payload;
+			}
+
+			public AnonymousEndPoint[] MySideTerminalEndPoints {
+				get { return _mySideTermEPs; }
+			}
+
+			public AnonymousEndPoint[] OtherSideTerminalEndPoints {
+				get { return _otherSideTermEPs; }
+			}
+
+			public int ConnectionId {
+				get { return _connectionId; }
+			}
+
+			public byte[] Payload {
+				get { return _payload; }
+			}
+		}
+
+		[Serializable]
+		class ConnectionMessage
+		{
+			RouteLabel _label;
+			int _connectionId;
+			AnonymousEndPoint[] _termEPs;
+			byte[] _payload;
+
+			public ConnectionMessage (AnonymousEndPoint[] termEPs, RouteLabel label, int connectionId, byte[] payload)
+			{
+				_termEPs = termEPs;
+				_label = label;
+				_connectionId = connectionId;
+				_payload = payload;
+			}
+
+			public RouteLabel Label {
+				get { return _label; }
+			}
+
+			public int ConnectionId {
+				get { return _connectionId; }
+			}
+
+			public AnonymousEndPoint[] EndPoints {
+				get { return _termEPs; }
 			}
 
 			public byte[] Payload {

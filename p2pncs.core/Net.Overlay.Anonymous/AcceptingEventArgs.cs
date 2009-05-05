@@ -21,22 +21,22 @@ namespace p2pncs.Net.Overlay.Anonymous
 {
 	public class AcceptingEventArgs : EventArgs
 	{
-		protected Key _recipiendId;
+		protected Key _recipiendId, _destId;
 		protected object _payload, _state = null;
 		protected DatagramReceiveEventHandler _handler = null;
 
-		public AcceptingEventArgs (Key recipientId, object payload)
+		public AcceptingEventArgs (Key recipientId, Key destId)
 		{
 			_recipiendId = recipientId;
-			_payload = payload;
+			_destId = destId;
 		}
 
 		public Key RecipientId {
 			get { return _recipiendId; }
 		}
 
-		public object Payload {
-			get { return _payload; }
+		public Key DestinationId {
+			get { return _destId; }
 		}
 
 		public DatagramReceiveEventHandler ReceiveEventHandler {
