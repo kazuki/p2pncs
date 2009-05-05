@@ -41,6 +41,10 @@ namespace p2pncs.Simulation.VirtualNet
 			get { return _vnet_node; }
 		}
 
+		public VirtualNetwork VirtualNetwork {
+			get { return _vnet; }
+		}
+
 		public IPAddress PublicIPAddress {
 			get { return _pubIP; }
 		}

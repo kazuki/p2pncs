@@ -68,7 +68,7 @@ namespace p2pncs.tests.Simulation.VirtualNet
 				endPoints[i] = new IPEndPoint (IPAddress.Parse ("10.0.0." + (i + 1).ToString ()), 10000);
 				VirtualDatagramEventSocket sock = new VirtualDatagramEventSocket (_net, ((IPEndPoint)endPoints[i]).Address);
 				sock.Bind (endPoints[i]);
-				sockets[i] = new VirtualMessagingSocket (_net, sock, true, _interrupter, DefaultTimeout, DefaultRetryCount, 1024);
+				sockets[i] = new VirtualMessagingSocket (sock, true, _interrupter, DefaultTimeout, DefaultRetryCount, 1024);
 			}
 		}
 	}

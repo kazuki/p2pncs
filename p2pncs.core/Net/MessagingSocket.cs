@@ -16,56 +16,34 @@
  */
 
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Runtime.Serialization;
-using System.Threading;
 using p2pncs.Security.Cryptography;
 using p2pncs.Threading;
-using openCrypto;
 
 namespace p2pncs.Net
 {
-	public class MessagingSocket : IMessagingSocket
+	public class MessagingSocket : MessagingSocketBase
 	{
-		TimeSpan _inquiryTimeout;
-		int _maxRetries, _retryListSize;
-
-		IDatagramEventSocket _sock;
 		SymmetricKey _key;
-		bool _active = true, _ownSocket;
 		IFormatter _formatter;
 		object _nullObject;
-		List<InquiredAsyncResult> _retryList = new List<InquiredAsyncResult> ();
-		IntervalInterrupter _interrupter;
-
-		public event ReceivedEventHandler Received;
-		public event InquiredEventHandler Inquired;
-		public event InquiredEventHandler InquiryFailure;
-		public event InquiredEventHandler InquirySuccess;
 
 		public MessagingSocket (IDatagramEventSocket sock, bool ownSocket, SymmetricKey key,
 			IFormatter formatter, object nullObject, IntervalInterrupter interrupter,
 			TimeSpan timeout, int maxRetry, int retryBufferSize)
+			: base (sock, ownSocket, interrupter, timeout, maxRetry, retryBufferSize)
 		{
-			_sock = sock;
-			_ownSocket = ownSocket;
 			_key = (key != null ? key : SymmetricKey.NoneKey);
 			_formatter = formatter;
 			_nullObject = nullObject != null ? nullObject : NullObject.Instance;
-			_interrupter = interrupter;
-			_inquiryTimeout = timeout;
-			_maxRetries = maxRetry;
-			_retryListSize = retryBufferSize;
-
-			interrupter.AddInterruption (TimeoutCheck);
-			_sock.Received += new DatagramReceiveEventHandler (Socket_Received);
+			sock.Received += Socket_Received;
 		}
 
 		void Socket_Received (object sender, DatagramReceiveEventArgs e)
 		{
-			if (!_active)
+			if (!IsActive)
 				return;
 
 			MessageType type;
@@ -96,27 +74,17 @@ namespace p2pncs.Net
 			switch (type) {
 				case MessageType.Request:
 					InquiredEventArgs args = new InquiredResponseState (obj, e.RemoteEndPoint, id);
-					if (Inquired != null) {
-						try {
-							Inquired (this, args);
-						} catch {}
-					}
+					InvokeInquired (this, args);
 					break;
 				case MessageType.Response:
-					InquiredAsyncResult ar = RemoveFromRetryList (id, e.RemoteEndPoint);
+					InquiredAsyncResultBase ar = RemoveFromRetryList (id, e.RemoteEndPoint);
 					if (ar == null)
 						return;
 					ar.Complete (obj);
-					if (InquirySuccess != null) {
-						InquirySuccess (this, new InquiredEventArgs (ar.Request, obj, e.RemoteEndPoint));
-					}
+					InvokeInquirySuccess (this, new InquiredEventArgs (ar.Request, obj, e.RemoteEndPoint));
 					break;
 				case MessageType.OneWay:
-					if (Received != null) {
-						try {
-							Received (this, new ReceivedEventArgs (obj, e.RemoteEndPoint));
-						} catch {}
-					}
+					InvokeReceived (this, new ReceivedEventArgs (obj, e.RemoteEndPoint));
 					break;
 				default:
 					goto MessageError;
@@ -127,47 +95,9 @@ MessageError:
 			return;
 		}
 
-		public void StartResponse (InquiredEventArgs args, object response)
-		{
-			InquiredResponseState state = args as InquiredResponseState;
-			if (state == null)
-				throw new ArgumentException ();
-			if (response == null)
-				response = _nullObject;
-			byte[] raw = SerializeTransmitData (MessageType.Response, state.ID, response);
-			state.Send (_sock, raw);
-		}
+		#region IMessagingSocket/MessagingSocketBase Members
 
-		void TimeoutCheck ()
-		{
-			List<InquiredAsyncResult> timeoutList = new List<InquiredAsyncResult> ();
-			DateTime now = DateTime.Now;
-			lock (_retryList) {
-				for (int i = 0; i < _retryList.Count; i ++) {
-					if (_retryList[i].Expiry <= now) {
-						timeoutList.Add (_retryList[i]);
-						if (_retryList[i].RetryCount >= _retryList[i].MaxRetry) {
-							_retryList.RemoveAt (i);
-							i --;
-						}
-					}
-				}
-			}
-			for (int i = 0; i < timeoutList.Count; i ++) {
-				InquiredAsyncResult iar = timeoutList[i];
-				if (iar.RetryCount >= iar.MaxRetry) {
-					iar.Fail ();
-					if (InquiryFailure != null)
-						InquiryFailure (this, new InquiredEventArgs (iar.Request, iar.Response, iar.RemoteEndPoint));
-				} else {
-					iar.Retry (_sock);
-				}
-			}
-		}
-
-		#region IMessagingSocket Members
-
-		public void Send (object obj, EndPoint remoteEP)
+		public override void Send (object obj, EndPoint remoteEP)
 		{
 			if (obj == null || remoteEP == null)
 				throw new ArgumentNullException ();
@@ -176,80 +106,23 @@ MessageError:
 			_sock.SendTo (raw, remoteEP);
 		}
 
-		public IAsyncResult BeginInquire (object obj, EndPoint remoteEP, AsyncCallback callback, object state)
+		protected override void StartResponse_Internal (MessagingSocketBase.InquiredResponseState state, object response)
 		{
-			return BeginInquire (obj, remoteEP, _inquiryTimeout, _maxRetries, callback, state);
+			if (response == null)
+				response = _nullObject;
+			byte[] raw = SerializeTransmitData (MessageType.Response, state.ID, response);
+			_sock.SendTo (raw, state.EndPoint);
 		}
 
-		public IAsyncResult BeginInquire (object obj, EndPoint remoteEP, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state)
+		protected override InquiredAsyncResultBase CreateInquiredAsyncResult (ushort id, object obj, EndPoint remoteEP, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state)
 		{
-			if (obj == null || remoteEP == null)
-				throw new ArgumentNullException ();
-
-			ushort id = CreateMessageID ();
 			byte[] msg = SerializeTransmitData (MessageType.Request, id, obj);
-			InquiredAsyncResult ar = new InquiredAsyncResult (obj, msg, remoteEP, id, timeout, maxRetry, callback, state);
-			ar.Transmit (_sock);
-
-			InquiredAsyncResult overflow = null;
-			lock (_retryList) {
-				if (_retryList.Count > _retryListSize) {
-					overflow = _retryList[0];
-					_retryList.RemoveAt (0);
-				}
-				_retryList.Add (ar);
-			}
-			if (overflow != null) {
-				overflow.Fail ();
-				if (InquiryFailure != null)
-					InquiryFailure (this, new InquiredEventArgs (overflow.Request, overflow.Response, overflow.RemoteEndPoint));
-			}
-			return ar;
-		}
-
-		public object EndInquire (IAsyncResult iar)
-		{
-			InquiredAsyncResult ar = iar as InquiredAsyncResult;
-			if (ar == null)
-				throw new ArgumentException ();
-			ar.AsyncWaitHandle.WaitOne ();
-			ar.AsyncWaitHandle.Close ();
-			return ar.Response;
-		}
-
-		public void Dispose ()
-		{
-			Close ();
-		}
-
-		public void Close ()
-		{
-			if (!_active)
-				return;
-			_active = false;
-			_interrupter.RemoveInterruption (TimeoutCheck);
-			if (_ownSocket) {
-				_sock.Close ();
-			}
-			lock (_retryList) {
-				for (int i = 0; i < _retryList.Count; i ++)
-					_retryList[i].Fail ();
-				_retryList.Clear ();
-			}
-		}
-
-		public IDatagramEventSocket BaseSocket {
-			get { return _sock; }
+			return new InquiredAsyncResult (obj, msg, remoteEP, id, timeout, maxRetry, callback, state);
 		}
 
 		#endregion
 
 		#region Misc
-		ushort CreateMessageID ()
-		{
-			return BitConverter.ToUInt16 (RNG.GetRNGBytes (4), 0);
-		}
-
 		byte[] SerializeTransmitData (MessageType type, ushort id, object obj)
 		{
 			using (MemoryStream strm = new MemoryStream ()) {
@@ -264,20 +137,6 @@ MessageError:
 				return _key.Encrypt (raw, 0, raw.Length);
 			}
 		}
-
-		InquiredAsyncResult RemoveFromRetryList (ushort id, EndPoint ep)
-		{
-			lock (_retryList) {
-				for (int i = 0; i < _retryList.Count; i++) {
-					InquiredAsyncResult ar = _retryList[i];
-					if (ar.ID == id && ep.Equals (ar.RemoteEndPoint)) {
-						_retryList.RemoveAt (i);
-						return ar;
-					}
-				}
-			}
-			return null;
-		}
 		#endregion
 
 		#region internal classes
@@ -288,131 +147,19 @@ MessageError:
 			OneWay = 2
 		}
 
-		class InquiredAsyncResult : IAsyncResult
+		class InquiredAsyncResult : InquiredAsyncResultBase
 		{
 			byte[] _dgram;
-			EndPoint _remoteEP;
-			object _state;
-			AsyncCallback _callback;
-			ManualResetEvent _waitHandle = new ManualResetEvent (false);
-			object _req, _response = null;
-			bool _isCompleted = false;
-			DateTime _dt, _expiry;
-			TimeSpan _timeout;
-			ushort _id;
-			int _retries = 0, _maxRetry;
 
 			public InquiredAsyncResult (object req, byte[] dgram, EndPoint remoteEP, ushort id, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state)
+				: base (req, remoteEP, id, timeout, maxRetry, callback, state)
 			{
-				_req = req;
 				_dgram = dgram;
-				_remoteEP = remoteEP;
-				_callback = callback;
-				_state = state;
-				_id = id;
-				_timeout = timeout;
-				_maxRetry = maxRetry;
 			}
 
-			public void Transmit (IDatagramEventSocket sock)
+			protected override void Transmit_Internal (IDatagramEventSocket sock)
 			{
-				_dt = DateTime.Now;
-				_expiry = _dt + _timeout;
 				sock.SendTo (_dgram, 0, _dgram.Length, _remoteEP);
-			}
-
-			public void Retry (IDatagramEventSocket sock)
-			{
-				_retries++;
-				Transmit (sock);
-			}
-
-			public object Request {
-				get { return _req; }
-			}
-
-			public object Response {
-				get { return _response; }
-			}
-
-			public DateTime TransmitTime {
-				get { return _dt; }
-			}
-
-			public DateTime Expiry {
-				get { return _expiry; }
-			}
-
-			public ushort ID {
-				get { return _id; }
-			}
-
-			public int RetryCount {
-				get { return _retries; }
-			}
-
-			public EndPoint RemoteEndPoint {
-				get { return _remoteEP; }
-			}
-
-			public int MaxRetry {
-				get { return _maxRetry; }
-			}
-
-			public void Complete (object obj)
-			{
-				_response = obj;
-				_isCompleted = true;
-				_waitHandle.Set ();
-				if (_callback != null) {
-					try {
-						_callback (this);
-					} catch {}
-				}
-			}
-
-			public void Fail ()
-			{
-				Complete (null);
-			}
-
-			public object AsyncState {
-				get { return _state; }
-			}
-
-			public WaitHandle AsyncWaitHandle {
-				get { return _waitHandle; }
-			}
-
-			public bool CompletedSynchronously {
-				get { return false; }
-			}
-
-			public bool IsCompleted {
-				get { return _isCompleted; }
-			}
-		}
-
-		class InquiredResponseState : InquiredEventArgs
-		{
-			ushort _id;
-			bool _sentFlag = false;
-
-			public InquiredResponseState (object inq, EndPoint ep, ushort id) : base (inq, ep)
-			{
-				_id = id;
-			}
-
-			public void Send (IDatagramEventSocket sock, byte[] raw)
-			{
-				if (_sentFlag)
-					throw new ApplicationException ();
-				sock.SendTo (raw, 0, raw.Length, this.EndPoint);
-				_sentFlag = true;
-			}
-
-			public ushort ID {
-				get { return _id; }
 			}
 		}
 

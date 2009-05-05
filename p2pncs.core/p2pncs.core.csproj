@@ -66,6 +66,7 @@
     <Compile Include="Net\InquiredEventArgs.cs" />
     <Compile Include="Net\InquiredEventHandler.cs" />
     <Compile Include="Net\MessagingSocket.cs" />
+    <Compile Include="Net\MessagingSocketBase.cs" />
     <Compile Include="Net\ReceivedEventArgs.cs" />
     <Compile Include="Net\ReceivedEventHandler.cs" />
     <Compile Include="Net\UdpSocket.cs" />
