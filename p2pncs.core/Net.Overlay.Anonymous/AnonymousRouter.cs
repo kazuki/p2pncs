@@ -173,8 +173,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 						object routedMsg = MultipleCipherHelper.DecryptRoutedPayloadAtEnd (routeInfo.Key, msg.Payload);
 						Console.WriteLine ("{0}: Received RoutedMessage (end) : {1}", _kbr.SelftNodeId, routedMsg);
 
-						// Response "ACK" message
-						payload = MultipleCipherHelper.CreateRoutedPayload (routeInfo.Key, "ACK");
+						object ack = ProcessMessage (routedMsg, routeInfo.BoundaryInfo);
+						payload = MultipleCipherHelper.CreateRoutedPayload (routeInfo.Key, ack);
 						_sock.StartResponse (e, new AcknowledgeMessage (payload));
 					}
 				} else {
@@ -188,6 +188,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					} else {
 						object routedMsg = MultipleCipherHelper.DecryptRoutedPayload (routeInfo.StartPointInfo.RelayNodeKeys, msg.Payload);
 						Console.WriteLine ("{0}: Received RoutedMessage (start) : {1}", _kbr.SelftNodeId, routedMsg);
+						ProcessMessage (routedMsg, routeInfo.StartPointInfo);
 					}
 					_sock.StartResponse (e, "ACK");
 				}
@@ -222,6 +223,17 @@ namespace p2pncs.Net.Overlay.Anonymous
 				routeInfo.ReceiveMessageFromNextNode ();
 			else if (aep.Equals (routeInfo.Previous))
 				routeInfo.ReceiveMessageFromPreviousNode ();
+		}
+		#endregion
+
+		#region Message Handlers
+		void ProcessMessage (object msg, StartPointInfo info)
+		{
+		}
+
+		object ProcessMessage (object msg, BoundaryInfo info)
+		{
+			return "ACK";
 		}
 		#endregion
 
