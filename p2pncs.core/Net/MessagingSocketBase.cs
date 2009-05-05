@@ -35,8 +35,11 @@ namespace p2pncs.Net
 		List<InquiredAsyncResultBase> _retryList = new List<InquiredAsyncResultBase> ();
 		IntervalInterrupter _interrupter;
 
+		ReaderWriterLockWrapper _inquiredHandlersLock = new ReaderWriterLockWrapper ();
+		Dictionary<Type, InquiredEventHandler> _inquiredHandlers = new Dictionary<Type, InquiredEventHandler> ();
+
 		public event ReceivedEventHandler Received;
-		public event InquiredEventHandler Inquired;
+		public event InquiredEventHandler InquiredUnknownMessage;
 		public event InquiredEventHandler InquirySuccess;
 		public event InquiredEventHandler InquiryFailure;
 
@@ -108,6 +111,30 @@ namespace p2pncs.Net
 			StartResponse_Internal (state, response);
 		}
 		protected abstract void StartResponse_Internal (InquiredResponseState state, object response);
+
+		public void AddInquiredHandler (Type inquiryMessageType, InquiredEventHandler handler)
+		{
+			using (IDisposable cookie = _inquiredHandlersLock.EnterWriteLock ()) {
+				InquiredEventHandler value;
+				if (_inquiredHandlers.TryGetValue (inquiryMessageType, out value)) {
+					value += handler;
+				} else {
+					_inquiredHandlers.Add (inquiryMessageType, handler);
+				}
+			}
+		}
+
+		public void RemoveInquiredHandler (Type inquiryMessageType, InquiredEventHandler handler)
+		{
+			using (IDisposable cookie = _inquiredHandlersLock.EnterWriteLock ()) {
+				InquiredEventHandler value;
+				if (_inquiredHandlers.TryGetValue (inquiryMessageType, out value)) {
+					value -= handler;
+					if (value == null)
+						_inquiredHandlers.Remove (inquiryMessageType);
+				}
+			}
+		}
 
 		public IDatagramEventSocket BaseSocket {
 			get { return _sock; }
@@ -190,10 +217,19 @@ namespace p2pncs.Net
 
 		protected void InvokeInquired (object sender, InquiredEventArgs e)
 		{
-			if (Inquired != null) {
-				try {
-					Inquired (sender, e);
-				} catch {}
+			using (IDisposable cookie = _inquiredHandlersLock.EnterReadLock ()) {
+				InquiredEventHandler handler;
+				if (e.InquireMessage != null && _inquiredHandlers.TryGetValue (e.InquireMessage.GetType (), out handler)) {
+					try {
+						handler (sender, e);
+					} catch {}
+				} else {
+					if (InquiredUnknownMessage != null) {
+						try {
+							InquiredUnknownMessage (sender, e);
+						} catch {}
+					}
+				}
 			}
 		}
 

@@ -19,7 +19,7 @@ using System;
 
 namespace p2pncs.Net.Overlay.DHT
 {
-	public interface IDistributedHashTable
+	public interface IDistributedHashTable : IDisposable
 	{
 		IAsyncResult BeginGet (Key key, AsyncCallback callback, object state);
 		GetResult EndGet (IAsyncResult ar);

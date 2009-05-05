@@ -35,21 +35,19 @@ namespace p2pncs.Net.Overlay.DHT
 			_kbr = kbr;
 			_sock = sock;
 			_lht = lht;
-			sock.Inquired += new InquiredEventHandler (MessagingSocket_Inquired);
+			sock.AddInquiredHandler (typeof (GetRequest), MessagingSocket_Inquired_GetRequest);
+			sock.AddInquiredHandler (typeof (PutRequest), MessagingSocket_Inquired_PutRequest);
 		}
 
-		void MessagingSocket_Inquired (object sender, InquiredEventArgs e)
+		void MessagingSocket_Inquired_GetRequest (object sender, InquiredEventArgs e)
 		{
-			GetRequest getReq = e.InquireMessage as GetRequest;
-			PutRequest putReq = e.InquireMessage as PutRequest;
-			if (getReq == null && putReq == null)
-				return;
-
-			if (getReq != null) {
-				_sock.StartResponse (e, new GetResponse (_lht.Get (getReq.Key)));
-			} else {
-				_lht.Put (putReq.Key, DateTime.Now + putReq.LifeTime, putReq.Value);
-			}
+			GetRequest getReq = (GetRequest)e.InquireMessage;
+			_sock.StartResponse (e, new GetResponse (_lht.Get (getReq.Key)));
+		}
+		void MessagingSocket_Inquired_PutRequest (object sender, InquiredEventArgs e)
+		{
+			PutRequest putReq = (PutRequest)e.InquireMessage;
+			_lht.Put (putReq.Key, DateTime.Now + putReq.LifeTime, putReq.Value);
 		}
 
 		#region IDistributedHashTable Members
@@ -78,6 +76,16 @@ namespace p2pncs.Net.Overlay.DHT
 
 		public IKeyBasedRouter KeyBasedRouter {
 			get { return _kbr; }
+		}
+
+		#endregion
+
+		#region IDisposable Members
+
+		public void Dispose ()
+		{
+			_sock.RemoveInquiredHandler (typeof (GetRequest), MessagingSocket_Inquired_GetRequest);
+			_sock.RemoveInquiredHandler (typeof (PutRequest), MessagingSocket_Inquired_PutRequest);
 		}
 
 		#endregion

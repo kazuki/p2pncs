@@ -46,34 +46,31 @@ namespace p2pncs.Net.Overlay
 			_maxNodeHandlesPerResponse = (dgramMaxSize - overhead) / nodeHandleBytes;
 
 			algo.Setup (self, this);
-			sock.Inquired += new InquiredEventHandler (MessagingSocket_Inquired);
+			sock.AddInquiredHandler (typeof (NextHopQueryMessage), MessagingSocket_Inquired_NextHopQueryMessage);
 		}
 
 		#region MessagingSocket Inquired Handler
-		void MessagingSocket_Inquired (object sender, InquiredEventArgs e)
+		void MessagingSocket_Inquired_NextHopQueryMessage (object sender, InquiredEventArgs e)
 		{
 			if (!_active)
 				return;
-			object obj_req = e.InquireMessage;
-			if (obj_req is NextHopQueryMessage) {
-				NextHopQueryMessage req = (NextHopQueryMessage)obj_req;
-				NodeHandle[] nextHops = _algo.GetNextHopNodes (req.Destination, Math.Max (_maxNodeHandlesPerResponse / 3 * 2, req.NumberOfNextHops), req.Sender);
-				bool isRoot = false;
-				if (nextHops == null) {
-					isRoot = true;
-					nextHops = _algo.GetNeighbors (req.NumberOfRootCandidates - 1);
-				}
-				int numOfRands = _maxNodeHandlesPerResponse - nextHops.Length;
-				NodeHandle[] rndNodes;
-				if (numOfRands <= 0) {
-					numOfRands = 0;
-					rndNodes = null;
-				} else {
-					rndNodes = _algo.GetRandomNodes (numOfRands);
-				}
-				_sock.StartResponse (e, new NextHopQueryResponse (_selfId, isRoot, nextHops, rndNodes));
-				_algo.Touch (new NodeHandle (req.Sender, e.EndPoint));
+			NextHopQueryMessage req = (NextHopQueryMessage)e.InquireMessage;
+			NodeHandle[] nextHops = _algo.GetNextHopNodes (req.Destination, Math.Max (_maxNodeHandlesPerResponse / 3 * 2, req.NumberOfNextHops), req.Sender);
+			bool isRoot = false;
+			if (nextHops == null) {
+				isRoot = true;
+				nextHops = _algo.GetNeighbors (req.NumberOfRootCandidates - 1);
 			}
+			int numOfRands = _maxNodeHandlesPerResponse - nextHops.Length;
+			NodeHandle[] rndNodes;
+			if (numOfRands <= 0) {
+				numOfRands = 0;
+				rndNodes = null;
+			} else {
+				rndNodes = _algo.GetRandomNodes (numOfRands);
+			}
+			_sock.StartResponse (e, new NextHopQueryResponse (_selfId, isRoot, nextHops, rndNodes));
+			_algo.Touch (new NodeHandle (req.Sender, e.EndPoint));
 		}
 		#endregion
 
@@ -86,6 +83,7 @@ namespace p2pncs.Net.Overlay
 
 		public void Close ()
 		{
+			_sock.RemoveInquiredHandler (typeof (NextHopQueryMessage), MessagingSocket_Inquired_NextHopQueryMessage);
 			_algo.Close ();
 		}
 

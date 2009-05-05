@@ -64,7 +64,9 @@ namespace p2pncs.Net
 		/// <returns>問い合わせに対するレスポンス。問い合わせに失敗した場合は null が返る</returns>
 		object EndInquire (IAsyncResult ar);
 
-		event InquiredEventHandler Inquired;
+		event InquiredEventHandler InquiredUnknownMessage;
+		void AddInquiredHandler (Type inquiredMessageType, InquiredEventHandler handler);
+		void RemoveInquiredHandler (Type inquiredMessageType, InquiredEventHandler handler);
 		void StartResponse (InquiredEventArgs args, object response);
 
 		event InquiredEventHandler InquiryFailure;

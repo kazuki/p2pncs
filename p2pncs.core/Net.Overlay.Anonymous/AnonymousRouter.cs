@@ -71,8 +71,6 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 		Dictionary<Key, List<BoundaryInfo>> _boundMap = new Dictionary<Key, List<BoundaryInfo>> ();
 		ReaderWriterLockWrapper _boundMapLock = new ReaderWriterLockWrapper ();
-
-		Dictionary<Type, InquiredEventHandler> _inquireHandlers = new Dictionary<Type,InquiredEventHandler> ();
 		#endregion
 
 		static AnonymousRouter ()
@@ -90,22 +88,13 @@ namespace p2pncs.Net.Overlay.Anonymous
 			_ecdh = new ECDiffieHellman (privateNodeKey);
 			_interrupter = interrupter;
 
-			_inquireHandlers.Add (typeof (EstablishRouteMessage), MessagingSocket_Inquired_EstablishRouteMessage);
-			_inquireHandlers.Add (typeof (RoutedMessage), MessagingSocket_Inquired_RoutedMessage);
-			_sock.Inquired += MessagingSocket_Inquired;
+			_sock.AddInquiredHandler (typeof (EstablishRouteMessage), MessagingSocket_Inquired_EstablishRouteMessage);
+			_sock.AddInquiredHandler (typeof (RoutedMessage), MessagingSocket_Inquired_RoutedMessage);
 			_sock.InquirySuccess += new InquiredEventHandler (MessagingSocket_Success);
 			interrupter.AddInterruption (RouteTimeoutCheck);
 		}
 
 		#region MessagingSocket
-		void MessagingSocket_Inquired (object sender, InquiredEventArgs e)
-		{
-			Type inqMsgType = e.InquireMessage.GetType ();
-			InquiredEventHandler handler;
-			if (_inquireHandlers.TryGetValue (inqMsgType, out handler))
-				handler (sender, e);
-		}
-
 		void MessagingSocket_Inquired_EstablishRouteMessage (object sender, InquiredEventArgs e)
 		{
 			EstablishRouteMessage msg = (EstablishRouteMessage)e.InquireMessage;
@@ -342,7 +331,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 		public void Close ()
 		{
-			_sock.Inquired -= MessagingSocket_Inquired;
+			_sock.RemoveInquiredHandler (typeof (EstablishRouteMessage), MessagingSocket_Inquired_EstablishRouteMessage);
+			_sock.RemoveInquiredHandler (typeof (RoutedMessage), MessagingSocket_Inquired_RoutedMessage);
+			_sock.InquirySuccess -= MessagingSocket_Success;
 			_interrupter.RemoveInterruption (RouteTimeoutCheck);
 
 			using (IDisposable cookie = _subscribeMapLock.EnterWriteLock ()) {

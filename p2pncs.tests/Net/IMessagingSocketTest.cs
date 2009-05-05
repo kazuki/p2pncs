@@ -55,7 +55,7 @@ namespace p2pncs.tests.Net
 		{
 			CreateMessagingSockets (count, out sockets, out endPoints, out noRouteEP);
 			for (int i = 0; i < sockets.Length; i++) {
-				sockets[i].Inquired += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+				sockets[i].InquiredUnknownMessage += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
 					(sender as IMessagingSocket).StartResponse (e, ((string)e.InquireMessage) + ":Responsed");
 				});
 			}
@@ -175,7 +175,7 @@ namespace p2pncs.tests.Net
 					msockets[0].Received += new ReceivedEventHandler(delegate (object sender, ReceivedEventArgs e) {
 						Assert.Fail ();
 					});
-					msockets[0].Inquired += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+					msockets[0].InquiredUnknownMessage += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
 						Assert.Fail ();
 					});
 					msockets[0].InquirySuccess += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
@@ -188,7 +188,7 @@ namespace p2pncs.tests.Net
 						Assert.AreEqual ("HELLO", e.Message as string);
 						done.Set ();
 					});
-					msockets[1].Inquired += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+					msockets[1].InquiredUnknownMessage += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
 						Assert.Fail ();
 					});
 					msockets[1].InquirySuccess += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
