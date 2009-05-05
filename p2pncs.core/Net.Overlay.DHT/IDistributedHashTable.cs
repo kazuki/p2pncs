@@ -21,7 +21,9 @@ namespace p2pncs.Net.Overlay.DHT
 {
 	public interface IDistributedHashTable : IDisposable
 	{
-		IAsyncResult BeginGet (Key key, AsyncCallback callback, object state);
+		void RegisterTypeID (Type type, int id);
+
+		IAsyncResult BeginGet (Key key, int typeId, AsyncCallback callback, object state);
 		GetResult EndGet (IAsyncResult ar);
 
 		IAsyncResult BeginPut (Key key, TimeSpan lifeTime, object value, AsyncCallback callback, object state);

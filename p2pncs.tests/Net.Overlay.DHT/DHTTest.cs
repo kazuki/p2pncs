@@ -38,6 +38,7 @@ namespace p2pncs.tests.Net.Overlay.DHT
 		{
 			VirtualNetwork network = new VirtualNetwork (20, 20, 5, 2);
 			IntervalInterrupter interrupter = new IntervalInterrupter (TimeSpan.FromMilliseconds (50), "MessagingSocket Interrupter");
+			IntervalInterrupter dhtInt = new IntervalInterrupter (TimeSpan.FromSeconds (5), "DHT Maintenance Interrupter");
 			interrupter.Start ();
 			System.Runtime.Serialization.Formatters.Binary.BinaryFormatter formatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter ();
 			Key[] keys = new Key[] {
@@ -66,7 +67,8 @@ namespace p2pncs.tests.Net.Overlay.DHT
 					sockets.Add (msock);
 
 					IKeyBasedRouter router = new SimpleIterativeRouter (keys[i], msock, new SimpleRoutingAlgorithm ());
-					SimpleDHT dht = new SimpleDHT (router, msock, new OnMemoryLocalHashTable ());
+					SimpleDHT dht = new SimpleDHT (router, msock, new OnMemoryLocalHashTable (dhtInt));
+					dht.RegisterTypeID (typeof (string), 0);
 					dht.NumberOfReplicas = 1;
 					routers.Add (router);
 					dhts.Add (dht);
@@ -78,19 +80,34 @@ namespace p2pncs.tests.Net.Overlay.DHT
 
 				System.Threading.Thread.Sleep (1000);
 				Key reqKey = new Key (new byte[] { 0xb4, 0x07 });
+				HashSet<object> expectedSet = new HashSet<object> ();
+				expectedSet.Add ("HELLO");
 				dhts[0].EndPut (dhts[0].BeginPut (reqKey, TimeSpan.FromHours (1), "HELLO", null, null));
-				Assert.IsNull (dhts[0].LocalHashTable.Get (reqKey));
-				Assert.IsNull (dhts[1].LocalHashTable.Get (reqKey));
-				Assert.IsNull (dhts[2].LocalHashTable.Get (reqKey));
-				Assert.IsNull (dhts[3].LocalHashTable.Get (reqKey));
-				Assert.IsNull (dhts[4].LocalHashTable.Get (reqKey));
-				Assert.AreEqual ("HELLO", dhts[5].LocalHashTable.Get (reqKey));
-				Assert.IsNull (dhts[6].LocalHashTable.Get (reqKey));
-				Assert.IsNull (dhts[7].LocalHashTable.Get (reqKey));
-
-				GetResult ret = dhts[0].EndGet (dhts[0].BeginGet (reqKey, null, null));
+				Assert.IsNull (dhts[0].LocalHashTable.Get (reqKey, 0));
+				Assert.IsNull (dhts[1].LocalHashTable.Get (reqKey, 0));
+				Assert.IsNull (dhts[2].LocalHashTable.Get (reqKey, 0));
+				Assert.IsNull (dhts[3].LocalHashTable.Get (reqKey, 0));
+				Assert.IsNull (dhts[4].LocalHashTable.Get (reqKey, 0));
+				Assert.IsTrue (expectedSet.SetEquals (dhts[5].LocalHashTable.Get (reqKey, 0)));
+				Assert.IsNull (dhts[6].LocalHashTable.Get (reqKey, 0));
+				Assert.IsNull (dhts[7].LocalHashTable.Get (reqKey, 0));
+				GetResult ret = dhts[0].EndGet (dhts[0].BeginGet (reqKey, 0, null, null));
 				Assert.IsNotNull (ret);
-				Assert.AreEqual ("HELLO", ret.Value);
+				Assert.IsTrue (expectedSet.SetEquals (ret.Values));
+
+				dhts[0].EndPut (dhts[0].BeginPut (reqKey, TimeSpan.FromHours (1), "HOGE", null, null));
+				expectedSet.Add ("HOGE");
+				Assert.IsNull (dhts[0].LocalHashTable.Get (reqKey, 0));
+				Assert.IsNull (dhts[1].LocalHashTable.Get (reqKey, 0));
+				Assert.IsNull (dhts[2].LocalHashTable.Get (reqKey, 0));
+				Assert.IsNull (dhts[3].LocalHashTable.Get (reqKey, 0));
+				Assert.IsNull (dhts[4].LocalHashTable.Get (reqKey, 0));
+				Assert.IsTrue (expectedSet.SetEquals (dhts[5].LocalHashTable.Get (reqKey, 0)));
+				Assert.IsNull (dhts[6].LocalHashTable.Get (reqKey, 0));
+				Assert.IsNull (dhts[7].LocalHashTable.Get (reqKey, 0));
+				ret = dhts[0].EndGet (dhts[0].BeginGet (reqKey, 0, null, null));
+				Assert.IsNotNull (ret);
+				Assert.IsTrue (expectedSet.SetEquals (ret.Values));
 			} finally {
 				for (int i = 0; i < routers.Count; i++)
 					routers[i].Close ();

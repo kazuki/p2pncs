@@ -20,13 +20,13 @@ namespace p2pncs.Net.Overlay.DHT
 	public class GetResult
 	{
 		Key _key;
-		object _value;
+		object[] _values;
 		int _hops;
 
-		internal GetResult (Key key, object value, int hops)
+		internal GetResult (Key key, object[] values, int hops)
 		{
 			_key = key;
-			_value = value;
+			_values = values;
 			_hops = hops;
 		}
 
@@ -34,8 +34,8 @@ namespace p2pncs.Net.Overlay.DHT
 			get { return _key; }
 		}
 
-		public object Value {
-			get { return _value; }
+		public object[] Values {
+			get { return _values; }
 		}
 
 		public int Hops {

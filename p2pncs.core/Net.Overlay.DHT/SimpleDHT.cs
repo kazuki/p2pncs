@@ -29,6 +29,7 @@ namespace p2pncs.Net.Overlay.DHT
 		IMessagingSocket _sock;
 		ILocalHashTable _lht;
 		int _numOfReplicas = 3, _numOfSimultaneous = 3;
+		Dictionary<Type, int> _typeMap = new Dictionary<Type, int> ();
 
 		public SimpleDHT (IKeyBasedRouter kbr, IMessagingSocket sock, ILocalHashTable lht)
 		{
@@ -42,19 +43,32 @@ namespace p2pncs.Net.Overlay.DHT
 		void MessagingSocket_Inquired_GetRequest (object sender, InquiredEventArgs e)
 		{
 			GetRequest getReq = (GetRequest)e.InquireMessage;
-			_sock.StartResponse (e, new GetResponse (_lht.Get (getReq.Key)));
+			_sock.StartResponse (e, new GetResponse (_lht.Get (getReq.Key, getReq.TypeID)));
 		}
 		void MessagingSocket_Inquired_PutRequest (object sender, InquiredEventArgs e)
 		{
 			PutRequest putReq = (PutRequest)e.InquireMessage;
-			_lht.Put (putReq.Key, DateTime.Now + putReq.LifeTime, putReq.Value);
+			LocalPut (putReq.Key, putReq.LifeTime, putReq.Value);
+			_sock.StartResponse (e, new PutResponse ());
+		}
+		void LocalPut (Key key, TimeSpan lifeTime, object value)
+		{
+			int typeId;
+			if (_typeMap.TryGetValue (value.GetType (), out typeId)) {
+				_lht.Put (key, typeId, DateTime.Now + lifeTime, value);
+			}
 		}
 
 		#region IDistributedHashTable Members
 
-		public IAsyncResult BeginGet (Key key, AsyncCallback callback, object state)
+		public void RegisterTypeID (Type type, int id)
 		{
-			AsyncResult ar = new AsyncResult (key, this, callback, state);
+			_typeMap.Add (type, id);
+		}
+
+		public IAsyncResult BeginGet (Key key, int typeId, AsyncCallback callback, object state)
+		{
+			AsyncResult ar = new AsyncResult (key, typeId, this, callback, state);
 			return ar;
 		}
 
@@ -117,6 +131,7 @@ namespace p2pncs.Net.Overlay.DHT
 			SimpleDHT _dht;
 			IAsyncResult _kbrAR;
 			Key _key;
+			int _typeId;
 			AsyncCallback _callback;
 			object _state;
 			ManualResetEvent _done = new ManualResetEvent (false);
@@ -127,12 +142,13 @@ namespace p2pncs.Net.Overlay.DHT
 			int _hops, _getInquires = 0;
 			object _getLock = null;
 
-			public AsyncResult (Key key, SimpleDHT dht, AsyncCallback callback, object state)
+			public AsyncResult (Key key, int typeId, SimpleDHT dht, AsyncCallback callback, object state)
 			{
 				_callback = callback;
 				_state = state;
 				_dht = dht;
 				_key = key;
+				_typeId = typeId;
 				_start = DateTime.Now;
 				_getMethod = true;
 				_getLock = new object ();
@@ -167,7 +183,7 @@ namespace p2pncs.Net.Overlay.DHT
 				AsyncCallback callback;
 				if (_getMethod) {
 					count = Math.Min (_dht.NumberOfReplicas, rr.RootCandidates.Length);
-					msg = new GetRequest (_key);
+					msg = new GetRequest (_key, _typeId);
 					callback = GetRequest_Callback;
 				} else {
 					count = Math.Min (_dht.NumberOfReplicas, rr.RootCandidates.Length);
@@ -181,7 +197,7 @@ namespace p2pncs.Net.Overlay.DHT
 						if (_getMethod) {
 							lock (_getLock) {
 								_getInquires --;
-								object ret = _dht.LocalHashTable.Get (_key);
+								object[] ret = _dht.LocalHashTable.Get (_key, _typeId);
 								if (ret != null || _getInquires == 0) {
 									_result = new GetResult (_key, ret, rr.Hops);
 									Done ();
@@ -190,7 +206,7 @@ namespace p2pncs.Net.Overlay.DHT
 								}
 							}
 						} else {
-							_dht.LocalHashTable.Put (_putReq.Key, DateTime.Now + _putReq.LifeTime, _putReq.Value);
+							_dht.LocalPut (_putReq.Key, _putReq.LifeTime, _putReq.Value);
 						}
 					} else {
 						_dht.MessagingSocket.BeginInquire (msg, rr.RootCandidates[i].EndPoint, callback, null);
@@ -205,12 +221,12 @@ namespace p2pncs.Net.Overlay.DHT
 					if (_result != null)
 						return;
 					_getInquires --;
-					if (res == null || res.Value == null) {
+					if (res == null || res.Values == null) {
 						if (_getInquires != 0)
 							return;
 						_result = new GetResult (_key, null, _hops);
 					} else {
-						_result = new GetResult (_key, res.Value, _hops);
+						_result = new GetResult (_key, res.Values, _hops);
 					}
 				}
 				Done ();
@@ -259,29 +275,35 @@ namespace p2pncs.Net.Overlay.DHT
 		class GetRequest
 		{
 			Key _key;
+			int _typeId;
 
-			public GetRequest (Key key)
+			public GetRequest (Key key, int typeId)
 			{
 				_key = key;
+				_typeId = typeId;
 			}
 
 			public Key Key {
 				get { return _key; }
+			}
+
+			public int TypeID {
+				get { return _typeId; }
 			}
 		}
 
 		[Serializable]
 		class GetResponse
 		{
-			object _value;
+			object[] _values;
 
-			public GetResponse (object value)
+			public GetResponse (object[] values)
 			{
-				_value = value;
+				_values = values;
 			}
 
-			public object Value {
-				get { return _value; }
+			public object[] Values {
+				get { return _values; }
 			}
 		}
 

@@ -21,9 +21,13 @@ namespace p2pncs.Net.Overlay.DHT
 {
 	public interface ILocalHashTable : IDisposable
 	{
-		void Put (Key key, DateTime expires, object value);
-		object Get (Key key);
-		void Remove (Key key);
+		void Put (Key key, int typeId, DateTime expires, object value);
+
+		object[] Get (Key key, int typeId);
+
+		/// <param name="value">削除する値. nullの場合はkeyとtypeIdが一致するすべての値を削除</param>
+		void Remove (Key key, int typeId, object value);
+
 		void Clear ();
 	}
 }
