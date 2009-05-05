@@ -26,7 +26,7 @@ namespace p2pncs.Simulation.VirtualNet
 	{
 		VirtualNetwork _vnet;
 		VirtualNetwork.VirtualNetworkNode _vnet_node = null;
-		IPEndPoint _bindEP;
+		EndPoint _bindPubEP;
 		IPAddress _pubIP;
 
 		public VirtualDatagramEventSocket (VirtualNetwork vnet, IPAddress publicIPAddress)
@@ -45,16 +45,16 @@ namespace p2pncs.Simulation.VirtualNet
 			get { return _pubIP; }
 		}
 
-		public IPEndPoint BindEndPoint {
-			get { return _bindEP; }
+		public EndPoint BindedPublicEndPoint {
+			get { return _bindPubEP; }
 		}
 
 		#region IDatagramEventSocket Members
 
 		public void Bind (EndPoint bindEP)
 		{
-			_bindEP = new IPEndPoint (_pubIP, ((IPEndPoint)bindEP).Port);
-			_vnet_node = _vnet.AddVirtualNode (this, _bindEP);
+			_bindPubEP = new IPEndPoint (_pubIP, ((IPEndPoint)bindEP).Port);
+			_vnet_node = _vnet.AddVirtualNode (this, _bindPubEP);
 		}
 
 		public void Close ()
@@ -76,7 +76,7 @@ namespace p2pncs.Simulation.VirtualNet
 		{
 			if (_vnet == null)
 				return;
-			_vnet.AddSendQueue (_bindEP, (IPEndPoint)remoteEP, buffer, offset, size);
+			_vnet.AddSendQueue (_bindPubEP, remoteEP, buffer, offset, size);
 		}
 
 		public event DatagramReceiveEventHandler Received;
