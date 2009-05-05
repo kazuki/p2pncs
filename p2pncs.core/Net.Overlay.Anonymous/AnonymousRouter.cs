@@ -41,7 +41,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 		const int PayloadFixedSize = (DefaultSymmetricKeyBits / 8) * 56; // 896 bytes
 
 		const int DefaultSubscribeRoutes = 3;
-		const int DefaultRealyNodes = 5;
+		const int DefaultRealyNodes = 3;
 
 		static TimeSpan MaxRRT = TimeSpan.FromMilliseconds (1000); // included cost of cryptography
 		static TimeSpan MultipleCipherRouteMaxRoundtripTime = new TimeSpan (MaxRRT.Ticks * DefaultRealyNodes);
@@ -366,12 +366,13 @@ namespace p2pncs.Net.Overlay.Anonymous
 		class SubscribeInfo
 		{
 			bool _active = true;
-			float FACTOR = 1.5F;
+			float FACTOR = 1.0F;
 			int _numOfRoutes = DefaultSubscribeRoutes;
 			Key _recipientId;
 			IKeyBasedRouter _kbr;
 			ECKeyPair _privateKey;
 			AnonymousRouter _router;
+			object _listLock = new object ();
 			List<StartPointInfo> _establishedList = new List<StartPointInfo> ();
 			List<StartPointInfo> _establishingList = new List<StartPointInfo> ();
 
@@ -385,45 +386,51 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public void Start ()
 			{
-				for (int i = 0; i < (int)Math.Ceiling (_numOfRoutes * FACTOR); i++) {
-					StartEstablishingRoute ();
-				}
+				CheckNumberOfEstablishedRoutes ();
 			}
 
 			public void CheckTimeout ()
 			{
 				DateTime border = DateTime.Now - RelayRouteTimeout;
-				lock (_establishedList) {
+				lock (_listLock) {
 					for (int i = 0; i < _establishedList.Count; i ++) {
 						if (_establishedList[i].LastSendTime < border)
 							_establishedList[i].SendMessage (_kbr.MessagingSocket, Ping.Instance);
 					}
 				}
+
+				CheckNumberOfEstablishedRoutes ();
 			}
 
-			void StartEstablishingRoute ()
+			void CheckNumberOfEstablishedRoutes ()
 			{
-				// for DEBUG
-				if (_establishingList.Count + _establishedList.Count > 0)
-					return;
-
 				if (!_active) return;
-				StartPointInfo info = new StartPointInfo (this, _kbr.RoutingAlgorithm.GetRandomNodes (DefaultRealyNodes));
-				lock (_establishingList) {
-					_establishingList.Add (info);
+				lock (_listLock) {
+					if (_establishedList.Count < _numOfRoutes) {
+						int expectedCount = (int)Math.Ceiling ((_numOfRoutes - _establishedList.Count) * FACTOR);
+						int count = expectedCount - _establishingList.Count;
+						while (count-- > 0) {
+							NodeHandle[] relays = _kbr.RoutingAlgorithm.GetRandomNodes (DefaultRealyNodes);
+							if (relays.Length < DefaultRealyNodes) {
+								Console.WriteLine ("{0}: Relay node selection failed", _kbr.SelftNodeId);
+								return;
+							}
+							StartPointInfo info = new StartPointInfo (this, relays);
+							_establishingList.Add (info);
+							byte[] payload = info.CreateEstablishData (_recipientId, _privateKey.DomainName);
+							EstablishRouteMessage msg = new EstablishRouteMessage (info.Label, payload);
+							_kbr.MessagingSocket.BeginInquire (msg, info.RelayNodes[0].EndPoint,
+								MultipleCipherRouteMaxRoundtripTime, MultipleCipherRouteMaxRetry, EstablishRoute_Callback, info);
+						}
+					}
 				}
-				byte[] payload = info.CreateEstablishData (_recipientId, _privateKey.DomainName);
-				EstablishRouteMessage msg = new EstablishRouteMessage (info.Label, payload);
-				Console.WriteLine ("START");
-				_kbr.MessagingSocket.BeginInquire (msg, info.RelayNodes[0].EndPoint,
-					MultipleCipherRouteMaxRoundtripTime, MultipleCipherRouteMaxRetry, EstablishRoute_Callback, info);
 			}
 
 			void EstablishRoute_Callback (IAsyncResult ar)
 			{
 				AcknowledgeMessage ack = _kbr.MessagingSocket.EndInquire (ar) as AcknowledgeMessage;
 				StartPointInfo startInfo = (StartPointInfo)ar.AsyncState;
-				lock (_establishingList) {
+				lock (_listLock) {
 					_establishingList.Remove (startInfo);
 				}
 				Console.WriteLine (ack == null ? "ESTABLISH FAILED" : "ESTABLISHED !!");
@@ -431,16 +438,11 @@ namespace p2pncs.Net.Overlay.Anonymous
 				if (!_active) return;
 				if (ack == null) {
 					startInfo.Close ();
-					if (_establishedList.Count < _numOfRoutes) {
-						int expectedCount = (int)Math.Ceiling ((_numOfRoutes - _establishedList.Count) * FACTOR);
-						int count = expectedCount - _establishingList.Count;
-						while (count-- > 0)
-							StartEstablishingRoute ();
-					}
+					CheckNumberOfEstablishedRoutes ();
 				} else {
 					object msg = MultipleCipherHelper.DecryptRoutedPayload (startInfo.RelayNodeKeys, ack.Payload);
 					RouteInfo routeInfo = new RouteInfo (startInfo, new AnonymousEndPoint (startInfo.RelayNodes[0].EndPoint, startInfo.Label), null);
-					lock (_establishedList) {
+					lock (_listLock) {
 						_establishedList.Add (startInfo);
 					}
 					using (IDisposable cookie = _router._routingMapLock.EnterWriteLock ()) {
@@ -451,12 +453,11 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public void Close (StartPointInfo start)
 			{
-				lock (_establishedList) {
+				lock (_listLock) {
 					start.Close ();
 					_establishedList.Remove (start);
 				}
-				// DEBUG
-				//StartEstablishingRoute ();
+				CheckNumberOfEstablishedRoutes ();
 			}
 
 			public void Close ()
