@@ -1,0 +1,128 @@
+﻿/*
+ * Copyright (C) 2009 Kazuki Oikawa
+ * 
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+using System;
+using System.Collections.Generic;
+using System.Net;
+using System.Threading;
+using openCrypto.EllipticCurve;
+using p2pncs.Net;
+using p2pncs.Net.Overlay;
+using p2pncs.Net.Overlay.Anonymous;
+using p2pncs.Net.Overlay.DHT;
+using p2pncs.Security.Cryptography;
+using p2pncs.Simulation.VirtualNet;
+using p2pncs.Threading;
+
+namespace p2pncs.tests.Net.Overlay
+{
+	class KBREnvironment : IDisposable
+	{
+		static System.Runtime.Serialization.Formatters.Binary.BinaryFormatter Formatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter ();
+
+		VirtualNetwork _network;
+		IntervalInterrupter _interrupter, _dhtInt, _anonInt;
+		List<EndPoint> _endPoints = new List<EndPoint> ();
+		List<IMessagingSocket> _sockets = new List<IMessagingSocket> ();
+		List<IKeyBasedRouter> _routers = new List<IKeyBasedRouter> ();
+		List<IDistributedHashTable> _dhts = null;
+		List<IAnonymousRouter> _anons = null;
+
+		public KBREnvironment (bool enableDHT, bool enableAnon)
+		{
+			_network = new VirtualNetwork (20, 20, 5, 2);
+			_interrupter = new IntervalInterrupter (TimeSpan.FromMilliseconds (50), "MessagingSocket Interrupter");
+			_interrupter.Start ();
+			if (enableDHT || enableAnon) {
+				_dhts = new List<IDistributedHashTable> ();
+				_dhtInt = new IntervalInterrupter (TimeSpan.FromSeconds (5), "DHT Maintenance Interrupter");
+			}
+			if (enableAnon) {
+				_anons = new List<IAnonymousRouter> ();
+				_anonInt = new IntervalInterrupter (TimeSpan.FromMilliseconds (500), "Anonymous Interrupter");
+			}
+		}
+
+		public void AddNodes (Key[] keys, ECKeyPair[] keyPairs)
+		{
+			for (int i = 0; i < keys.Length; i++) {
+				IPAddress adrs = IPAddress.Parse ("10.0.0." + (_endPoints.Count + 1).ToString ());
+				IPEndPoint ep = new IPEndPoint (adrs, 10000);
+				VirtualDatagramEventSocket sock = new VirtualDatagramEventSocket (_network, adrs);
+				sock.Bind (new IPEndPoint (IPAddress.Loopback, ep.Port));
+				IMessagingSocket msock = new MessagingSocket (sock, true, SymmetricKey.NoneKey, Formatter, null, _interrupter, TimeSpan.FromSeconds (1), 2, 1024);
+				_sockets.Add (msock);
+				IKeyBasedRouter router = new SimpleIterativeRouter (keys[i], msock, new SimpleRoutingAlgorithm ());
+				_routers.Add (router);
+				if (_dhts != null) {
+					IDistributedHashTable dht = new SimpleDHT (router, msock, new OnMemoryLocalHashTable (_dhtInt));
+					_dhts.Add (dht);
+					if (_anons != null) {
+						IAnonymousRouter anonRouter = new AnonymousRouter (dht, keyPairs[i], _anonInt);
+						_anons.Add (anonRouter);
+					}
+				}
+				if (_endPoints.Count != 0)
+					router.Join (_endPoints.ToArray ());
+				_endPoints.Add (ep);
+			}
+			Thread.Sleep (500);
+		}
+
+		public VirtualNetwork VirtualNetwork {
+			get { return _network; }
+		}
+
+		public IList<EndPoint> EndPoints {
+			get { return _endPoints; }
+		}
+
+		public IList<IMessagingSocket> Sockets {
+			get { return _sockets; }
+		}
+
+		public IList<IKeyBasedRouter> KeyBasedRouters {
+			get { return _routers; }
+		}
+
+		public IList<IDistributedHashTable> DistributedHashTables {
+			get { return _dhts; }
+		}
+
+		public IList<IAnonymousRouter> AnonymousRouters {
+			get { return _anons; }
+		}
+
+		public void Dispose ()
+		{
+			if (_dhts != null) {
+				if (_anonInt != null) {
+					for (int i = 0; i < _anons.Count; i++)
+						_anons[i].Close ();
+				}
+				for (int i = 0; i < _dhts.Count; i++)
+					_dhts[i].Dispose ();
+			}
+			for (int i = 0; i < _routers.Count; i++)
+				_routers[i].Close ();
+			for (int i = 0; i < _sockets.Count; i++)
+				_sockets[i].Dispose ();
+			_network.Close ();
+			_interrupter.Dispose ();
+		}
+	}
+}

@@ -15,18 +15,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/// TODO: KBRのテストと重複が多いからどうにかしたいなぁ･･･
-
 using System;
 using System.Collections.Generic;
-using System.Net;
 using NUnit.Framework;
-using p2pncs.Net;
 using p2pncs.Net.Overlay;
 using p2pncs.Net.Overlay.DHT;
-using p2pncs.Threading;
-using p2pncs.Security.Cryptography;
-using p2pncs.Simulation.VirtualNet;
 
 namespace p2pncs.tests.Net.Overlay.DHT
 {
@@ -36,49 +29,25 @@ namespace p2pncs.tests.Net.Overlay.DHT
 		[Test]
 		public void Test ()
 		{
-			VirtualNetwork network = new VirtualNetwork (20, 20, 5, 2);
-			IntervalInterrupter interrupter = new IntervalInterrupter (TimeSpan.FromMilliseconds (50), "MessagingSocket Interrupter");
-			IntervalInterrupter dhtInt = new IntervalInterrupter (TimeSpan.FromSeconds (5), "DHT Maintenance Interrupter");
-			interrupter.Start ();
-			System.Runtime.Serialization.Formatters.Binary.BinaryFormatter formatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter ();
-			Key[] keys = new Key[] {
-				new Key (new byte[]{0x00, 0x80}),
-				new Key (new byte[]{0x00, 0x40}),
-				new Key (new byte[]{0x00, 0x20}),
-				new Key (new byte[]{0x00, 0x10}),
-				new Key (new byte[]{0x00, 0x08}),
-				new Key (new byte[]{0x00, 0x04}),
-				new Key (new byte[]{0x00, 0x02}),
-				new Key (new byte[]{0x00, 0x01}),
-			};
-			List<EndPoint> endPoints = new List<EndPoint> ();
-			List<IMessagingSocket> sockets = new List<IMessagingSocket> ();
-			List<IKeyBasedRouter> routers = new List<IKeyBasedRouter> ();
-			List<SimpleDHT> dhts = new List<SimpleDHT> ();
-			try {
-				for (int i = 0; i < keys.Length; i++) {
-					IPAddress adrs = IPAddress.Parse ("10.0.0." + (i + 1).ToString ());
-					IPEndPoint ep = new IPEndPoint (adrs, 10000);
-					endPoints.Add (ep);
-
-					VirtualDatagramEventSocket sock = new VirtualDatagramEventSocket (network, adrs);
-					sock.Bind (new IPEndPoint (IPAddress.Loopback, ep.Port));
-					IMessagingSocket msock = new MessagingSocket (sock, true, SymmetricKey.NoneKey, formatter, null, interrupter, TimeSpan.FromSeconds (1), 2, 1024);
-					sockets.Add (msock);
-
-					IKeyBasedRouter router = new SimpleIterativeRouter (keys[i], msock, new SimpleRoutingAlgorithm ());
-					SimpleDHT dht = new SimpleDHT (router, msock, new OnMemoryLocalHashTable (dhtInt));
-					dht.RegisterTypeID (typeof (string), 0);
-					dht.NumberOfReplicas = 1;
-					routers.Add (router);
-					dhts.Add (dht);
-					if (i != 0) {
-						router.Join (new EndPoint[] { endPoints[0] });
-						System.Threading.Thread.Sleep (50);
-					}
+			using (KBREnvironment env = new KBREnvironment (true, false)) {
+				Key[] keys = new Key[] {
+					new Key (new byte[]{0x00, 0x80}),
+					new Key (new byte[]{0x00, 0x40}),
+					new Key (new byte[]{0x00, 0x20}),
+					new Key (new byte[]{0x00, 0x10}),
+					new Key (new byte[]{0x00, 0x08}),
+					new Key (new byte[]{0x00, 0x04}),
+					new Key (new byte[]{0x00, 0x02}),
+					new Key (new byte[]{0x00, 0x01}),
+				};
+				env.AddNodes (keys, null);
+				SimpleDHT[] dhts = new SimpleDHT[env.DistributedHashTables.Count];
+				for (int i = 0; i < dhts.Length; i ++) {
+					dhts[i] = (SimpleDHT)env.DistributedHashTables[i];
+					dhts[i].RegisterTypeID (typeof (string), 0);
+					dhts[i].NumberOfReplicas = 1;
 				}
 
-				System.Threading.Thread.Sleep (1000);
 				Key reqKey = new Key (new byte[] { 0xb4, 0x07 });
 				HashSet<object> expectedSet = new HashSet<object> ();
 				expectedSet.Add ("HELLO");
@@ -108,13 +77,6 @@ namespace p2pncs.tests.Net.Overlay.DHT
 				ret = dhts[0].EndGet (dhts[0].BeginGet (reqKey, 0, null, null));
 				Assert.IsNotNull (ret);
 				Assert.IsTrue (expectedSet.SetEquals (ret.Values));
-			} finally {
-				for (int i = 0; i < routers.Count; i++)
-					routers[i].Close ();
-				for (int i = 0; i < sockets.Count; i++)
-					sockets[i].Dispose ();
-				network.Close ();
-				interrupter.Dispose ();
 			}
 		}
 	}
