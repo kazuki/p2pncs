@@ -35,7 +35,7 @@ namespace p2pncs.Simulation.VirtualNet
 		List<DatagramInfo> _dgramList = new List<DatagramInfo> (1 << 14);
 		int _dgramListIndex = 0;
 
-		int _delayMin, _delayMax, _delayPrec;
+		int _delayPrec;
 		List<DatagramInfo>[] _dgramRingBuffer;
 		int _dgramRingOffset = 0;
 
@@ -50,12 +50,16 @@ namespace p2pncs.Simulation.VirtualNet
 		double _avgJitter = 0.0;
 		object _jitterLock = new object ();
 
-		public VirtualNetwork (int minDelay, int maxDelay, int delayPrecision, int invokeThreads)
+		ILatency _latency;
+		IPacketLossRate _packetLossrate;
+		Random _rnd = new Random ();
+
+		public VirtualNetwork (ILatency latency, int delayPrecision, IPacketLossRate lossrate, int invokeThreads)
 		{
-			_delayMin = minDelay;
-			_delayMax = maxDelay;
+			_latency = latency;
+			_packetLossrate = lossrate;
 			_delayPrec = delayPrecision;
-			_dgramRingBuffer = new List<DatagramInfo> [Math.Max (1, maxDelay / delayPrecision)];
+			_dgramRingBuffer = new List<DatagramInfo> [(int)Math.Max (1, _latency.MaxLatency.TotalMilliseconds / delayPrecision)];
 			for (int i = 0; i < _dgramRingBuffer.Length; i ++)
 				_dgramRingBuffer[i] = new List<DatagramInfo> (1 << 14);
 
@@ -118,6 +122,8 @@ namespace p2pncs.Simulation.VirtualNet
 					if (i >= _dgramList.Count)
 						break;
 					DatagramInfo dgram = _dgramList[i];
+					if (IsLossPacket (dgram.SourceEndPoint, dgram.DestinationEndPoint))
+						continue;
 					VirtualNetworkNode node;
 					if (!_mapping.TryGetValue (dgram.DestinationEndPoint, out node)) {
 						Interlocked.Increment (ref _noDestPackets);
@@ -175,12 +181,11 @@ namespace p2pncs.Simulation.VirtualNet
 
 		void MessageScheduling (DatagramInfo dgram)
 		{
-			// TODO: 何らかの方法で遅延を計算
-			dgram.ExpectedDelay = new TimeSpan (_delayMin * TimeSpan.TicksPerMillisecond);
+			dgram.ExpectedDelay = _latency.ComputeLatency (dgram.SourceEndPoint, dgram.DestinationEndPoint);
 
 			// とりあえず、最短遅延で配送をスケジューリング
 			lock (_dgramRingBuffer) {
-				_dgramRingBuffer[(_dgramRingOffset + (_delayMin / _delayPrec - 1)) % _dgramRingBuffer.Length].Add (dgram);
+				_dgramRingBuffer[(_dgramRingOffset + (int)(dgram.ExpectedDelay.TotalMilliseconds / _delayPrec - 1)) % _dgramRingBuffer.Length].Add (dgram);
 			}
 		}
 
@@ -216,6 +221,14 @@ namespace p2pncs.Simulation.VirtualNet
 				_maxJitter = int.MinValue;
 				_avgJitter = 0;
 				_jitterPackets = 0;
+			}
+		}
+
+		bool IsLossPacket (EndPoint src, EndPoint dst)
+		{
+			double rate = _packetLossrate.ComputePacketLossRate (src, dst);
+			lock (_rnd) {
+				return _rnd.NextDouble () < rate;
 			}
 		}
 

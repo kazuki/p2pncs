@@ -39,6 +39,10 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="VirtualNet\LatencyTypes.cs" />
+    <Compile Include="VirtualNet\ILatency.cs" />
+    <Compile Include="VirtualNet\IPacketLossRate.cs" />
+    <Compile Include="VirtualNet\PacketLossType.cs" />
     <Compile Include="VirtualNet\VirtualDatagramEventSocket.cs" />
     <Compile Include="VirtualNet\VirtualMessagingSocket.cs" />
     <Compile Include="VirtualNet\VirtualNetwork.cs" />

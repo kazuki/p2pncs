@@ -33,7 +33,7 @@ namespace p2pncs.tests.Simulation.VirtualNet
 			IPEndPoint ep2 = new IPEndPoint (IPAddress.Parse ("10.0.0.2"), 10000);
 			IPEndPoint ep3 = new IPEndPoint (IPAddress.Parse ("10.0.0.3"), 10000);
 
-			VirtualNetwork network = new VirtualNetwork (20, 20, 5, 2);
+			VirtualNetwork network = new VirtualNetwork (LatencyTypes.Constant (20), 5, PacketLossType.Lossless (), 2);
 			try {
 				using (VirtualDatagramEventSocket sock1 = new VirtualDatagramEventSocket (network, ep1.Address))
 				using (VirtualDatagramEventSocket sock2 = new VirtualDatagramEventSocket (network, ep2.Address))
@@ -53,7 +53,7 @@ namespace p2pncs.tests.Simulation.VirtualNet
 			IPEndPoint ep1 = new IPEndPoint (IPAddress.Parse ("10.0.0.1"), 10000);
 			IPEndPoint ep2 = new IPEndPoint (IPAddress.Parse ("10.0.0.2"), 10000);
 
-			VirtualNetwork network = new VirtualNetwork (20, 20, 5, 2);
+			VirtualNetwork network = new VirtualNetwork (LatencyTypes.Constant (20), 5, PacketLossType.Lossless (), 2);
 			byte[] msg = new byte[]{0, 1, 2, 3};
 			try {
 				using (AutoResetEvent done = new AutoResetEvent (false))

@@ -31,7 +31,7 @@ namespace p2pncs.tests.Simulation.VirtualNet
 		public override void Init ()
 		{
 			base.Init ();
-			_net = new VirtualNetwork (20, 20, 5, 2);
+			_net = new VirtualNetwork (LatencyTypes.Constant (20), 5, PacketLossType.Lossless (), 2);
 		}
 
 		[TestFixtureTearDown]

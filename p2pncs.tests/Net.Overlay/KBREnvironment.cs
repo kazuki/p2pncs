@@ -44,7 +44,7 @@ namespace p2pncs.tests.Net.Overlay
 
 		public KBREnvironment (bool enableDHT, bool enableAnon)
 		{
-			_network = new VirtualNetwork (20, 20, 5, 2);
+			_network = new VirtualNetwork (LatencyTypes.Constant (20), 5, PacketLossType.Lossless (), 2);
 			_interrupter = new IntervalInterrupter (TimeSpan.FromMilliseconds (50), "MessagingSocket Interrupter");
 			_interrupter.Start ();
 			if (enableDHT || enableAnon) {
