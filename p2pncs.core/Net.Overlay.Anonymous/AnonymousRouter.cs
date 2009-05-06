@@ -49,33 +49,52 @@ namespace p2pncs.Net.Overlay.Anonymous
 		const int DefaultSymmetricKeyBits = 128;
 		const int DefaultSymmetricBlockBits = 128;
 
-		//const int PayloadFixedSize = (DefaultSymmetricKeyBits / 8) * 56; // 896 bytes
-		const int PayloadFixedSize = 5120; // TODO: シリアライザを見直して896バイト未満に収まるように調整する
+		/// <summary>多重暗号化されたメッセージのメッセージ長 (常にここで指定したサイズになる)</summary>
+		const int PayloadFixedSize = 5120; // TODO: シリアライザを見直して896(128bit*56)バイト未満に収まるように調整する
 
+		/// <summary>1つのIDにつき構築する多重暗号経路の最小数</summary>
 		const int DefaultSubscribeRoutes = 2;
+
+		/// <summary>多重暗号経路構築時に選択する中継ノード数 (終端ノード込み)</summary>
 		const int DefaultRealyNodes = 3;
 
-		static TimeSpan MaxRRT = TimeSpan.FromMilliseconds (1000); // included cost of cryptography
-		static TimeSpan MultipleCipherRouteMaxRoundtripTime = new TimeSpan (MaxRRT.Ticks * DefaultRealyNodes);
-		static int MultipleCipherRouteMaxRetry = 1;
-		static TimeSpan MultipleCipherRelayTimeout = new TimeSpan (MaxRRT.Ticks * (DefaultRealyNodes - 1));
-		static int MultipleCipherRelayMaxRetry = 1;
-		static TimeSpan MultipleCipherReverseRelayTimeout = MaxRRT;
-		static int MultipleCipherReverseRelayMaxRetry = 1;
+		/// <summary>各ノード間の最大RTT</summary>
+		static TimeSpan MaxRRT = TimeSpan.FromMilliseconds (1000);
 
+		/// <summary>多重暗号経路(MCR)の始点と終点間の最大RTT</summary>
+		static TimeSpan MCR_MaxRTT = new TimeSpan ((long)(MaxRRT.Ticks * DefaultRealyNodes * 1.2));
+
+		/// <summary>多重暗号経路確立時に始点ノードが再送する最大回数</summary>
+		static int MCR_EstablishMaxRetry = 1;
+
+		/// <summary>多重暗号経路確立時に中継ノードが利用する問い合わせタイムアウト時間</summary>
+		static TimeSpan MCR_EstablishRelayTimeout = new TimeSpan (MaxRRT.Ticks * (DefaultRealyNodes - 1));
+
+		/// <summary>多重暗号経路確立時に中継ノードが利用する最大再送回数</summary>
+		static int MCR_EstablishRelayMaxRetry = MCR_EstablishMaxRetry;
+
+		/// <summary>多重暗号経路を利用してメッセージを送る際に利用するタイムアウト時間</summary>
+		static TimeSpan MCR_RelayTimeout = MaxRRT;
+
+		/// <summary>多重暗号経路を利用してメッセージを送る際に利用する最大再送回数</summary>
+		static int MCR_RelayMaxRetry = 2;
+
+		/// <summary>多重暗号経路の終端ノードがDHTに自身の情報を保存する間隔</summary>
 		static TimeSpan DHTPutInterval = TimeSpan.FromSeconds (60);
+
+		/// <summary>多重暗号経路の終端ノードがDHTに自身の情報を保存する際に利用する有効期限</summary>
 		static TimeSpan DHTPutValueLifeTime = DHTPutInterval + TimeSpan.FromSeconds (5);
 
-		static TimeSpan RelayRouteTimeout = TimeSpan.FromSeconds (30);
-		static TimeSpan RelayRouteTimeoutWithMargin = RelayRouteTimeout + (MultipleCipherRouteMaxRoundtripTime + MultipleCipherRouteMaxRoundtripTime);
+		/// <summary>多重暗号経路を流れるメッセージの最大間隔 (これより長い間隔が開くと経路エラーと判断する基準になる)</summary>
+		static TimeSpan MCR_Timeout = TimeSpan.FromSeconds (30);
+
+		/// <summary>多重暗号経路が壊れているためメッセージが届かないと認識するために利用するタイムアウト時間</summary>
+		static TimeSpan MCR_TimeoutWithMargin = MCR_Timeout + (MCR_MaxRTT + MCR_MaxRTT);
+
 		static IFormatter DefaultFormatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter ();
-
 		static EndPoint DummyEndPoint = new IPEndPoint (IPAddress.Loopback, 0);
-
 		const int DHT_TYPEID = 1;
-
 		static object DummyAckMsg = "ACK";
-
 		const int ConnectionEstablishSharedInfoBytes = 16;
 		#endregion
 
@@ -134,7 +153,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				RouteLabel label = GenerateRouteLabel ();
 				Console.WriteLine ("{0}: Received {1} -> (this) -> {3}@{2}", _kbr.SelftNodeId, msg.Label, label, payload.NextHopEndPoint);
 				EstablishRouteMessage msg2 = new EstablishRouteMessage (label, payload.NextHopPayload);
-				sock.BeginInquire (msg2, payload.NextHopEndPoint, MultipleCipherRelayTimeout, MultipleCipherRelayMaxRetry,
+				sock.BeginInquire (msg2, payload.NextHopEndPoint, MCR_EstablishRelayTimeout, MCR_EstablishRelayMaxRetry,
 					MessagingSocket_Inquired_EstablishRouteMessage_Callback, new object[] {sock, e, msg, payload, msg2});
 			} else {
 				Key key = new Key (payload.NextHopPayload);
@@ -206,7 +225,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					if (routeInfo.BoundaryInfo == null) {
 						payload = MultipleCipherHelper.DecryptRoutedPayload (routeInfo.Key, msg.Payload);
 						_sock.BeginInquire (new RoutedMessage (routeInfo.Next.Label, payload), routeInfo.Next.EndPoint,
-							MultipleCipherReverseRelayTimeout, MultipleCipherReverseRelayMaxRetry, null, null);
+							MCR_RelayTimeout, MCR_RelayMaxRetry, null, null);
 						Console.WriteLine ("{0}: -> Recv RoutedMessage", _kbr.SelftNodeId);
 					} else {
 						long dupCheckId;
@@ -223,7 +242,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					if (routeInfo.StartPointInfo == null) {
 						payload = MultipleCipherHelper.EncryptRoutedPayload (routeInfo.Key, msg.Payload);
 						_sock.BeginInquire (new RoutedMessage (routeInfo.Previous.Label, payload), routeInfo.Previous.EndPoint,
-							MultipleCipherReverseRelayTimeout, MultipleCipherReverseRelayMaxRetry, null, null);
+							MCR_RelayTimeout, MCR_RelayMaxRetry, null, null);
 						Console.WriteLine ("{0}: <- Recv RoutedMessage", _kbr.SelftNodeId);
 					} else {
 						long dupCheckId;
@@ -602,7 +621,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public void CheckTimeout ()
 			{
-				DateTime border = DateTime.Now - RelayRouteTimeout;
+				DateTime border = DateTime.Now - MCR_Timeout;
 				lock (_listLock) {
 					for (int i = 0; i < _establishedList.Count; i ++) {
 						if (_establishedList[i].LastSendTime < border)
@@ -631,7 +650,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 							byte[] payload = info.CreateEstablishData (_recipientId, _ecdh.Parameters.DomainName);
 							EstablishRouteMessage msg = new EstablishRouteMessage (info.Label, payload);
 							_kbr.MessagingSocket.BeginInquire (msg, info.RelayNodes[0].EndPoint,
-								MultipleCipherRouteMaxRoundtripTime, MultipleCipherRouteMaxRetry, EstablishRoute_Callback, info);
+								MCR_MaxRTT, MCR_EstablishMaxRetry, EstablishRoute_Callback, info);
 						}
 					}
 				}
@@ -757,7 +776,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				byte[] payload = MultipleCipherHelper.CreateRoutedPayload (_relayKeys, msg);
 				_lastSendTime = DateTime.Now;
 				sock.BeginInquire (new RoutedMessage (_label, payload), _relayNodes[0].EndPoint,
-					MultipleCipherReverseRelayTimeout, MultipleCipherReverseRelayMaxRetry, SendMessage_Callback, sock);
+					MCR_RelayTimeout, MCR_RelayMaxRetry, SendMessage_Callback, sock);
 			}
 
 			void SendMessage_Callback (IAsyncResult ar)
@@ -814,7 +833,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				if (_closed) return;
 				byte[] payload = MultipleCipherHelper.CreateRoutedPayload (_key, msg);
 				sock.BeginInquire (new RoutedMessage (_prevEP.Label, payload), _prevEP.EndPoint,
-					MultipleCipherReverseRelayTimeout, MultipleCipherReverseRelayMaxRetry,
+					MCR_RelayTimeout, MCR_RelayMaxRetry,
 					SendMessage_Callback, sock);
 			}
 			void SendMessage_Callback (IAsyncResult ar)
@@ -888,8 +907,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_startPoint = startPoint;
 				_boundary = boundary;
 
-				_prevExpiry = (prev == null ? DateTime.MaxValue : DateTime.Now + RelayRouteTimeoutWithMargin);
-				_nextExpiry = (next == null ? DateTime.MaxValue : DateTime.Now + RelayRouteTimeoutWithMargin);
+				_prevExpiry = (prev == null ? DateTime.MaxValue : DateTime.Now + MCR_TimeoutWithMargin);
+				_nextExpiry = (next == null ? DateTime.MaxValue : DateTime.Now + MCR_TimeoutWithMargin);
 			}
 
 			public AnonymousEndPoint Previous {
@@ -914,12 +933,12 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public void ReceiveMessageFromNextNode ()
 			{
-				_nextExpiry = DateTime.Now + RelayRouteTimeoutWithMargin;
+				_nextExpiry = DateTime.Now + MCR_TimeoutWithMargin;
 			}
 
 			public void ReceiveMessageFromPreviousNode ()
 			{
-				_prevExpiry = DateTime.Now + RelayRouteTimeoutWithMargin;
+				_prevExpiry = DateTime.Now + MCR_TimeoutWithMargin;
 			}
 
 			public bool IsExpiry ()
