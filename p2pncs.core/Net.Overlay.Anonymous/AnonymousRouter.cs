@@ -206,8 +206,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					if (routeInfo.BoundaryInfo == null) {
 						payload = MultipleCipherHelper.DecryptRoutedPayload (routeInfo.Key, msg.Payload);
 						_sock.BeginInquire (new RoutedMessage (routeInfo.Next.Label, payload), routeInfo.Next.EndPoint,
-							MultipleCipherRelayTimeout, MultipleCipherRelayMaxRetry,
-							MessagingSocket_Inquired_RoutedMessage_Callback, new object[] {e, routeInfo});
+							MultipleCipherReverseRelayTimeout, MultipleCipherReverseRelayMaxRetry, null, null);
 						Console.WriteLine ("{0}: -> Recv RoutedMessage", _kbr.SelftNodeId);
 					} else {
 						long dupCheckId;
@@ -216,8 +215,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 							Console.WriteLine ("{0}: -> Recv RoutedMessage (end) : {1}", _kbr.SelftNodeId, routedMsg);
 							ProcessMessage (routedMsg, routeInfo.BoundaryInfo);
 						}
-						_sock.StartResponse (e, DummyAckMsg);
 					}
+					_sock.StartResponse (e, DummyAckMsg);
 				} else {
 					// direction: next -> ! -> prev
 					routeInfo.ReceiveMessageFromNextNode ();
@@ -239,23 +238,6 @@ namespace p2pncs.Net.Overlay.Anonymous
 			} else {
 				Console.WriteLine ("{0}: No Route ({1}@{2})", _kbr.SelftNodeId, e.EndPoint, msg.Label);
 			}
-		}
-
-		void MessagingSocket_Inquired_RoutedMessage_Callback (IAsyncResult ar)
-		{
-			object[] state = (object[])ar.AsyncState;
-			object res = _sock.EndInquire (ar);
-			AcknowledgeMessage ack = res as AcknowledgeMessage;
-			InquiredEventArgs e = (InquiredEventArgs)state[0];
-			RouteInfo routeInfo = (RouteInfo)state[1];
-			if (ack == null) {
-				// inquiry fail or responsed ack only
-				_sock.StartResponse (e, res);
-				return;
-			}
-			
-			ack = new AcknowledgeMessage (MultipleCipherHelper.EncryptRoutedPayload (routeInfo.Key, ack.Payload));
-			_sock.StartResponse (e, ack);
 		}
 
 		void MessagingSocket_Inquired_ConnectionEstablishMessage (object sender, InquiredEventArgs e)
@@ -353,7 +335,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 						_connections.Add (connection);
 					}
 					subscribeInfo.SendToAllRoutes (new ConnectionMessageBeforeBoundary (subscribeInfo.GetRouteEndPoints(),
-						establishInfo.EndPoints,establishInfo.ConnectionId, sharedInfo2), null, null);
+						establishInfo.EndPoints,establishInfo.ConnectionId, sharedInfo2));
 
 					try {
 						Accepted (this, new AcceptedEventArgs (connection.Socket, args.State));
@@ -624,7 +606,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				lock (_listLock) {
 					for (int i = 0; i < _establishedList.Count; i ++) {
 						if (_establishedList[i].LastSendTime < border)
-							_establishedList[i].SendMessage (_kbr.MessagingSocket, Ping.Instance, null, null);
+							_establishedList[i].SendMessage (_kbr.MessagingSocket, Ping.Instance);
 					}
 				}
 
@@ -696,11 +678,11 @@ namespace p2pncs.Net.Overlay.Anonymous
 				}
 			}
 
-			public void SendToAllRoutes (object msg, AckMessageHandler handler, object state)
+			public void SendToAllRoutes (object msg)
 			{
 				lock (_establishedList) {
 					for (int i = 0; i < _establishedList.Count; i ++)
-						_establishedList[i].SendMessage (_router._sock, msg, handler, state);
+						_establishedList[i].SendMessage (_router._sock, msg);
 				}
 			}
 
@@ -770,40 +752,19 @@ namespace p2pncs.Net.Overlay.Anonymous
 				get { return _lastSendTime; }
 			}
 
-			public void SendMessage (IMessagingSocket sock, object msg, AckMessageHandler ackHandler, object state)
+			public void SendMessage (IMessagingSocket sock, object msg)
 			{
 				byte[] payload = MultipleCipherHelper.CreateRoutedPayload (_relayKeys, msg);
 				_lastSendTime = DateTime.Now;
 				sock.BeginInquire (new RoutedMessage (_label, payload), _relayNodes[0].EndPoint,
-					MultipleCipherRouteMaxRoundtripTime, MultipleCipherRouteMaxRetry,
-					SendMessage_Callback, new object[] {sock, ackHandler, state});
+					MultipleCipherReverseRelayTimeout, MultipleCipherReverseRelayMaxRetry, SendMessage_Callback, sock);
 			}
 
 			void SendMessage_Callback (IAsyncResult ar)
 			{
-				object[] states = (object[])ar.AsyncState;
-				IMessagingSocket sock = (IMessagingSocket)states[0];
-				AckMessageHandler handler = (AckMessageHandler)states[1];
-				object state = states[2];
-				object res = sock.EndInquire (ar);
-				AcknowledgeMessage ack = res as AcknowledgeMessage;
-				if (ack == null) {
-					if (res == null)
-						Timeout ();
-					return;
-				}
-
-				long dupCheckId;
-				object msg = MultipleCipherHelper.DecryptRoutedPayload (_relayKeys, ack.Payload, out dupCheckId);
-				if (!_subscribe.AnonymousRouter._dupCheck.Check (dupCheckId))
-					return;
-
-				if (handler != null) {
-					try {
-						handler (msg);
-					} catch {}
-				}
-				Console.WriteLine ("{0}: ACK: {1}", _subscribe.RecipientID, msg);
+				IMessagingSocket sock = (IMessagingSocket)ar.AsyncState;
+				if (sock.EndInquire (ar) == null)
+					Timeout ();
 			}
 
 			public byte[] CreateEstablishData (Key recipientId, ECDomainNames domain)
@@ -1003,7 +964,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_establishMsg = new ConnectionEstablishMessage (_establishInfo, _destPubKey, destKey);
 				_lookupMsg = new LookupRecipientProxyMessage (destKey, _establishMsg);
 
-				_subscribeInfo.SendToAllRoutes (_lookupMsg, AckLookup, null);
+				_subscribeInfo.SendToAllRoutes (_lookupMsg);
 			}
 
 			public ConnectionInfo (AnonymousRouter router, SubscribeInfo subscribeInfo, Key destKey, int connectionId, SymmetricKey key, DatagramReceiveEventHandler receivedHandler)
@@ -1016,11 +977,6 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_connectionId = connectionId;
 				_key = key;
 				_sock = new ConnectionSocket (this, receivedHandler);
-			}
-
-			void AckLookup (object ack)
-			{
-				Console.WriteLine (ack);
 			}
 
 			public bool IsInitiator {
@@ -1072,18 +1028,13 @@ namespace p2pncs.Net.Overlay.Anonymous
 				byte[] payload = _key.Encrypt (buffer, offset, size);
 				ConnectionMessageBeforeBoundary msg = new ConnectionMessageBeforeBoundary (_subscribeInfo.GetRouteEndPoints (),
 					_destSideTermEPs, _connectionId, payload);
-				_subscribeInfo.SendToAllRoutes (msg, null, null);
+				_subscribeInfo.SendToAllRoutes (msg);
 			}
 
 			public void Receive (ConnectionMessage msg)
 			{
 				_destSideTermEPs = msg.EndPoints;
 				byte[] payload = _key.Decrypt (msg.Payload, 0, msg.Payload.Length);
-				/*object obj;
-				using (MemoryStream ms = new MemoryStream (payload)) {
-					obj = DefaultFormatter.Deserialize (ms);
-				}
-				Console.WriteLine ("{0}@{1}: Conn.Recv {2}", RecipientID, ConnectionID, obj);*/
 				_sock.InvokeReceivedEvent (new DatagramReceiveEventArgs (payload, payload.Length, null));
 			}
 
