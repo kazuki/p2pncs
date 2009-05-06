@@ -80,6 +80,7 @@
     <Compile Include="SerializableFieldIndexAttribute.cs" />
     <Compile Include="SerializableTypeIdAttribute.cs" />
     <Compile Include="Serializer.cs" />
+    <Compile Include="Utility\SerializeHelper.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\openCrypto.NET\openCrypto.NET.csproj">

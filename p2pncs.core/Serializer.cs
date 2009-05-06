@@ -26,7 +26,13 @@ namespace p2pncs
 {
 	public class Serializer : IFormatter
 	{
-		static IFormatter _instance = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter ();
+		//static IFormatter _instance = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter ();
+		static IFormatter _instance = new Serializer ();
+
+		Serializer ()
+		{
+			Utility.SerializeHelper.RegisterCustomHandler ();
+		}
 
 		public static IFormatter Instance {
 			get { return _instance; }
@@ -45,6 +51,11 @@ namespace p2pncs
 		public static void AddCustomHandler (Type type, SerializeHandler serializer, DeserializeHandler deserializer)
 		{
 			SimpleFormatter.Instance.AddCustomHandler (type, serializer, deserializer);
+		}
+
+		public static void AddCustomHandler (Type type, int typeId, SerializeHandler serializer, DeserializeHandler deserializer)
+		{
+			SimpleFormatter.Instance.AddCustomHandler (type, typeId, serializer, deserializer);
 		}
 
 		public static void AddMapping (Type type, int id)

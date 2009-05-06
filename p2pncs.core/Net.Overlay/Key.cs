@@ -23,7 +23,6 @@ using openCrypto.EllipticCurve;
 namespace p2pncs.Net.Overlay
 {
 	[Serializable]
-	[SerializableTypeId (0x100)]
 	public sealed class Key : IComparable<Key>, IComparable, IEquatable<Key>
 	{
 		static int[] RadixToBitLengtTable = new int[] {
@@ -40,7 +39,6 @@ namespace p2pncs.Net.Overlay
 			0x0, 0x1, 0x3, 0x7, 0xF
 		};
 
-		[SerializableFieldIndex (0)]
 		byte[] _data;
 		int _hash;
 
