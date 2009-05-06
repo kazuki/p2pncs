@@ -245,8 +245,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 		void MessagingSocket_Inquired_ConnectionEstablishMessage (object sender, InquiredEventArgs e)
 		{
 			ConnectionEstablishMessage msg = (ConnectionEstablishMessage)e.InquireMessage;
-			RouteInfo routeInfo;
 			_sock.StartResponse (e, DummyAckMsg);
+			if (!_dupCheck.Check (msg.DuplicationCheckId))
+				return;
+			RouteInfo routeInfo;
 			using (IDisposable cookie = _routingMapLock.EnterReadLock ()) {
 				if (!_routingMap.TryGetValue (new AnonymousEndPoint (DummyEndPoint, msg.Label), out routeInfo))
 					routeInfo = null;
@@ -260,8 +262,11 @@ namespace p2pncs.Net.Overlay.Anonymous
 		void MessagingSocket_Inquired_ConnectionMessage (object sender, InquiredEventArgs e)
 		{
 			ConnectionMessage msg = (ConnectionMessage)e.InquireMessage;
-			RouteInfo routeInfo;
 			_sock.StartResponse (e, DummyAckMsg);
+			if (!_dupCheck.Check (msg.DuplicationCheckId))
+				return;
+
+			RouteInfo routeInfo;
 			using (IDisposable cookie = _routingMapLock.EnterReadLock ()) {
 				if (!_routingMap.TryGetValue (new AnonymousEndPoint (DummyEndPoint, msg.Label), out routeInfo))
 					routeInfo = null;
@@ -297,14 +302,14 @@ namespace p2pncs.Net.Overlay.Anonymous
 			{
 				ConnectionEstablishMessage msg = msg_obj as ConnectionEstablishMessage;
 				if (msg != null) {
+					if (!_dupCheck.Check (msg.DuplicationCheckId))
+						return;
 					SubscribeInfo subscribeInfo;
 					using (IDisposable cookie = _subscribeMapLock.EnterReadLock ()) {
 						if (!_subscribeMap.TryGetValue (msg.RecipientID, out subscribeInfo))
 							return;
 					}
 					ConnectionEstablishInfo establishInfo = msg.Decrypt (subscribeInfo.DiffieHellman);
-					if (!_dupCheck.Check (establishInfo.DuplicationCheckId))
-						return;
 					AcceptingEventArgs args = new AcceptingEventArgs (subscribeInfo.RecipientID, establishInfo.Initiator);
 					if (Accepting != null) {
 						try {
@@ -377,10 +382,12 @@ namespace p2pncs.Net.Overlay.Anonymous
 			{
 				ConnectionMessageBeforeBoundary msg = msg_obj as ConnectionMessageBeforeBoundary;
 				if (msg != null) {
-					for (int i = 0; i < msg.OtherSideTerminalEndPoints.Length; i ++) {
-						ConnectionMessage msg2 = new ConnectionMessage (msg.MySideTerminalEndPoints,
-							msg.OtherSideTerminalEndPoints[i].Label, msg.ConnectionId, msg.DuplicationCheckId, msg.Payload);
-						_sock.BeginInquire (msg2, msg.OtherSideTerminalEndPoints[i].EndPoint, null, null);
+					if (_dupCheck.Check (msg.DuplicationCheckId)) {
+						for (int i = 0; i < msg.OtherSideTerminalEndPoints.Length; i ++) {
+							ConnectionMessage msg2 = new ConnectionMessage (msg.MySideTerminalEndPoints,
+								msg.OtherSideTerminalEndPoints[i].Label, msg.ConnectionId, msg.DuplicationCheckId, msg.Payload);
+							_sock.BeginInquire (msg2, msg.OtherSideTerminalEndPoints[i].EndPoint, null, null);
+						}
 					}
 					return DummyAckMsg;
 				}
@@ -1648,13 +1655,15 @@ namespace p2pncs.Net.Overlay.Anonymous
 			byte[] _encryptedInfo;
 			Key _recipientId;
 			RouteLabel _label = 0;
+			long _dupCheckId;
 
-			ConnectionEstablishMessage (byte[] tempPubKey, byte[] encryptedInfo, RouteLabel label, Key recipientID)
+			ConnectionEstablishMessage (byte[] tempPubKey, byte[] encryptedInfo, RouteLabel label, Key recipientID, long dupCheckId)
 			{
 				_tempPubKey = tempPubKey;
 				_encryptedInfo = encryptedInfo;
 				_label = label;
 				_recipientId = recipientID;
+				_dupCheckId = dupCheckId;
 			}
 
 			public ConnectionEstablishMessage (ConnectionEstablishInfo info, ECKeyPair pubKey, Key recipientID)
@@ -1674,6 +1683,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				}
 				_tempPubKey = dh.Parameters.ExportPublicKey (true);
 				_recipientId = recipientID;
+				_dupCheckId = BitConverter.ToInt64 (RNG.GetRNGBytes (8), 0);
 			}
 
 			public ConnectionEstablishInfo Decrypt (ECDiffieHellman dh)
@@ -1693,7 +1703,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public ConnectionEstablishMessage Copy (RouteLabel label)
 			{
-				return new ConnectionEstablishMessage (_tempPubKey, _encryptedInfo, label, _recipientId);
+				return new ConnectionEstablishMessage (_tempPubKey, _encryptedInfo, label, _recipientId, _dupCheckId);
 			}
 
 			public RouteLabel Label {
@@ -1703,6 +1713,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 			public Key RecipientID {
 				get { return _recipientId; }
 			}
+
+			public long DuplicationCheckId {
+				get { return _dupCheckId; }
+			}
 		}
 
 		[Serializable]
@@ -1711,7 +1725,6 @@ namespace p2pncs.Net.Overlay.Anonymous
 			byte[] _sharedInfo;
 			Key _initiator;
 			int _connectionId;
-			long _dupCheckId;
 			AnonymousEndPoint[] _endPoints;
 
 			public ConnectionEstablishInfo (Key initiator, AnonymousEndPoint[] eps, byte[] sharedInfo, int connectionId)
@@ -1720,7 +1733,6 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_endPoints = eps;
 				_sharedInfo = sharedInfo;
 				_connectionId = connectionId;
-				_dupCheckId = BitConverter.ToInt64 (RNG.GetRNGBytes (8), 0);
 			}
 
 			public byte[] SharedInfo {
@@ -1737,10 +1749,6 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public int ConnectionId {
 				get { return _connectionId; }
-			}
-
-			public long DuplicationCheckId {
-				get { return _dupCheckId; }
 			}
 		}
 
