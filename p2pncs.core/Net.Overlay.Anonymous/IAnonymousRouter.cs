@@ -28,7 +28,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 		void SubscribeRecipient (Key recipientId, ECKeyPair privateKey);
 		void UnsubscribeRecipient (Key recipientId);
 
-		IAsyncResult BeginEstablishRoute (Key recipientId, Key destinationId, AsyncCallback callback, object state);
+		IAsyncResult BeginEstablishRoute (Key recipientId, Key destinationId, DatagramReceiveEventHandler receivedHandler, AsyncCallback callback, object state);
 		IAnonymousSocket EndEstablishRoute (IAsyncResult ar);
 
 		void Close ();

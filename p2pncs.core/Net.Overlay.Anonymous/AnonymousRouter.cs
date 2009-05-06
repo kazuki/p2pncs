@@ -302,7 +302,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 							Accepting (this, args);
 						} catch {}
 					}
-					if (args.ReceiveEventHandler == null)
+					if (args.ReceiveEventHandler == null || Accepted == null)
 						return; // Reject
 
 					byte[] sharedInfo2 = RNG.GetRNGBytes (ConnectionEstablishSharedInfoBytes);
@@ -317,13 +317,17 @@ namespace p2pncs.Net.Overlay.Anonymous
 					Buffer.BlockCopy (shared, 0, iv, 0, iv.Length);
 					Buffer.BlockCopy (shared, iv.Length, key, 0, key.Length);
 					SymmetricKey key2 = new SymmetricKey (DefaultSymmetricAlgorithmType, iv, key);
-					ConnectionInfo connection = new ConnectionInfo (this, subscribeInfo, establishInfo.Initiator, establishInfo.ConnectionId, key2);
+					ConnectionInfo connection = new ConnectionInfo (this, subscribeInfo, establishInfo.Initiator, establishInfo.ConnectionId, key2, args.ReceiveEventHandler);
 					connection.DestinationSideTerminalNodes = establishInfo.EndPoints;
 					lock (_connections) {
 						_connections.Add (connection);
 					}
 					subscribeInfo.SendToAllRoutes (new ConnectionMessageBeforeBoundary (subscribeInfo.GetRouteEndPoints(),
 						establishInfo.EndPoints,establishInfo.ConnectionId, sharedInfo2), null, null);
+
+					try {
+						Accepted (this, new AcceptedEventArgs (connection.Socket, args.State));
+					} catch {}
 					return;
 				}
 			}
@@ -345,6 +349,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					} else {
 						connection.Receive (msg);
 					}
+					return;
 				}
 			}
 		}
@@ -365,6 +370,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 						ConnectionMessage msg2 = new ConnectionMessage (msg.MySideTerminalEndPoints, msg.OtherSideTerminalEndPoints[i].Label, msg.ConnectionId, msg.Payload);
 						_sock.BeginInquire (msg2, msg.OtherSideTerminalEndPoints[i].EndPoint, null, null);
 					}
+					return DummyAckMsg;
 				}
 			}
 			return DummyAckMsg;
@@ -501,7 +507,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			info.Close ();
 		}
 
-		public IAsyncResult BeginEstablishRoute (Key recipientId, Key destinationId, AsyncCallback callback, object state)
+		public IAsyncResult BeginEstablishRoute (Key recipientId, Key destinationId, DatagramReceiveEventHandler receivedHandler, AsyncCallback callback, object state)
 		{
 			SubscribeInfo subscribeInfo;
 			using (IDisposable cookie = _subscribeMapLock.EnterReadLock ()) {
@@ -509,7 +515,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					throw new KeyNotFoundException ();
 			}
 
-			ConnectionInfo info = new ConnectionInfo (this, subscribeInfo, destinationId, callback, state);
+			ConnectionInfo info = new ConnectionInfo (this, subscribeInfo, destinationId, receivedHandler, callback, state);
 			lock (_connections) {
 				_connections.Add (info);
 			}
@@ -518,8 +524,11 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 		public IAnonymousSocket EndEstablishRoute (IAsyncResult ar)
 		{
+			IConnectionAsyncResult ar2 = ar as IConnectionAsyncResult;
+			if (ar2 == null)
+				throw new ArgumentException ();
 			ar.AsyncWaitHandle.WaitOne ();
-			return null;
+			return ar2.ConnectionInfo.Socket;
 		}
 
 		public void Close ()
@@ -921,8 +930,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 			int _connectionId;
 			SymmetricKey _key = null;
 			AnonymousEndPoint[] _destSideTermEPs;
+			ConnectionSocket _sock;
 
-			public ConnectionInfo (AnonymousRouter router, SubscribeInfo subscribeInfo, Key destKey, AsyncCallback callback, object state)
+			public ConnectionInfo (AnonymousRouter router, SubscribeInfo subscribeInfo, Key destKey, DatagramReceiveEventHandler receivedHandler, AsyncCallback callback, object state)
 			{
 				_initiator = true;
 				_router = router;
@@ -931,6 +941,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_destPubKey = destKey.ToECPublicKey (_subscribeInfo.DiffieHellman.Parameters.DomainName);
 				_connectionId = BitConverter.ToInt32 (RNG.GetRNGBytes (4), 0);
 				_ar = new EstablishRouteAsyncResult (this, callback, state);
+				_sock = new ConnectionSocket (this, receivedHandler);
 
 				// Create connection establish message
 				_establishInfo = new ConnectionEstablishInfo (subscribeInfo.RecipientID, subscribeInfo.GetRouteEndPoints (),
@@ -941,7 +952,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_subscribeInfo.SendToAllRoutes (_lookupMsg, AckLookup, null);
 			}
 
-			public ConnectionInfo (AnonymousRouter router, SubscribeInfo subscribeInfo, Key destKey, int connectionId, SymmetricKey key)
+			public ConnectionInfo (AnonymousRouter router, SubscribeInfo subscribeInfo, Key destKey, int connectionId, SymmetricKey key, DatagramReceiveEventHandler receivedHandler)
 			{
 				_initiator = false;
 				_connected = true;
@@ -950,6 +961,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_destKey = destKey;
 				_connectionId = connectionId;
 				_key = key;
+				_sock = new ConnectionSocket (this, receivedHandler);
 			}
 
 			void AckLookup (object ack)
@@ -982,6 +994,14 @@ namespace p2pncs.Net.Overlay.Anonymous
 				get { return _destKey; }
 			}
 
+			public IAnonymousSocket Socket {
+				get {
+					if (_connected)
+						return _sock;
+					return null;
+				}
+			}
+
 			public void Send (object obj)
 			{
 				byte[] payload;
@@ -990,7 +1010,12 @@ namespace p2pncs.Net.Overlay.Anonymous
 					ms.Close ();
 					payload = ms.ToArray ();
 				}
-				payload = _key.Encrypt (payload, 0, payload.Length);
+				Send (payload, 0, payload.Length);
+			}
+
+			public void Send (byte[] buffer, int offset, int size)
+			{
+				byte[] payload = _key.Encrypt (buffer, offset, size);
 				ConnectionMessageBeforeBoundary msg = new ConnectionMessageBeforeBoundary (_subscribeInfo.GetRouteEndPoints (),
 					_destSideTermEPs, _connectionId, payload);
 				_subscribeInfo.SendToAllRoutes (msg, null, null);
@@ -1000,13 +1025,12 @@ namespace p2pncs.Net.Overlay.Anonymous
 			{
 				_destSideTermEPs = msg.EndPoints;
 				byte[] payload = _key.Decrypt (msg.Payload, 0, msg.Payload.Length);
-				object obj;
+				/*object obj;
 				using (MemoryStream ms = new MemoryStream (payload)) {
 					obj = DefaultFormatter.Deserialize (ms);
 				}
-				Console.WriteLine ("{0}@{1}: Conn.Recv {2}", RecipientID, ConnectionID, obj);
-				if ("HELLO" == (obj as string))
-					Send ("HELLO, I'M OK");
+				Console.WriteLine ("{0}@{1}: Conn.Recv {2}", RecipientID, ConnectionID, obj);*/
+				_sock.InvokeReceivedEvent (new DatagramReceiveEventArgs (payload, payload.Length, null));
 			}
 
 			public void ReceiveFirstConnectionMessage (ConnectionMessage msg)
@@ -1024,14 +1048,18 @@ namespace p2pncs.Net.Overlay.Anonymous
 				Buffer.BlockCopy (shared, iv.Length, key, 0, key.Length);
 				_key = new SymmetricKey (DefaultSymmetricAlgorithmType, iv, key);
 				_destSideTermEPs = msg.EndPoints;
-				Send ("HELLO");
+				_ar.Done ();
+			}
+
+			public void Close ()
+			{
 			}
 
 			public IAsyncResult AsyncResult {
 				get { return _ar; }
 			}
 
-			class EstablishRouteAsyncResult : IAsyncResult
+			class EstablishRouteAsyncResult : IAsyncResult, IConnectionAsyncResult
 			{
 				ConnectionInfo _owner;
 				object _state;
@@ -1061,7 +1089,78 @@ namespace p2pncs.Net.Overlay.Anonymous
 				public bool IsCompleted {
 					get { return _completed; }
 				}
+
+				public void Done ()
+				{
+					_completed = true;
+					_done.Set ();
+					if (_callback != null) {
+						try {
+							_callback (this);
+						} catch {}
+					}
+				}
+
+				public ConnectionInfo ConnectionInfo {
+					get { return _owner; }
+				}
 			}
+
+			class ConnectionSocket : IAnonymousSocket
+			{
+				ConnectionInfo _info;
+				DatagramReceiveEventHandler _handler;
+
+				public ConnectionSocket (ConnectionInfo info, DatagramReceiveEventHandler received_handler)
+				{
+					_info = info;
+					_handler = received_handler;
+				}
+
+				public void InvokeReceivedEvent (DatagramReceiveEventArgs args)
+				{
+					if (_handler != null) {
+						try {
+							_handler (this, args);
+						} catch {}
+					}
+				}
+
+				#region IAnonymousSocket Members
+
+				public void Send (byte[] buffer)
+				{
+					Send (buffer, 0, buffer.Length);
+				}
+
+				public void Send (byte[] buffer, int offset, int size)
+				{
+					_info.Send (buffer, offset, size);
+				}
+
+				public void Close ()
+				{
+					Dispose ();
+				}
+
+				#endregion
+
+				#region IDisposable Members
+
+				public void Dispose ()
+				{
+					if (_info != null) {
+						_info.Close ();
+						_info = null;
+					}
+				}
+
+				#endregion
+			}
+		}
+		interface IConnectionAsyncResult
+		{
+			ConnectionInfo ConnectionInfo { get; }
 		}
 		#endregion
 

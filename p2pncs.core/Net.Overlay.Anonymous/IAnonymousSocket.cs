@@ -15,9 +15,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+using System;
+
 namespace p2pncs.Net.Overlay.Anonymous
 {
-	public interface IAnonymousSocket
+	public interface IAnonymousSocket : IDisposable
 	{
 		void Send (byte[] buffer);
 		void Send (byte[] buffer, int offset, int size);
