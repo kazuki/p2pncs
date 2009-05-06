@@ -139,23 +139,25 @@ namespace p2pncs.Net.Overlay.Anonymous
 			} else {
 				Key key = new Key (payload.NextHopPayload);
 				BoundaryInfo boundaryInfo = new BoundaryInfo (payload.SharedKey, new AnonymousEndPoint (e.EndPoint, msg.Label), key);
-				Console.WriteLine ("{0}: Received {1} -> (end)\r\n: Subcribe {2}", _kbr.SelftNodeId, msg.Label, key);
 				EstablishedMessage ack = new EstablishedMessage (boundaryInfo.LabelOnlyAnonymousEndPoint.Label);
 				sock.StartResponse (e, new AcknowledgeMessage (MultipleCipherHelper.CreateRoutedPayload (payload.SharedKey, ack)));
-				RouteInfo info = new RouteInfo (boundaryInfo.Previous, boundaryInfo, payload.SharedKey);
-				using (IDisposable cookie = _routingMapLock.EnterWriteLock ()) {
-					_routingMap.Add (info.Previous, info);
-					_routingMap.Add (boundaryInfo.LabelOnlyAnonymousEndPoint, info);
-				}
-				using (IDisposable cookie = _boundMapLock.EnterWriteLock ()) {
-					List<BoundaryInfo> list;
-					if (!_boundMap.TryGetValue (key, out list)) {
-						list = new List<BoundaryInfo> (2);
-						_boundMap.Add (key, list);
+				if (_dupCheck.Check (payload.DuplicationCheckId)) {
+					Console.WriteLine ("{0}: Received {1} -> (end)\r\n: Subcribe {2}", _kbr.SelftNodeId, msg.Label, key);
+					RouteInfo info = new RouteInfo (boundaryInfo.Previous, boundaryInfo, payload.SharedKey);
+					using (IDisposable cookie = _routingMapLock.EnterWriteLock ()) {
+						_routingMap.Add (info.Previous, info);
+						_routingMap.Add (boundaryInfo.LabelOnlyAnonymousEndPoint, info);
 					}
-					list.Add (boundaryInfo);
+					using (IDisposable cookie = _boundMapLock.EnterWriteLock ()) {
+						List<BoundaryInfo> list;
+						if (!_boundMap.TryGetValue (key, out list)) {
+							list = new List<BoundaryInfo> (2);
+							_boundMap.Add (key, list);
+						}
+						list.Add (boundaryInfo);
+					}
+					boundaryInfo.PutToDHT (_dht);
 				}
-				boundaryInfo.PutToDHT (_dht);
 			}
 		}
 
@@ -168,13 +170,21 @@ namespace p2pncs.Net.Overlay.Anonymous
 			EstablishRoutePayload payload = (EstablishRoutePayload)state[3];
 			EstablishRouteMessage msg2 = (EstablishRouteMessage)state[4];
 			AcknowledgeMessage ack = (AcknowledgeMessage)sock.EndInquire (ar);
+			if (ack == null) {
+				// Inquiry fail.
+				sock.StartResponse (e, null);
+				return;
+			}
 			sock.StartResponse (e, new AcknowledgeMessage (MultipleCipherHelper.EncryptRoutedPayload (payload.SharedKey, ack.Payload)));
 
-			RouteInfo info = new RouteInfo (new AnonymousEndPoint (e.EndPoint, msg.Label),
-				new AnonymousEndPoint (payload.NextHopEndPoint, msg2.Label), payload.SharedKey);
+			AnonymousEndPoint prevEP = new AnonymousEndPoint (e.EndPoint, msg.Label);
+			AnonymousEndPoint nextEP = new AnonymousEndPoint (payload.NextHopEndPoint, msg2.Label);
+			RouteInfo info = new RouteInfo (prevEP, nextEP, payload.SharedKey);
 			using (IDisposable cookie = _routingMapLock.EnterWriteLock ()) {
-				_routingMap.Add (info.Previous, info);
-				_routingMap.Add (info.Next, info);
+				if (!_routingMap.ContainsKey (prevEP)) {
+					_routingMap.Add (info.Previous, info);
+					_routingMap.Add (info.Next, info);
+				}
 			}
 		}
 
@@ -207,6 +217,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 							object ack = ProcessMessage (routedMsg, routeInfo.BoundaryInfo);
 							payload = MultipleCipherHelper.CreateRoutedPayload (routeInfo.Key, ack);
 							_sock.StartResponse (e, new AcknowledgeMessage (payload));
+						} else {
+							// TODO: どうする?
 						}
 					}
 				} else {
@@ -238,6 +250,12 @@ namespace p2pncs.Net.Overlay.Anonymous
 			AcknowledgeMessage ack = (AcknowledgeMessage)_sock.EndInquire (ar);
 			InquiredEventArgs e = (InquiredEventArgs)state[0];
 			RouteInfo routeInfo = (RouteInfo)state[1];
+			if (ack == null) {
+				// inquiry fail
+				_sock.StartResponse (e, null);
+				return;
+			}
+			
 			ack = new AcknowledgeMessage (MultipleCipherHelper.EncryptRoutedPayload (routeInfo.Key, ack.Payload));
 			_sock.StartResponse (e, ack);
 		}
@@ -836,7 +854,14 @@ namespace p2pncs.Net.Overlay.Anonymous
 				if (_closed) return;
 				byte[] payload = MultipleCipherHelper.CreateRoutedPayload (_key, msg);
 				sock.BeginInquire (new RoutedMessage (_prevEP.Label, payload), _prevEP.EndPoint,
-					MultipleCipherReverseRelayTimeout, MultipleCipherReverseRelayMaxRetry, null, null);
+					MultipleCipherReverseRelayTimeout, MultipleCipherReverseRelayMaxRetry,
+					SendMessage_Callback, sock);
+			}
+			void SendMessage_Callback (IAsyncResult ar)
+			{
+				IMessagingSocket sock = (IMessagingSocket)ar.AsyncState;
+				if (sock.EndInquire (ar) == null)
+					Timeout ();
 			}
 
 			public void PutToDHT (IDistributedHashTable dht)
@@ -1228,12 +1253,12 @@ namespace p2pncs.Net.Overlay.Anonymous
 				byte[] iv = new byte[DefaultSymmetricBlockBits / 8];
 				byte[] key = new byte[DefaultSymmetricKeyBits / 8];
 
-				int payload_size = recipientId.KeyBytes + 1;
+				int payload_size = recipientId.KeyBytes + 8;
 				byte[] payload = new byte[PayloadFixedSize];
 
 				RNG.Instance.GetBytes (payload);
 				payload[0] = 0;
-				recipientId.CopyTo (payload, 1);
+				recipientId.CopyTo (payload, 9);
 
 				for (int i = relayKeys.Length - 1; i >= 0; i--) {
 					if (payload_size % iv.Length != 0)
@@ -1288,14 +1313,14 @@ namespace p2pncs.Net.Overlay.Anonymous
 				switch (decrypted[0]) {
 					case 0:
 						byte[] rawKey = new byte[pubKeyLen];
-						Buffer.BlockCopy (decrypted, 1, rawKey, 0, rawKey.Length);
-						return new EstablishRoutePayload (null, rawKey, sharedKey);
+						Buffer.BlockCopy (decrypted, 9, rawKey, 0, rawKey.Length);
+						return new EstablishRoutePayload (null, rawKey, sharedKey, BitConverter.ToInt64 (decrypted, 1));
 					case 1:
 						byte[] new_payload = new byte[PayloadFixedSize];
 						RNG.Instance.GetBytes (new_payload);
 						EndPoint nextHop = DeserializeEndPoint (decrypted, 1, out len);
 						Buffer.BlockCopy (decrypted, 1 + len, new_payload, 0, decrypted.Length - 1 - len);
-						return new EstablishRoutePayload (nextHop, new_payload, sharedKey);
+						return new EstablishRoutePayload (nextHop, new_payload, sharedKey, 0);
 					default:
 						throw new FormatException ();
 				}
@@ -1545,12 +1570,14 @@ namespace p2pncs.Net.Overlay.Anonymous
 			SymmetricKey _key;
 			EndPoint _nextHop;
 			byte[] _nextHopPayload;
+			long _dupCheckId;
 
-			public EstablishRoutePayload (EndPoint nextHop, byte[] nextHopPayload, SymmetricKey key)
+			public EstablishRoutePayload (EndPoint nextHop, byte[] nextHopPayload, SymmetricKey key, long dupCheckId)
 			{
 				_nextHop = nextHop;
 				_nextHopPayload = nextHopPayload;
 				_key = key;
+				_dupCheckId = dupCheckId;
 			}
 
 			public EndPoint NextHopEndPoint {
@@ -1563,6 +1590,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public SymmetricKey SharedKey {
 				get { return _key; }
+			}
+
+			public long DuplicationCheckId {
+				get { return _dupCheckId; }
 			}
 		}
 
