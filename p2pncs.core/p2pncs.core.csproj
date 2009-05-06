@@ -76,6 +76,7 @@
     <Compile Include="Threading\InterruptHandler.cs" />
     <Compile Include="Threading\IntervalInterrupter.cs" />
     <Compile Include="Threading\ReaderWriterLockWrapper.cs" />
+    <Compile Include="Utility\DuplicationChecker.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\openCrypto.NET\openCrypto.NET.csproj">
