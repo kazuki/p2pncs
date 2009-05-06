@@ -54,6 +54,7 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Net.Overlay.Anonymous\AnonymousRouterTest.cs" />
     <Compile Include="Net.Overlay.DHT\DHTTest.cs" />
     <Compile Include="Net.Overlay\KBREnvironment.cs" />
     <Compile Include="Net.Overlay\KeyTest.cs" />
