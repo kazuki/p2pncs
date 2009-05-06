@@ -214,12 +214,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 						object routedMsg = MultipleCipherHelper.DecryptRoutedPayloadAtEnd (routeInfo.Key, msg.Payload, out dupCheckId);
 						if (_dupCheck.Check (dupCheckId)) {
 							Console.WriteLine ("{0}: -> Recv RoutedMessage (end) : {1}", _kbr.SelftNodeId, routedMsg);
-							object ack = ProcessMessage (routedMsg, routeInfo.BoundaryInfo);
-							payload = MultipleCipherHelper.CreateRoutedPayload (routeInfo.Key, ack);
-							_sock.StartResponse (e, new AcknowledgeMessage (payload));
-						} else {
-							// TODO: どうする?
+							ProcessMessage (routedMsg, routeInfo.BoundaryInfo);
 						}
+						_sock.StartResponse (e, DummyAckMsg);
 					}
 				} else {
 					// direction: next -> ! -> prev
@@ -247,12 +244,13 @@ namespace p2pncs.Net.Overlay.Anonymous
 		void MessagingSocket_Inquired_RoutedMessage_Callback (IAsyncResult ar)
 		{
 			object[] state = (object[])ar.AsyncState;
-			AcknowledgeMessage ack = (AcknowledgeMessage)_sock.EndInquire (ar);
+			object res = _sock.EndInquire (ar);
+			AcknowledgeMessage ack = res as AcknowledgeMessage;
 			InquiredEventArgs e = (InquiredEventArgs)state[0];
 			RouteInfo routeInfo = (RouteInfo)state[1];
 			if (ack == null) {
-				// inquiry fail
-				_sock.StartResponse (e, null);
+				// inquiry fail or responsed ack only
+				_sock.StartResponse (e, res);
 				return;
 			}
 			
@@ -388,13 +386,13 @@ namespace p2pncs.Net.Overlay.Anonymous
 			}
 		}
 
-		object ProcessMessage (object msg_obj, BoundaryInfo info)
+		void ProcessMessage (object msg_obj, BoundaryInfo info)
 		{
 			{
 				LookupRecipientProxyMessage msg = msg_obj as LookupRecipientProxyMessage;
 				if (msg != null) {
 					_dht.BeginGet (msg.RecipientKey, DHT_TYPEID, Process_LookupRecipientProxyMessage_Callback, msg);
-					return DummyAckMsg;
+					return;
 				}
 			}
 			{
@@ -407,10 +405,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 							_sock.BeginInquire (msg2, msg.OtherSideTerminalEndPoints[i].EndPoint, null, null);
 						}
 					}
-					return DummyAckMsg;
+					return;
 				}
 			}
-			return DummyAckMsg;
 		}
 
 		void Process_LookupRecipientProxyMessage_Callback (IAsyncResult ar)
@@ -788,9 +785,11 @@ namespace p2pncs.Net.Overlay.Anonymous
 				IMessagingSocket sock = (IMessagingSocket)states[0];
 				AckMessageHandler handler = (AckMessageHandler)states[1];
 				object state = states[2];
-				AcknowledgeMessage ack = sock.EndInquire (ar) as AcknowledgeMessage;
+				object res = sock.EndInquire (ar);
+				AcknowledgeMessage ack = res as AcknowledgeMessage;
 				if (ack == null) {
-					Timeout ();
+					if (res == null)
+						Timeout ();
 					return;
 				}
 
