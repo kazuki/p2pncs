@@ -138,7 +138,9 @@ namespace p2pncs.Simulation.VirtualNet
 			protected override void Transmit_Internal (IDatagramEventSocket sock)
 			{
 				VirtualDatagramEventSocket vsock = (VirtualDatagramEventSocket)sock;
-				vsock.VirtualNetwork.AddSendQueue (vsock.BindedPublicEndPoint, _remoteEP, new RequestWrapper (_req, _id));
+				try {
+					vsock.VirtualNetwork.AddSendQueue (vsock.BindedPublicEndPoint, _remoteEP, new RequestWrapper (_req, _id));
+				} catch {}
 			}
 		}
 		#endregion

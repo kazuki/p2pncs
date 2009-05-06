@@ -50,10 +50,12 @@ namespace p2pncs.tests.Net.Overlay
 			if (enableDHT || enableAnon) {
 				_dhts = new List<IDistributedHashTable> ();
 				_dhtInt = new IntervalInterrupter (TimeSpan.FromSeconds (5), "DHT Maintenance Interrupter");
+				_dhtInt.Start ();
 			}
 			if (enableAnon) {
 				_anons = new List<IAnonymousRouter> ();
 				_anonInt = new IntervalInterrupter (TimeSpan.FromMilliseconds (500), "Anonymous Interrupter");
+				_anonInt.Start ();
 			}
 		}
 
@@ -81,6 +83,23 @@ namespace p2pncs.tests.Net.Overlay
 				_endPoints.Add (ep);
 			}
 			Thread.Sleep (500);
+		}
+
+		public void RemoveNode (int index)
+		{
+			_endPoints.RemoveAt (index);
+			if (_dhts != null) {
+				if (_anons != null) {
+					_anons[index].Close ();
+					_anons.RemoveAt (index);
+				}
+				_dhts[index].Dispose ();
+				_dhts.RemoveAt (index);
+			}
+			_routers[index].Close ();
+			_routers.RemoveAt (index);
+			_sockets[index].Close ();
+			_sockets.RemoveAt (index);
 		}
 
 		public VirtualNetwork VirtualNetwork {
@@ -111,9 +130,11 @@ namespace p2pncs.tests.Net.Overlay
 		{
 			if (_dhts != null) {
 				if (_anonInt != null) {
+					_anonInt.Dispose ();
 					for (int i = 0; i < _anons.Count; i++)
 						_anons[i].Close ();
 				}
+				_dhtInt.Dispose ();
 				for (int i = 0; i < _dhts.Count; i++)
 					_dhts[i].Dispose ();
 			}

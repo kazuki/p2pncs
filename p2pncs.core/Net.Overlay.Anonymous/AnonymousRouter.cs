@@ -163,6 +163,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				if (_dupCheck.Check (payload.DuplicationCheckId)) {
 					Console.WriteLine ("{0}: Received {1} -> (end)\r\n: Subcribe {2}", _kbr.SelftNodeId, msg.Label, key);
 					RouteInfo info = new RouteInfo (boundaryInfo.Previous, boundaryInfo, payload.SharedKey);
+					boundaryInfo.RouteInfo = info;
 					using (IDisposable cookie = _routingMapLock.EnterWriteLock ()) {
 						_routingMap.Add (info.Previous, info);
 						_routingMap.Add (boundaryInfo.LabelOnlyAnonymousEndPoint, info);
@@ -466,6 +467,13 @@ namespace p2pncs.Net.Overlay.Anonymous
 					}
 				}
 			}
+			lock (_connections) {
+				for (int i = 0; i < _connections.Count; i ++)
+					if (!_connections[i].CheckTimeout ()) {
+						_connections[i].Close ();
+						i --;
+					}
+			}
 
 			List<AnonymousEndPoint> timeoutRoutes = null;
 			List<RouteInfo> timeoutRouteEnds = null;
@@ -563,6 +571,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 			if (ar2 == null)
 				throw new ArgumentException ();
 			ar.AsyncWaitHandle.WaitOne ();
+			if (ar2.ConnectionInfo.Socket == null)
+				throw new System.Net.Sockets.SocketException ();
 			return ar2.ConnectionInfo.Socket;
 		}
 
@@ -676,8 +686,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 					CheckNumberOfEstablishedRoutes ();
 				} else {
 					Console.WriteLine ("ESTABLISHED !!");
-					startInfo.Established (msg);
 					RouteInfo routeInfo = new RouteInfo (startInfo, new AnonymousEndPoint (startInfo.RelayNodes[0].EndPoint, startInfo.Label), null);
+					startInfo.Established (msg, routeInfo);
 					lock (_listLock) {
 						_establishedList.Add (startInfo);
 					}
@@ -743,6 +753,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			AnonymousEndPoint _termEP = null;
 			DateTime _lastSendTime = DateTime.Now;
 			SubscribeInfo _subscribe;
+			RouteInfo _routeInfo = null;
 
 			public StartPointInfo (SubscribeInfo subscribe, NodeHandle[] relayNodes)
 			{
@@ -794,9 +805,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 				return MultipleCipherHelper.CreateEstablishPayload (_relayNodes, _relayKeys, recipientId, domain);
 			}
 
-			public void Established (EstablishedMessage msg)
+			public void Established (EstablishedMessage msg, RouteInfo routeInfo)
 			{
 				_termEP = new AnonymousEndPoint (_relayNodes[_relayNodes.Length - 1].EndPoint, msg.Label);
+				_routeInfo = routeInfo;
 			}
 
 			public void Timeout ()
@@ -806,6 +818,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public void Close ()
 			{
+				if (_routeInfo != null) {
+					_routeInfo.Timeout ();
+				}
 			}
 		}
 		#endregion
@@ -819,6 +834,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			DateTime _nextPutToDHTTime = DateTime.Now + DHTPutInterval;
 			AnonymousEndPoint _dummyEP;
 			Key _recipientKey;
+			RouteInfo _routeInfo = null;
 
 			public BoundaryInfo (SymmetricKey key, AnonymousEndPoint prev, Key recipientKey)
 			{
@@ -865,9 +881,15 @@ namespace p2pncs.Net.Overlay.Anonymous
 				get { return _dummyEP; }
 			}
 
+			public RouteInfo RouteInfo {
+				set { _routeInfo = value; }
+			}
+
 			public void Timeout ()
 			{
 				_closed = true;
+				if (_routeInfo != null)
+					_routeInfo.Timeout ();
 
 				/// TODO: DHTからキー情報を削除
 			}
@@ -945,6 +967,12 @@ namespace p2pncs.Net.Overlay.Anonymous
 			{
 				return _nextExpiry < DateTime.Now || _prevExpiry < DateTime.Now;
 			}
+
+			public void Timeout ()
+			{
+				_prevExpiry = DateTime.MinValue;
+				_nextExpiry = DateTime.MinValue;
+			}
 		}
 		#endregion
 
@@ -965,6 +993,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 			SymmetricKey _key = null;
 			AnonymousEndPoint[] _destSideTermEPs;
 			ConnectionSocket _sock;
+			DateTime _sendExpiry = DateTime.Now + MCR_Timeout;
+			DateTime _recvExpiry = DateTime.Now + MCR_MaxRTT;
 
 			public ConnectionInfo (AnonymousRouter router, SubscribeInfo subscribeInfo, Key destKey, DatagramReceiveEventHandler receivedHandler, AsyncCallback callback, object state)
 			{
@@ -1044,22 +1074,33 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public void Send (byte[] buffer, int offset, int size)
 			{
+				if (size == 0)
+					return;
+				Send_Internal (buffer, offset, size);
+			}
+
+			void Send_Internal (byte[] buffer, int offset, int size)
+			{
 				byte[] payload = _key.Encrypt (buffer, offset, size);
 				ConnectionMessageBeforeBoundary msg = new ConnectionMessageBeforeBoundary (_subscribeInfo.GetRouteEndPoints (),
 					_destSideTermEPs, _connectionId, payload);
 				_subscribeInfo.SendToAllRoutes (msg);
+				_sendExpiry = DateTime.Now + MCR_Timeout;
 			}
 
 			public void Receive (ConnectionMessage msg)
 			{
+				_recvExpiry = DateTime.Now + MCR_TimeoutWithMargin;
 				_destSideTermEPs = msg.EndPoints;
 				byte[] payload = _key.Decrypt (msg.Payload, 0, msg.Payload.Length);
-				_sock.InvokeReceivedEvent (new DatagramReceiveEventArgs (payload, payload.Length, null));
+				if (payload.Length > 0)
+					_sock.InvokeReceivedEvent (new DatagramReceiveEventArgs (payload, payload.Length, null));
 			}
 
 			public void ReceiveFirstConnectionMessage (ConnectionMessage msg)
 			{
 				_connected = true;
+				_recvExpiry = DateTime.Now + MCR_TimeoutWithMargin;
 				byte[] sharedInfo = new byte[msg.Payload.Length + _establishInfo.SharedInfo.Length];
 				Buffer.BlockCopy (_establishInfo.SharedInfo, 0, sharedInfo, 0, _establishInfo.SharedInfo.Length);
 				Buffer.BlockCopy (msg.Payload, 0, sharedInfo, _establishInfo.SharedInfo.Length, msg.Payload.Length);
@@ -1077,6 +1118,26 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public void Close ()
 			{
+				if (_sock != null) {
+					_sock.Disconnected ();
+					_sock = null;
+				}
+				if (!_connected) {
+					_ar.Done ();
+				}
+				lock (_router._connections) {
+					_router._connections.Remove (this);
+				}
+			}
+
+			public bool CheckTimeout ()
+			{
+				if (_recvExpiry <= DateTime.Now)
+					return false; // Timeout...
+
+				if (_connected && _sendExpiry <= DateTime.Now)
+					Send_Internal (new byte[0], 0, 0);
+				return true;
 			}
 
 			public IAsyncResult AsyncResult {
@@ -1150,6 +1211,11 @@ namespace p2pncs.Net.Overlay.Anonymous
 					}
 				}
 
+				public void Disconnected ()
+				{
+					_info = null;
+				}
+
 				#region IAnonymousSocket Members
 
 				public void Send (byte[] buffer)
@@ -1159,6 +1225,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 				public void Send (byte[] buffer, int offset, int size)
 				{
+					if (_info == null)
+						throw new System.Net.Sockets.SocketException ();
 					_info.Send (buffer, offset, size);
 				}
 

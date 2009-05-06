@@ -112,5 +112,107 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 				}
 			}
 		}
+
+		[Test]
+		public void EstablishFailTest ()
+		{
+			using (KBREnvironment env = new KBREnvironment (true, true)) {
+				ECDomainNames domain = ECDomainNames.secp112r2;
+				int nodes = 20;
+				ECKeyPair[] nodePrivateKeys = new ECKeyPair[nodes];
+				Key[] nodeKeys = new Key[nodes];
+				for (int i = 0; i < nodePrivateKeys.Length; i ++) {
+					nodePrivateKeys[i] = ECKeyPair.Create (domain);
+					nodeKeys[i] = Key.Create (nodePrivateKeys[i]);
+				}
+				env.AddNodes (nodeKeys, nodePrivateKeys);
+
+				ECKeyPair priv1 = ECKeyPair.Create (domain);
+				ECKeyPair priv2 = ECKeyPair.Create (domain);
+				Key id1 = Key.Create (priv1);
+				Key id2 = Key.Create (priv2);
+				env.AnonymousRouters[0].SubscribeRecipient (id1, priv1);
+				env.AnonymousRouters[1].SubscribeRecipient (id2, priv2);
+				Thread.Sleep (1000);
+
+				AutoResetEvent accepted_done = new AutoResetEvent (false);
+				IAnonymousSocket sock2 = null;
+				env.AnonymousRouters[1].Accepting += delegate (object sender, AcceptingEventArgs args) {
+					Thread.Sleep (4000); // AnonymousRouter.MCR_MaxRTTに依存
+					args.Accept (delegate (object s, DatagramReceiveEventArgs e) {}, null);
+				};
+				env.AnonymousRouters[1].Accepted += delegate (object sender, AcceptedEventArgs args) {
+					accepted_done.Set ();
+					sock2 = args.Socket;
+				};
+
+				try {
+					IAsyncResult ar = env.AnonymousRouters[0].BeginEstablishRoute (id1, id2, delegate (object sender, DatagramReceiveEventArgs args) {}, null, null);
+					env.AnonymousRouters[0].EndEstablishRoute (ar);
+					Assert.Fail ();
+				} catch (System.Net.Sockets.SocketException) {}
+			}
+		}
+
+		[Test]
+		public void ConnectionFailTest ()
+		{
+			using (KBREnvironment env = new KBREnvironment (true, true)) {
+				ECDomainNames domain = ECDomainNames.secp112r2;
+				int nodes = 20;
+				ECKeyPair[] nodePrivateKeys = new ECKeyPair[nodes];
+				Key[] nodeKeys = new Key[nodes];
+				for (int i = 0; i < nodePrivateKeys.Length; i++) {
+					nodePrivateKeys[i] = ECKeyPair.Create (domain);
+					nodeKeys[i] = Key.Create (nodePrivateKeys[i]);
+				}
+				env.AddNodes (nodeKeys, nodePrivateKeys);
+
+				ECKeyPair priv1 = ECKeyPair.Create (domain);
+				ECKeyPair priv2 = ECKeyPair.Create (domain);
+				Key id1 = Key.Create (priv1);
+				Key id2 = Key.Create (priv2);
+				env.AnonymousRouters[0].SubscribeRecipient (id1, priv1);
+				env.AnonymousRouters[1].SubscribeRecipient (id2, priv2);
+				Thread.Sleep (1000);
+
+				AutoResetEvent accepted_done = new AutoResetEvent (false);
+				IAnonymousSocket sock2 = null;
+				env.AnonymousRouters[1].Accepting += delegate (object sender, AcceptingEventArgs args) {
+					args.Accept (delegate (object s, DatagramReceiveEventArgs e) { }, null);
+				};
+				env.AnonymousRouters[1].Accepted += delegate (object sender, AcceptedEventArgs args) {
+					accepted_done.Set ();
+					sock2 = args.Socket;
+				};
+
+				// Close Test
+				IAsyncResult ar = env.AnonymousRouters[0].BeginEstablishRoute (id1, id2, delegate (object sender, DatagramReceiveEventArgs args) { }, null, null);
+				IAnonymousSocket sock1 = env.AnonymousRouters[0].EndEstablishRoute (ar);
+				sock1.Close ();
+				try {
+					sock1.Send (new byte[] { 1, 2, 3 });
+					Assert.Fail ("close test");
+				} catch (System.Net.Sockets.SocketException) { }
+
+				// Timeout Test
+				ar = env.AnonymousRouters[0].BeginEstablishRoute (id1, id2, delegate (object sender, DatagramReceiveEventArgs args) { }, null, null);
+				sock1 = env.AnonymousRouters[0].EndEstablishRoute (ar);
+				env.RemoveNode (1);
+				Thread.Sleep (1000);
+				sock1.Send (new byte[] { 1, 2, 3 });
+				Thread.Sleep (10000);
+				sock1.Send (new byte[] { 1, 2, 3 });
+				Thread.Sleep (10000);
+				sock1.Send (new byte[] { 1, 2, 3 });
+				Thread.Sleep (10000);
+				sock1.Send (new byte[] { 1, 2, 3 });
+				Thread.Sleep (8000); // AnonymousRouter.MCR_TimeoutWithMargin (about 38sec) に依存
+				try {
+					sock1.Send (new byte[] {1, 2, 3});
+					Assert.Fail ();
+				} catch (System.Net.Sockets.SocketException) {}
+			}
+		}
 	}
 }
