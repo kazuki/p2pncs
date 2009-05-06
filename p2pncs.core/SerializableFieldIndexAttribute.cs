@@ -16,32 +16,19 @@
  */
 
 using System;
-using System.Net;
-using System.IO;
 
-namespace p2pncs.Net.Overlay
+namespace p2pncs
 {
-	[Serializable]
-	[SerializableTypeId (0x101)]
-	public class NodeHandle
+	public class SerializableFieldIndexAttribute : Attribute
 	{
-		[SerializableFieldIndex (0)]
-		EndPoint _ep;
+		int _id;
 
-		[SerializableFieldIndex (1)]
-		Key _id;
-
-		public NodeHandle (Key id, EndPoint ep)
+		public SerializableFieldIndexAttribute (int id)
 		{
 			_id = id;
-			_ep = ep;
 		}
 
-		public EndPoint EndPoint {
-			get { return _ep; }
-		}
-
-		public Key NodeID {
+		public int ID {
 			get { return _id; }
 		}
 	}

@@ -51,6 +51,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 		/// <summary>多重暗号化されたメッセージのメッセージ長 (常にここで指定したサイズになる)</summary>
 		const int PayloadFixedSize = 5120; // TODO: シリアライザを見直して896(128bit*56)バイト未満に収まるように調整する
+		//const int PayloadFixedSize = 896;
 
 		/// <summary>1つのIDにつき構築する多重暗号経路の最小数</summary>
 		const int DefaultSubscribeRoutes = 2;
@@ -91,10 +92,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 		/// <summary>多重暗号経路が壊れているためメッセージが届かないと認識するために利用するタイムアウト時間</summary>
 		static TimeSpan MCR_TimeoutWithMargin = MCR_Timeout + (MCR_MaxRTT + MCR_MaxRTT);
 
-		static IFormatter DefaultFormatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter ();
+		static IFormatter DefaultFormatter = Serializer.Instance;
 		static EndPoint DummyEndPoint = new IPEndPoint (IPAddress.Loopback, 0);
 		const int DHT_TYPEID = 1;
-		static object DummyAckMsg = "ACK";
+		static object DummyAckMsg = new ACK ();
 		const int ConnectionEstablishSharedInfoBytes = 16;
 		#endregion
 
@@ -1480,9 +1481,13 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 		#region AnonymousEndPoint
 		[Serializable]
+		[SerializableTypeId (0x20a)]
 		class AnonymousEndPoint// : EndPoint
 		{
+			[SerializableFieldIndex (0)]
 			EndPoint _ep;
+
+			[SerializableFieldIndex (1)]
 			RouteLabel _label;
 
 			public AnonymousEndPoint (EndPoint ep, RouteLabel label)
@@ -1525,9 +1530,13 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 		#region DHT Entry
 		[Serializable]
+		[SerializableTypeId (0x20b)]
 		class DHTEntry : IPutterEndPointStore, IEquatable<DHTEntry>
 		{
+			[SerializableFieldIndex (0)]
 			RouteLabel _label;
+
+			[SerializableFieldIndex (1)]
 			EndPoint _ep = null;
 
 			public DHTEntry (RouteLabel label)
@@ -1582,9 +1591,13 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 		#region Messages
 		[Serializable]
+		[SerializableTypeId (0x200)]
 		class EstablishRouteMessage
 		{
+			[SerializableFieldIndex (0)]
 			RouteLabel _label;
+
+			[SerializableFieldIndex (1)]
 			byte[] _payload;
 
 			public EstablishRouteMessage (RouteLabel label, byte[] payload)
@@ -1635,8 +1648,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 		}
 
 		[Serializable]
+		[SerializableTypeId (0x201)]
 		class EstablishedMessage
 		{
+			[SerializableFieldIndex (0)]
 			RouteLabel _label;
 
 			public EstablishedMessage (RouteLabel label)
@@ -1650,6 +1665,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 		}
 
 		[Serializable]
+		[SerializableTypeId (0x202)]
 		class Ping
 		{
 			static Ping _instance = new Ping ();
@@ -1660,9 +1676,13 @@ namespace p2pncs.Net.Overlay.Anonymous
 		}
 
 		[Serializable]
+		[SerializableTypeId (0x203)]
 		class RoutedMessage
 		{
+			[SerializableFieldIndex (0)]
 			RouteLabel _label;
+
+			[SerializableFieldIndex (1)]
 			byte[] _payload;
 
 			public RoutedMessage (RouteLabel label, byte[] payload)
@@ -1681,8 +1701,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 		}
 
 		[Serializable]
+		[SerializableTypeId (0x204)]
 		class AcknowledgeMessage
 		{
+			[SerializableFieldIndex (0)]
 			byte[] _payload;
 
 			public AcknowledgeMessage (byte[] payload)
@@ -1696,9 +1718,13 @@ namespace p2pncs.Net.Overlay.Anonymous
 		}
 
 		[Serializable]
+		[SerializableTypeId (0x205)]
 		class LookupRecipientProxyMessage
 		{
+			[SerializableFieldIndex (0)]
 			Key _recipientKey;
+
+			[SerializableFieldIndex (1)]
 			ConnectionEstablishMessage _msg;
 
 			public LookupRecipientProxyMessage (Key recipientKey, ConnectionEstablishMessage msg)
@@ -1717,12 +1743,22 @@ namespace p2pncs.Net.Overlay.Anonymous
 		}
 
 		[Serializable]
+		[SerializableTypeId (0x206)]
 		class ConnectionEstablishMessage
 		{
+			[SerializableFieldIndex (0)]
 			byte[] _tempPubKey;
+
+			[SerializableFieldIndex (1)]
 			byte[] _encryptedInfo;
+
+			[SerializableFieldIndex (2)]
 			Key _recipientId;
+
+			[SerializableFieldIndex (3)]
 			RouteLabel _label = 0;
+
+			[SerializableFieldIndex (4)]
 			long _dupCheckId;
 
 			ConnectionEstablishMessage (byte[] tempPubKey, byte[] encryptedInfo, RouteLabel label, Key recipientID, long dupCheckId)
@@ -1788,11 +1824,19 @@ namespace p2pncs.Net.Overlay.Anonymous
 		}
 
 		[Serializable]
+		[SerializableTypeId (0x207)]
 		class ConnectionEstablishInfo
 		{
+			[SerializableFieldIndex (0)]
 			byte[] _sharedInfo;
+
+			[SerializableFieldIndex (1)]
 			Key _initiator;
+
+			[SerializableFieldIndex (2)]
 			int _connectionId;
+
+			[SerializableFieldIndex (3)]
 			AnonymousEndPoint[] _endPoints;
 
 			public ConnectionEstablishInfo (Key initiator, AnonymousEndPoint[] eps, byte[] sharedInfo, int connectionId)
@@ -1821,12 +1865,22 @@ namespace p2pncs.Net.Overlay.Anonymous
 		}
 
 		[Serializable]
+		[SerializableTypeId (0x208)]
 		class ConnectionMessageBeforeBoundary
 		{
+			[SerializableFieldIndex (0)]
 			AnonymousEndPoint[] _mySideTermEPs;
+
+			[SerializableFieldIndex (1)]
 			AnonymousEndPoint[] _otherSideTermEPs;
+
+			[SerializableFieldIndex (2)]
 			byte[] _payload;
+
+			[SerializableFieldIndex (3)]
 			int _connectionId;
+
+			[SerializableFieldIndex (4)]
 			long _dupCheckId;
 
 			public ConnectionMessageBeforeBoundary (AnonymousEndPoint[] mySideTermEPs, AnonymousEndPoint[] otherSideTermEPs, int connectionId, byte[] payload)
@@ -1860,12 +1914,22 @@ namespace p2pncs.Net.Overlay.Anonymous
 		}
 
 		[Serializable]
+		[SerializableTypeId (0x209)]
 		class ConnectionMessage
 		{
+			[SerializableFieldIndex (0)]
 			RouteLabel _label;
+
+			[SerializableFieldIndex (1)]
 			int _connectionId;
+
+			[SerializableFieldIndex (2)]
 			AnonymousEndPoint[] _termEPs;
+
+			[SerializableFieldIndex (3)]
 			byte[] _payload;
+
+			[SerializableFieldIndex (4)]
 			long _dupCheckId;
 
 			public ConnectionMessage (AnonymousEndPoint[] termEPs, RouteLabel label, int connectionId, long dupCheckId, byte[] payload)
@@ -1896,6 +1960,12 @@ namespace p2pncs.Net.Overlay.Anonymous
 			public long DuplicationCheckId {
 				get { return _dupCheckId; }
 			}
+		}
+
+		[Serializable]
+		[SerializableTypeId (0x20c)]
+		class ACK
+		{
 		}
 		#endregion
 	}

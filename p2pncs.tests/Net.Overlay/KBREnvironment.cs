@@ -32,8 +32,6 @@ namespace p2pncs.tests.Net.Overlay
 {
 	class KBREnvironment : IDisposable
 	{
-		static System.Runtime.Serialization.Formatters.Binary.BinaryFormatter Formatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter ();
-
 		VirtualNetwork _network;
 		IntervalInterrupter _interrupter, _dhtInt, _anonInt;
 		List<EndPoint> _endPoints = new List<EndPoint> ();
@@ -66,9 +64,9 @@ namespace p2pncs.tests.Net.Overlay
 				IPEndPoint ep = new IPEndPoint (adrs, 10000);
 				VirtualDatagramEventSocket sock = new VirtualDatagramEventSocket (_network, adrs);
 				sock.Bind (new IPEndPoint (IPAddress.Loopback, ep.Port));
-				IMessagingSocket msock = new MessagingSocket (sock, true, SymmetricKey.NoneKey, Formatter, null, _interrupter, TimeSpan.FromSeconds (1), 2, 1024);
+				IMessagingSocket msock = new MessagingSocket (sock, true, SymmetricKey.NoneKey, Serializer.Instance, null, _interrupter, TimeSpan.FromSeconds (1), 2, 1024);
 				_sockets.Add (msock);
-				IKeyBasedRouter router = new SimpleIterativeRouter (keys[i], msock, new SimpleRoutingAlgorithm ());
+				IKeyBasedRouter router = new SimpleIterativeRouter (keys[i], msock, new SimpleRoutingAlgorithm (), Serializer.Instance);
 				_routers.Add (router);
 				if (_dhts != null) {
 					IDistributedHashTable dht = new SimpleDHT (router, msock, new OnMemoryLocalHashTable (_dhtInt));

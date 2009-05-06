@@ -18,6 +18,8 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.IO;
+using System.Runtime.Serialization;
 using System.Threading;
 
 namespace p2pncs.Net.Overlay
@@ -34,15 +36,24 @@ namespace p2pncs.Net.Overlay
 		const int dgramMaxSize = 1000;
 		int _maxNodeHandlesPerResponse;
 
-		public SimpleIterativeRouter (Key self, IMessagingSocket sock, IKeyBasedRoutingAlgorithm algo)
+		public SimpleIterativeRouter (Key self, IMessagingSocket sock, IKeyBasedRoutingAlgorithm algo, IFormatter formatter)
 		{
 			_selfId = self;
 			_sock = sock;
 			_algo = algo;
 
 			// 各メッセージに含むことの出来るNodeHandle数を計算
-			int overhead = self.KeyBytes + 10;
-			int nodeHandleBytes = self.KeyBytes + 20;
+			int overhead, nodeHandleBytes;
+			{
+				using (MemoryStream ms = new MemoryStream ()) {
+					formatter.Serialize (ms, new NextHopQueryResponse (self, true, new NodeHandle[0], new NodeHandle[0]));
+					overhead = (int)ms.Length;
+				}
+				using (MemoryStream ms = new MemoryStream ()) {
+					formatter.Serialize (ms, new NodeHandle (self, new IPEndPoint (IPAddress.Loopback, 0)));
+					nodeHandleBytes = (int)ms.Length;
+				}
+			}
 			_maxNodeHandlesPerResponse = (dgramMaxSize - overhead) / nodeHandleBytes;
 
 			algo.Setup (self, this);
@@ -480,11 +491,19 @@ namespace p2pncs.Net.Overlay
 		}
 
 		[Serializable]
+		[SerializableTypeId (0x110)]
 		class NextHopQueryMessage
 		{
+			[SerializableFieldIndex (0)]
 			Key _sender;
+
+			[SerializableFieldIndex (1)]
 			Key _dest;
+
+			[SerializableFieldIndex (2)]
 			int _numOfNextHops;
+
+			[SerializableFieldIndex (3)]
 			int _numOfRootCandidates;
 
 			public NextHopQueryMessage (Key sender, Key dest, int numOfNextHops, int numOfRootCandidates)
@@ -513,11 +532,19 @@ namespace p2pncs.Net.Overlay
 		}
 
 		[Serializable]
+		[SerializableTypeId (0x111)]
 		class NextHopQueryResponse
 		{
+			[SerializableFieldIndex (0)]
 			Key _sender;
+
+			[SerializableFieldIndex (1)]
 			bool _isRootCandidate;
+
+			[SerializableFieldIndex (2)]
 			NodeHandle[] _nextHops;
+
+			[SerializableFieldIndex (3)]
 			NodeHandle[] _randomNodes;
 
 			public NextHopQueryResponse (Key sender, bool isRootCandidate, NodeHandle[] nextHops, NodeHandle[] randomNodes)

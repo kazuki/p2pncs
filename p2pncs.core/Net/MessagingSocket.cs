@@ -164,6 +164,7 @@ MessageError:
 		}
 
 		[Serializable]
+		[SerializableTypeId (0x120)]
 		class NullObject
 		{
 			static NullObject _instance = new NullObject ();
