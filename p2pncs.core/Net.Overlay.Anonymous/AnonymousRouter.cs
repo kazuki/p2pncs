@@ -556,6 +556,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 			using (IDisposable cookie = _subscribeMapLock.EnterReadLock ()) {
 				if (!_subscribeMap.TryGetValue (recipientId, out subscribeInfo))
 					throw new KeyNotFoundException ();
+				if (_subscribeMap.ContainsKey (destinationId))
+					throw new ArgumentException ();
 			}
 
 			ConnectionInfo info = new ConnectionInfo (this, subscribeInfo, destinationId, receivedHandler, callback, state);

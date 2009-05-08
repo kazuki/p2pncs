@@ -28,6 +28,7 @@ namespace p2pncs.Net.Overlay
 			_hops = hops;
 		}
 
+		/// <remarks>配列の要素のEndPointがnullだった場合は、自身のノードを意味する</remarks>
 		public NodeHandle[] RootCandidates {
 			get { return _candidates; }
 		}

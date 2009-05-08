@@ -34,6 +34,7 @@ namespace p2pncs.Net.Overlay.DHT
 			get { return _key; }
 		}
 
+		/// <remarks>要素がIPutterEndPointStoreを実装していて、かつEndPointがnullだった場合はその要素のEndPointは自ノードを指している</remarks>
 		public object[] Values {
 			get { return _values; }
 		}
