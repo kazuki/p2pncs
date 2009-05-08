@@ -19,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using NUnit.Framework;
+using p2pncs;
 using p2pncs.Net.Overlay;
 using p2pncs.Net.Overlay.DHT;
 
@@ -147,10 +148,13 @@ namespace p2pncs.tests.Net.Overlay.DHT
 			}
 		}
 
-		[Serializable]
+		[SerializableTypeId (0x10000)]
 		class EPStore : IPutterEndPointStore
 		{
+			[SerializableFieldId (0)]
 			EndPoint _ep = null;
+
+			[SerializableFieldId (1)]
 			string _msg;
 			
 			public EPStore (string msg)
