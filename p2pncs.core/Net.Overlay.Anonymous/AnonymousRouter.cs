@@ -1543,7 +1543,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public override string ToString ()
 			{
-				return _ep.ToString () + "@" + _label.ToString ("x");
+				return _ep.ToString () + "#" + _label.ToString ("x");
 			}
 		}
 		#endregion

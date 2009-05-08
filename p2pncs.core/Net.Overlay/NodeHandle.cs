@@ -44,5 +44,10 @@ namespace p2pncs.Net.Overlay
 		public Key NodeID {
 			get { return _id; }
 		}
+
+		public override string ToString ()
+		{
+			return _id.ToString () + (_ep == null ? "@null" : "@" + _ep.ToString ());
+		}
 	}
 }
