@@ -67,7 +67,7 @@ namespace p2pncs.Net
 
 		public virtual IAsyncResult BeginInquire (object obj, EndPoint remoteEP, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state)
 		{
-			if (obj == null || remoteEP == null)
+			if (remoteEP == null)
 				throw new ArgumentNullException ();
 
 			ushort id = CreateMessageID ();

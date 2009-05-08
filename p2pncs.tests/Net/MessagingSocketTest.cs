@@ -68,5 +68,11 @@ namespace p2pncs.tests.Net
 		{
 			base.SendTest ();
 		}
+
+		[Test]
+		public override void NullMsgTest ()
+		{
+			base.NullMsgTest ();
+		}
 	}
 }

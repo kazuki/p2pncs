@@ -71,6 +71,9 @@ namespace p2pncs.Net
 				goto MessageError;
 			}
 
+			if (_nullObject.Equals (obj))
+				obj = null;
+
 			switch (type) {
 				case MessageType.Request:
 					InquiredEventArgs args = new InquiredResponseState (obj, e.RemoteEndPoint, id);
@@ -99,8 +102,10 @@ MessageError:
 
 		public override void Send (object obj, EndPoint remoteEP)
 		{
-			if (obj == null || remoteEP == null)
+			if (remoteEP == null)
 				throw new ArgumentNullException ();
+			if (obj == null)
+				obj = _nullObject;
 
 			byte[] raw = SerializeTransmitData (MessageType.OneWay, 0, obj);
 			_sock.SendTo (raw, remoteEP);
@@ -116,6 +121,8 @@ MessageError:
 
 		protected override InquiredAsyncResultBase CreateInquiredAsyncResult (ushort id, object obj, EndPoint remoteEP, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state)
 		{
+			if (obj == null)
+				obj = _nullObject;
 			byte[] msg = SerializeTransmitData (MessageType.Request, id, obj);
 			return new InquiredAsyncResult (obj, msg, remoteEP, id, timeout, maxRetry, callback, state);
 		}
@@ -172,6 +179,16 @@ MessageError:
 				get { return _instance; }
 			}
 			NullObject () {}
+
+			public override bool Equals (object obj)
+			{
+				return (obj is NullObject);
+			}
+
+			public override int GetHashCode ()
+			{
+				return 0;
+			}
 		}
 		#endregion
 	}

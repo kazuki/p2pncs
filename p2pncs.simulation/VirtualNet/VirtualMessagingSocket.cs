@@ -56,7 +56,7 @@ namespace p2pncs.Simulation.VirtualNet
 
 		public override void Send (object obj, EndPoint remoteEP)
 		{
-			if (obj == null || remoteEP == null)
+			if (remoteEP == null)
 				throw new ArgumentNullException ();
 
 			VirtualDatagramEventSocket vsock = (VirtualDatagramEventSocket)_sock;
