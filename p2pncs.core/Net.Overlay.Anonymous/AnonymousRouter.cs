@@ -1042,7 +1042,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			AnonymousEndPoint[] _destSideTermEPs;
 			ConnectionSocket _sock;
 			DateTime _sendExpiry = DateTime.Now + MCR_Timeout;
-			DateTime _recvExpiry = DateTime.Now + MCR_MaxRTT;
+			DateTime _recvExpiry;
 
 			public ConnectionInfo (AnonymousRouter router, SubscribeInfo subscribeInfo, Key destKey, DatagramReceiveEventHandler receivedHandler, AsyncCallback callback, object state)
 			{
@@ -1050,6 +1050,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_router = router;
 				_subscribeInfo = subscribeInfo;
 				_destKey = destKey;
+				_recvExpiry = DateTime.Now + MCR_MaxRTT;
 				_destPubKey = destKey.ToECPublicKey (_subscribeInfo.DiffieHellman.Parameters.DomainName);
 				_connectionId = BitConverter.ToInt32 (RNG.GetRNGBytes (4), 0);
 				_ar = new EstablishRouteAsyncResult (this, callback, state);
@@ -1074,6 +1075,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_connectionId = connectionId;
 				_key = key;
 				_sock = new ConnectionSocket (this, receivedHandler);
+				_recvExpiry = DateTime.Now + MCR_TimeoutWithMargin;
 			}
 
 			public bool IsInitiator {
