@@ -400,12 +400,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 			{
 				ConnectionMessageBeforeBoundary msg = msg_obj as ConnectionMessageBeforeBoundary;
 				if (msg != null) {
-					if (_dupCheck.Check (msg.DuplicationCheckId)) {
-						for (int i = 0; i < msg.OtherSideTerminalEndPoints.Length; i ++) {
-							ConnectionMessage msg2 = new ConnectionMessage (msg.MySideTerminalEndPoints,
-								msg.OtherSideTerminalEndPoints[i].Label, msg.ConnectionId, msg.DuplicationCheckId, msg.Payload);
-							_sock.BeginInquire (msg2, msg.OtherSideTerminalEndPoints[i].EndPoint, null, null);
-						}
+					for (int i = 0; i < msg.OtherSideTerminalEndPoints.Length; i ++) {
+						ConnectionMessage msg2 = new ConnectionMessage (msg.MySideTerminalEndPoints,
+							msg.OtherSideTerminalEndPoints[i].Label, msg.ConnectionId, msg.DuplicationCheckId, msg.Payload);
+						_sock.BeginInquire (msg2, msg.OtherSideTerminalEndPoints[i].EndPoint, null, null);
 					}
 					return;
 				}
