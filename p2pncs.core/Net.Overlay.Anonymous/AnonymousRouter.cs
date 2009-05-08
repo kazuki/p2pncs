@@ -263,7 +263,11 @@ namespace p2pncs.Net.Overlay.Anonymous
 		void MessagingSocket_Inquired_ConnectionEstablishMessage (object sender, InquiredEventArgs e)
 		{
 			ConnectionEstablishMessage msg = (ConnectionEstablishMessage)e.InquireMessage;
-			_sock.StartResponse (e, DummyAckMsg);
+			if (e.EndPoint == null) {
+				// Call from Process_LookupRecipientProxyMessage_Callback
+			} else {
+				_sock.StartResponse (e, DummyAckMsg);
+			}
 			if (!_dupCheck.Check (msg.DuplicationCheckId))
 				return;
 			RouteInfo routeInfo;
@@ -422,13 +426,17 @@ namespace p2pncs.Net.Overlay.Anonymous
 			for (int i = 0; i < result.Values.Length; i ++) {
 				DHTEntry entry = result.Values[i] as DHTEntry;
 				if (entry == null) continue;
-				_sock.BeginInquire (msg.Message.Copy (entry.Label), entry.EndPoint, delegate (IAsyncResult ar2) {
-					object res = _sock.EndInquire (ar2);
-					if (res == null)
-						Console.WriteLine ("{0}: FAIL", _kbr.SelftNodeId);
-					else
-						Console.WriteLine ("{0}: OK", _kbr.SelftNodeId);
-				}, null);
+				if (entry.EndPoint != null) {
+					_sock.BeginInquire (msg.Message.Copy (entry.Label), entry.EndPoint, delegate (IAsyncResult ar2) {
+						object res = _sock.EndInquire (ar2);
+						if (res == null)
+							Console.WriteLine ("{0}: FAIL", _kbr.SelftNodeId);
+						else
+							Console.WriteLine ("{0}: OK", _kbr.SelftNodeId);
+					}, null);
+				} else {
+					MessagingSocket_Inquired_ConnectionEstablishMessage (null, new InquiredEventArgs (msg.Message.Copy (entry.Label), null));
+				}
 				temp += entry.ToString () + ", ";
 			}
 			if (temp.Length > 0) {
