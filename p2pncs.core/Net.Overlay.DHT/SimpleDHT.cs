@@ -289,10 +289,10 @@ namespace p2pncs.Net.Overlay.DHT
 		[SerializableTypeId (0x300)]
 		class GetRequest
 		{
-			[SerializableFieldIndex (0)]
+			[SerializableFieldId (0)]
 			Key _key;
 
-			[SerializableFieldIndex (1)]
+			[SerializableFieldId (1)]
 			int _typeId;
 
 			public GetRequest (Key key, int typeId)
@@ -314,7 +314,7 @@ namespace p2pncs.Net.Overlay.DHT
 		[SerializableTypeId (0x301)]
 		class GetResponse
 		{
-			[SerializableFieldIndex (0)]
+			[SerializableFieldId (0)]
 			object[] _values;
 
 			public GetResponse (object[] values)
@@ -331,13 +331,13 @@ namespace p2pncs.Net.Overlay.DHT
 		[SerializableTypeId (0x302)]
 		class PutRequest
 		{
-			[SerializableFieldIndex (0)]
+			[SerializableFieldId (0)]
 			Key _key;
 
-			[SerializableFieldIndex (1)]
+			[SerializableFieldId (1)]
 			object _value;
 
-			[SerializableFieldIndex (2)]
+			[SerializableFieldId (2)]
 			TimeSpan _lifetime;
 
 			public PutRequest (Key key, object value, TimeSpan lifetime)

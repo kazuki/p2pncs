@@ -139,7 +139,8 @@ namespace p2pncs.Simulation.VirtualNet
 			{
 				VirtualDatagramEventSocket vsock = (VirtualDatagramEventSocket)sock;
 				try {
-					vsock.VirtualNetwork.AddSendQueue (vsock.BindedPublicEndPoint, _remoteEP, new RequestWrapper (_req, _id));
+					if (vsock.VirtualNetwork != null)
+						vsock.VirtualNetwork.AddSendQueue (vsock.BindedPublicEndPoint, _remoteEP, new RequestWrapper (_req, _id));
 				} catch {}
 			}
 		}

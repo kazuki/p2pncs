@@ -83,6 +83,10 @@
     <Compile Include="Utility\SerializeHelper.cs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\CompactBinarySerializer\CompactBinarySerializer.csproj">
+      <Project>{0991644E-7C68-4F1D-9A56-5E7CE10213CB}</Project>
+      <Name>CompactBinarySerializer</Name>
+    </ProjectReference>
     <ProjectReference Include="..\openCrypto.NET\openCrypto.NET.csproj">
       <Project>{59AD989B-7DD7-400B-B2D5-EFBD0004A749}</Project>
       <Name>openCrypto.NET</Name>

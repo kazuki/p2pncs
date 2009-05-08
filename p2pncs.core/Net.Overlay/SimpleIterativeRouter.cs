@@ -494,16 +494,16 @@ namespace p2pncs.Net.Overlay
 		[SerializableTypeId (0x110)]
 		class NextHopQueryMessage
 		{
-			[SerializableFieldIndex (0)]
+			[SerializableFieldId (0)]
 			Key _sender;
 
-			[SerializableFieldIndex (1)]
+			[SerializableFieldId (1)]
 			Key _dest;
 
-			[SerializableFieldIndex (2)]
+			[SerializableFieldId (2)]
 			int _numOfNextHops;
 
-			[SerializableFieldIndex (3)]
+			[SerializableFieldId (3)]
 			int _numOfRootCandidates;
 
 			public NextHopQueryMessage (Key sender, Key dest, int numOfNextHops, int numOfRootCandidates)
@@ -535,16 +535,16 @@ namespace p2pncs.Net.Overlay
 		[SerializableTypeId (0x111)]
 		class NextHopQueryResponse
 		{
-			[SerializableFieldIndex (0)]
+			[SerializableFieldId (0)]
 			Key _sender;
 
-			[SerializableFieldIndex (1)]
+			[SerializableFieldId (1)]
 			bool _isRootCandidate;
 
-			[SerializableFieldIndex (2)]
+			[SerializableFieldId (2)]
 			NodeHandle[] _nextHops;
 
-			[SerializableFieldIndex (3)]
+			[SerializableFieldId (3)]
 			NodeHandle[] _randomNodes;
 
 			public NextHopQueryResponse (Key sender, bool isRootCandidate, NodeHandle[] nextHops, NodeHandle[] randomNodes)

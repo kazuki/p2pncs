@@ -22,13 +22,13 @@ namespace p2pncs.Utility
 {
 	public class SerializeHelper
 	{
-		public static void RegisterCustomHandler ()
+		public static void RegisterCustomHandler (Serializer serializer)
 		{
-			Serializer.AddCustomHandler (typeof (Key), 0x100, delegate (Stream strm, object obj) {
+			serializer.AddCustomHandler (typeof (Key), 0x100, delegate (Stream strm, object obj, byte[] buffer) {
 				Key k = (Key)obj;
 				strm.WriteByte ((byte)k.KeyBytes);
 				k.WriteTo (strm);
-			}, delegate (Stream strm) {
+			}, delegate (Stream strm, byte[] buffer) {
 				byte[] raw = new byte[strm.ReadByte ()];
 				strm.Read (raw, 0, raw.Length);
 				return new Key (raw);

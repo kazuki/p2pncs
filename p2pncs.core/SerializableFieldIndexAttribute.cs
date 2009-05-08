@@ -19,17 +19,11 @@ using System;
 
 namespace p2pncs
 {
-	public class SerializableFieldIndexAttribute : Attribute
+	public sealed class SerializableFieldIdAttribute : CompactBinarySerializer.SerializableFieldIdAttribute
 	{
-		int _id;
-
-		public SerializableFieldIndexAttribute (int id)
+		public SerializableFieldIdAttribute (short id)
+			: base (id)
 		{
-			_id = id;
-		}
-
-		public int ID {
-			get { return _id; }
 		}
 	}
 }

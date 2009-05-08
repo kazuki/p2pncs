@@ -25,10 +25,10 @@ namespace p2pncs.Net.Overlay
 	[SerializableTypeId (0x101)]
 	public class NodeHandle
 	{
-		[SerializableFieldIndex (0)]
+		[SerializableFieldId (0)]
 		EndPoint _ep;
 
-		[SerializableFieldIndex (1)]
+		[SerializableFieldId (1)]
 		Key _id;
 
 		public NodeHandle (Key id, EndPoint ep)
