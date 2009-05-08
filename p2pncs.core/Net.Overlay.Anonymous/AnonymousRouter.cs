@@ -592,6 +592,13 @@ namespace p2pncs.Net.Overlay.Anonymous
 			}
 		}
 
+		public ISubscribeInfo GetSubscribeInfo (Key recipientId)
+		{
+			using (IDisposable cookie = _subscribeMapLock.EnterReadLock ()) {
+				return _subscribeMap[recipientId];
+			}
+		}
+
 		#endregion
 
 		#region Misc
@@ -603,7 +610,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 		#endregion
 
 		#region SubscribeInfo
-		class SubscribeInfo
+		class SubscribeInfo : ISubscribeInfo
 		{
 			bool _active = true;
 			float FACTOR = 1.0F;
@@ -615,6 +622,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			object _listLock = new object ();
 			List<StartPointInfo> _establishedList = new List<StartPointInfo> ();
 			List<StartPointInfo> _establishingList = new List<StartPointInfo> ();
+			SubscribeRouteStatus _status = SubscribeRouteStatus.Establishing;
 
 			public SubscribeInfo (AnonymousRouter router, Key id, ECKeyPair privateKey, IKeyBasedRouter kbr)
 			{
@@ -690,6 +698,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					startInfo.Established (msg, routeInfo);
 					lock (_listLock) {
 						_establishedList.Add (startInfo);
+						UpdateStatus ();
 					}
 					using (IDisposable cookie = _router._routingMapLock.EnterWriteLock ()) {
 						_router._routingMap.Add (routeInfo.Next, routeInfo);
@@ -720,6 +729,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				lock (_listLock) {
 					start.Close ();
 					_establishedList.Remove (start);
+					UpdateStatus ();
 				}
 				CheckNumberOfEstablishedRoutes ();
 			}
@@ -727,6 +737,20 @@ namespace p2pncs.Net.Overlay.Anonymous
 			public void Close ()
 			{
 				_active = false;
+			}
+
+			void UpdateStatus ()
+			{
+				if (!_active) {
+					_status = SubscribeRouteStatus.Disconnected;
+					return;
+				}
+				if (_establishedList.Count == 0)
+					_status = SubscribeRouteStatus.Establishing;
+				else if (_establishedList.Count < DefaultSubscribeRoutes)
+					_status = SubscribeRouteStatus.Unstable;
+				else
+					_status = SubscribeRouteStatus.Stable;
 			}
 
 			public Key RecipientID {
@@ -740,6 +764,22 @@ namespace p2pncs.Net.Overlay.Anonymous
 			public AnonymousRouter AnonymousRouter {
 				get { return _router; }
 			}
+
+			#region ISubscribeInfo Members
+
+			public Key Key {
+				get { return _recipientId; }
+			}
+
+			public ECKeyPair PrivateKey {
+				get { return _ecdh.Parameters; }
+			}
+
+			public SubscribeRouteStatus Status {
+				get { return _status; }
+			}
+
+			#endregion
 		}
 		#endregion
 
@@ -1261,30 +1301,6 @@ namespace p2pncs.Net.Overlay.Anonymous
 		{
 			const int RoutedPayloadHeaderSize = 10;
 
-			static byte[] SerializeEndPoint (EndPoint ep)
-			{
-				IPEndPoint ipep = (IPEndPoint)ep;
-				byte[] rawAdrs = ipep.Address.GetAddressBytes ();
-				byte[] ret = new byte[1 + rawAdrs.Length + 2];
-				ret[0] = (byte)(ret.Length - 1);
-				Buffer.BlockCopy (rawAdrs, 0, ret, 1, rawAdrs.Length);
-				ret[rawAdrs.Length + 1] = (byte)((ipep.Port >> 8) & 0xff);
-				ret[rawAdrs.Length + 2] = (byte)(ipep.Port & 0xff);
-				return ret;
-			}
-
-			static EndPoint DeserializeEndPoint (byte[] buffer, int offset, out int bytes)
-			{
-				bytes = buffer[offset] + 1;
-				if (buffer.Length - offset < bytes)
-					throw new FormatException ();
-				byte[] rawAdrs = new byte[bytes - 3];
-				Buffer.BlockCopy (buffer, offset + 1, rawAdrs, 0, rawAdrs.Length);
-				IPAddress adrs = new IPAddress (rawAdrs);
-				int port = (buffer[offset + bytes - 2] << 8) | buffer[offset + bytes - 1];
-				return new IPEndPoint (adrs, port);
-			}
-
 			public static byte[] CreateEstablishPayload (NodeHandle[] relayNodes, SymmetricKey[] relayKeys, Key recipientId, ECDomainNames domain)
 			{
 				byte[] iv = new byte[DefaultSymmetricBlockBits / 8];
@@ -1313,13 +1329,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 						Buffer.BlockCopy (cipher, 0, payload, pubKey.Length, cipher.Length);
 					} else {
 						payload[0] = 1;
-						byte[] nextHop = SerializeEndPoint (relayNodes[i].EndPoint);
-						int bytes;
-						EndPoint tmp = DeserializeEndPoint (nextHop, 0, out bytes);
-						if (bytes != nextHop.Length)
-							throw new Exception ();
-						if (!tmp.Equals (relayNodes[i].EndPoint))
-							throw new Exception ();
+						byte[] nextHop = Serializer.Instance.Serialize (relayNodes[i].EndPoint);
 						Buffer.BlockCopy (nextHop, 0, payload, 1, nextHop.Length);
 						Buffer.BlockCopy (pubKey, 0, payload, 1 + nextHop.Length, pubKey.Length);
 						Buffer.BlockCopy (cipher, 0, payload, 1 + nextHop.Length + pubKey.Length, cipher.Length);
@@ -1354,9 +1364,12 @@ namespace p2pncs.Net.Overlay.Anonymous
 						return new EstablishRoutePayload (null, rawKey, sharedKey, BitConverter.ToInt64 (decrypted, 1));
 					case 1:
 						byte[] new_payload = new byte[PayloadFixedSize];
+						EndPoint nextHop;
 						RNG.Instance.GetBytes (new_payload);
-						EndPoint nextHop = DeserializeEndPoint (decrypted, 1, out len);
-						Buffer.BlockCopy (decrypted, 1 + len, new_payload, 0, decrypted.Length - 1 - len);
+						using (MemoryStream ms = new MemoryStream (decrypted, 1, decrypted.Length - 1)) {
+							nextHop = (EndPoint)Serializer.Instance.Deserialize (ms);
+							Buffer.BlockCopy (decrypted, 1 + (int)ms.Position, new_payload, 0, decrypted.Length - 1 - (int)ms.Position);
+						}
 						return new EstablishRoutePayload (nextHop, new_payload, sharedKey, 0);
 					default:
 						throw new FormatException ();

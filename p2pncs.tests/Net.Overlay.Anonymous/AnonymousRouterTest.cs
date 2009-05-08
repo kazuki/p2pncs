@@ -49,7 +49,13 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 				Key id2 = Key.Create (priv2);
 				env.AnonymousRouters[0].SubscribeRecipient (id1, priv1);
 				env.AnonymousRouters[1].SubscribeRecipient (id2, priv2);
-				Thread.Sleep (1000);
+				ISubscribeInfo subscribeInfo1 = env.AnonymousRouters[0].GetSubscribeInfo (id1);
+				ISubscribeInfo subscribeInfo2 = env.AnonymousRouters[1].GetSubscribeInfo (id2);
+				while (true) {
+					if (subscribeInfo1.Status != SubscribeRouteStatus.Establishing && subscribeInfo2.Status != SubscribeRouteStatus.Establishing)
+						break;
+					Thread.Sleep (100);
+				}
 
 				byte[] received1 = null;
 				object received1_lock = new object ();
@@ -133,7 +139,13 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 				Key id2 = Key.Create (priv2);
 				env.AnonymousRouters[0].SubscribeRecipient (id1, priv1);
 				env.AnonymousRouters[1].SubscribeRecipient (id2, priv2);
-				Thread.Sleep (1000);
+				ISubscribeInfo subscribeInfo1 = env.AnonymousRouters[0].GetSubscribeInfo (id1);
+				ISubscribeInfo subscribeInfo2 = env.AnonymousRouters[1].GetSubscribeInfo (id2);
+				while (true) {
+					if (subscribeInfo1.Status != SubscribeRouteStatus.Establishing && subscribeInfo2.Status != SubscribeRouteStatus.Establishing)
+						break;
+					Thread.Sleep (100);
+				}
 
 				AutoResetEvent accepted_done = new AutoResetEvent (false);
 				IAnonymousSocket sock2 = null;
@@ -174,7 +186,13 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 				Key id2 = Key.Create (priv2);
 				env.AnonymousRouters[0].SubscribeRecipient (id1, priv1);
 				env.AnonymousRouters[1].SubscribeRecipient (id2, priv2);
-				Thread.Sleep (1000);
+				ISubscribeInfo subscribeInfo1 = env.AnonymousRouters[0].GetSubscribeInfo (id1);
+				ISubscribeInfo subscribeInfo2 = env.AnonymousRouters[1].GetSubscribeInfo (id2);
+				while (true) {
+					if (subscribeInfo1.Status != SubscribeRouteStatus.Establishing && subscribeInfo2.Status != SubscribeRouteStatus.Establishing)
+						break;
+					Thread.Sleep (100);
+				}
 
 				AutoResetEvent accepted_done = new AutoResetEvent (false);
 				IAnonymousSocket sock2 = null;

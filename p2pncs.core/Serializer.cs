@@ -44,9 +44,30 @@ namespace p2pncs
 			return _internal.Deserialize (serializationStream);
 		}
 
+		public object Deserialize (byte[] buffer)
+		{
+			return Deserialize (buffer, 0, buffer.Length);
+		}
+
+		public object Deserialize (byte[] buffer, int offset, int size)
+		{
+			using (MemoryStream ms = new MemoryStream (buffer, offset, size)) {
+				return Deserialize (ms);
+			}
+		}
+
 		public void Serialize (Stream serializationStream, object graph)
 		{
 			_internal.Serialize (serializationStream, graph);
+		}
+
+		public byte[] Serialize (object graph)
+		{
+			using (MemoryStream ms = new MemoryStream ()) {
+				Serialize (ms, graph);
+				ms.Close ();
+				return ms.ToArray ();
+			}
 		}
 
 		public void AddCustomHandler (Type type, int typeId, CompactBinarySerializer.SerializeHandler serializer, CompactBinarySerializer.DeserializeHandler deserializer)

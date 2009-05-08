@@ -47,6 +47,8 @@
     <Compile Include="Net.Overlay.Anonymous\AnonymousRouter.cs" />
     <Compile Include="Net.Overlay.Anonymous\IAnonymousRouter.cs" />
     <Compile Include="Net.Overlay.Anonymous\IAnonymousSocket.cs" />
+    <Compile Include="Net.Overlay.Anonymous\ISubscribeInfo.cs" />
+    <Compile Include="Net.Overlay.Anonymous\SubscribeRouteStatus.cs" />
     <Compile Include="Net.Overlay.DHT\GetResult.cs" />
     <Compile Include="Net.Overlay.DHT\IDistributedHashTable.cs" />
     <Compile Include="Net.Overlay.DHT\ILocalHashTable.cs" />
