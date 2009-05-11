@@ -304,8 +304,8 @@ namespace p2pncs.Net.Overlay
 				}
 
 				if (res == null) {
-					/*if (rawObj != null)
-						_logger.Error ("Received Wrong Message {0}", rawObj.GetType ().ToString ());*/
+					if (rawObj != null)
+						Logger.Log (LogLevel.Error, this, "Received Wrong Message {0}", rawObj.GetType ());
 					_router.RoutingAlgorithm.Fail (sender.NodeHandle);
 					StartNextInquiry (sender, null, false);
 					return;

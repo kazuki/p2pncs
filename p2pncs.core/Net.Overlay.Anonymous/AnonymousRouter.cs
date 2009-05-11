@@ -151,7 +151,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			EstablishRoutePayload payload = MultipleCipherHelper.DecryptEstablishPayload (msg.Payload, _ecdh, _kbr.SelftNodeId.KeyBytes);
 			if (payload.NextHopEndPoint != null) {
 				RouteLabel label = GenerateRouteLabel ();
-				Console.WriteLine ("{0}: Received {1} -> (this) -> {3}@{2}", _kbr.SelftNodeId, msg.Label, label, payload.NextHopEndPoint);
+				Logger.Log (LogLevel.Trace, this, "Recv Establish {0}@{1} -> (this) -> {2}@{3}", e.EndPoint, msg.Label, payload.NextHopEndPoint, label);
 				EstablishRouteMessage msg2 = new EstablishRouteMessage (label, payload.NextHopPayload);
 				sock.BeginInquire (msg2, payload.NextHopEndPoint, MCR_EstablishRelayTimeout, MCR_EstablishRelayMaxRetry,
 					MessagingSocket_Inquired_EstablishRouteMessage_Callback, new object[] {sock, e, msg, payload, msg2});
@@ -161,7 +161,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				EstablishedMessage ack = new EstablishedMessage (boundaryInfo.LabelOnlyAnonymousEndPoint.Label);
 				sock.StartResponse (e, new AcknowledgeMessage (MultipleCipherHelper.CreateRoutedPayload (payload.SharedKey, ack)));
 				if (_dupCheck.Check (payload.DuplicationCheckId)) {
-					Console.WriteLine ("{0}: Received {1} -> (end)\r\n: Subcribe {2}", _kbr.SelftNodeId, msg.Label, key);
+					Logger.Log (LogLevel.Trace, this, "Recv Establish {0}@{1} -> (end) Subcribe {2}", e.EndPoint, msg.Label, key);
 					RouteInfo info = new RouteInfo (boundaryInfo.Previous, boundaryInfo, payload.SharedKey);
 					boundaryInfo.RouteInfo = info;
 					using (IDisposable cookie = _routingMapLock.EnterWriteLock ()) {
@@ -227,12 +227,12 @@ namespace p2pncs.Net.Overlay.Anonymous
 						payload = MultipleCipherHelper.DecryptRoutedPayload (routeInfo.Key, msg.Payload);
 						_sock.BeginInquire (new RoutedMessage (routeInfo.Next.Label, payload), routeInfo.Next.EndPoint,
 							MCR_RelayTimeout, MCR_RelayMaxRetry, null, null);
-						Console.WriteLine ("{0}: -> Recv RoutedMessage", _kbr.SelftNodeId);
+						Logger.Log (LogLevel.Trace, this, "Recv Routed {0} -> {1}", routeInfo.Previous, routeInfo.Next);
 					} else {
 						long dupCheckId;
 						object routedMsg = MultipleCipherHelper.DecryptRoutedPayloadAtEnd (routeInfo.Key, msg.Payload, out dupCheckId);
 						if (_dupCheck.Check (dupCheckId)) {
-							Console.WriteLine ("{0}: -> Recv RoutedMessage (end) : {1}", _kbr.SelftNodeId, routedMsg);
+							Logger.Log (LogLevel.Trace, this, "Recv Routed {0} -> (end), {1}", routeInfo.Previous, routedMsg);
 							ProcessMessage (routedMsg, routeInfo.BoundaryInfo);
 						}
 					}
@@ -244,19 +244,19 @@ namespace p2pncs.Net.Overlay.Anonymous
 						payload = MultipleCipherHelper.EncryptRoutedPayload (routeInfo.Key, msg.Payload);
 						_sock.BeginInquire (new RoutedMessage (routeInfo.Previous.Label, payload), routeInfo.Previous.EndPoint,
 							MCR_RelayTimeout, MCR_RelayMaxRetry, null, null);
-						Console.WriteLine ("{0}: <- Recv RoutedMessage", _kbr.SelftNodeId);
+						Logger.Log (LogLevel.Trace, this, "Recv Routed {0} <- {1}", routeInfo.Previous, routeInfo.Next);
 					} else {
 						long dupCheckId;
 						object routedMsg = MultipleCipherHelper.DecryptRoutedPayload (routeInfo.StartPointInfo.RelayNodeKeys, msg.Payload, out dupCheckId);
 						if (_dupCheck.Check (dupCheckId)) {
-							Console.WriteLine ("{0}: <- Recv RoutedMessage (start) : {1}", _kbr.SelftNodeId, routedMsg);
+							Logger.Log (LogLevel.Trace, this, "Recv Routed (start) <- {0}, {1}", routeInfo.Next, routedMsg);
 							ProcessMessage (routedMsg, routeInfo.StartPointInfo);
 						}
 					}
 					_sock.StartResponse (e, DummyAckMsg);
 				}
 			} else {
-				Console.WriteLine ("{0}: No Route ({1}@{2})", _kbr.SelftNodeId, e.EndPoint, msg.Label);
+				Logger.Log (LogLevel.Trace, this, "No Route from {0}", e.EndPoint, msg.Label);
 			}
 		}
 
@@ -419,7 +419,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			LookupRecipientProxyMessage msg = (LookupRecipientProxyMessage)ar.AsyncState;
 			GetResult result = _dht.EndGet (ar);
 			if (result == null || result.Values == null || result.Values.Length == 0) {
-				Console.WriteLine ("{0}: DHT Lookup failed {1}", _kbr.SelftNodeId, msg.RecipientKey);
+				Logger.Log (LogLevel.Trace, this, "DHT Lookup failed {0}", msg.RecipientKey);
 				return;
 			}
 			string temp = "";
@@ -427,13 +427,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				DHTEntry entry = result.Values[i] as DHTEntry;
 				if (entry == null) continue;
 				if (entry.EndPoint != null) {
-					_sock.BeginInquire (msg.Message.Copy (entry.Label), entry.EndPoint, delegate (IAsyncResult ar2) {
-						object res = _sock.EndInquire (ar2);
-						if (res == null)
-							Console.WriteLine ("{0}: FAIL", _kbr.SelftNodeId);
-						else
-							Console.WriteLine ("{0}: OK", _kbr.SelftNodeId);
-					}, null);
+					_sock.BeginInquire (msg.Message.Copy (entry.Label), entry.EndPoint, null, null);
 				} else {
 					MessagingSocket_Inquired_ConnectionEstablishMessage (null, new InquiredEventArgs (msg.Message.Copy (entry.Label), null));
 				}
@@ -441,8 +435,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			}
 			if (temp.Length > 0) {
 				temp = temp.Substring (0, temp.Length - 2);
-				temp = _kbr.SelftNodeId.ToString() + ": Send ConnectionEstablishMessage to " + temp;
-				Console.WriteLine (temp);
+				Logger.Log (LogLevel.Trace, this, "Send ConnectionEstablishMessage to " + temp);
 			}
 		}
 		#endregion
@@ -500,10 +493,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 								timeoutRoutes.Add (info.BoundaryInfo.LabelOnlyAnonymousEndPoint);
 							timeoutRouteEnds.Add (info);
 						}
-						Console.WriteLine ("Timeout: {0} <- {1} -> {2}",
-							info.Previous == null ? "(null)" : info.Previous.Label.ToString(),
-							_kbr.SelftNodeId,
-							info.Next == null ? "(null)" : info.Next.Label.ToString ());
+						Logger.Log (LogLevel.Trace, this, "Timeout: {0} <- (this) -> {1}",
+							info.Previous == null ? "(null)" : info.Previous.ToString (),
+							info.Next == null ? "(null)" : info.Next.ToString ());
 					} else {
 						if (info.BoundaryInfo != null) {
 							if (info.BoundaryInfo.NextPutToDHTTime <= DateTime.Now)
@@ -676,7 +668,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 						while (count-- > 0) {
 							NodeHandle[] relays = _kbr.RoutingAlgorithm.GetRandomNodes (DefaultRealyNodes);
 							if (relays.Length < DefaultRealyNodes) {
-								Console.WriteLine ("{0}: Relay node selection failed", _kbr.SelftNodeId);
+								Logger.Log (LogLevel.Trace, this, "Relay node selection failed");
 								return;
 							}
 							StartPointInfo info = new StartPointInfo (this, relays);
@@ -706,10 +698,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 				if (ack == null || msg == null) {
 					startInfo.Close ();
-					Console.WriteLine ("ESTABLISH FAILED");
+					Logger.Log (LogLevel.Trace, this, "ESTABLISH FAILED");
 					CheckNumberOfEstablishedRoutes ();
 				} else {
-					Console.WriteLine ("ESTABLISHED !!");
+					Logger.Log (LogLevel.Trace, this, "ESTABLISHED !!");
 					RouteInfo routeInfo = new RouteInfo (startInfo, new AnonymousEndPoint (startInfo.RelayNodes[0].EndPoint, startInfo.Label), null);
 					startInfo.Established (msg, routeInfo);
 					lock (_listLock) {
