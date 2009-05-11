@@ -16,6 +16,7 @@
  */
 
 using System;
+using p2pncs.Net.Overlay.DHT;
 using openCrypto.EllipticCurve;
 
 namespace p2pncs.Net.Overlay.Anonymous
@@ -32,6 +33,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 		IAnonymousSocket EndEstablishRoute (IAsyncResult ar);
 
 		ISubscribeInfo GetSubscribeInfo (Key recipientId);
+
+		IKeyBasedRouter KeyBasedRouter { get; }
+		IDistributedHashTable DistributedHashTable { get; }
 
 		void Close ();
 	}

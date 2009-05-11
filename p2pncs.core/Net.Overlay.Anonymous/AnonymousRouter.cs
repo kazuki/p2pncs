@@ -607,6 +607,14 @@ namespace p2pncs.Net.Overlay.Anonymous
 			}
 		}
 
+		public IKeyBasedRouter KeyBasedRouter {
+			get { return _kbr; }
+		}
+
+		public IDistributedHashTable DistributedHashTable {
+			get { return _dht; }
+		}
+
 		#endregion
 
 		#region Misc
@@ -769,7 +777,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				get { return _ecdh; }
 			}
 
-			public AnonymousRouter AnonymousRouter {
+			public IAnonymousRouter AnonymousRouter {
 				get { return _router; }
 			}
 

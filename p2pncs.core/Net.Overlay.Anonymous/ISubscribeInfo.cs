@@ -24,5 +24,6 @@ namespace p2pncs.Net.Overlay.Anonymous
 		Key Key { get; }
 		ECKeyPair PrivateKey { get; }
 		SubscribeRouteStatus Status { get; }
+		IAnonymousRouter AnonymousRouter { get; }
 	}
 }

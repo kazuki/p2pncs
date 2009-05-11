@@ -34,6 +34,11 @@ namespace p2pncs.Threading
 			return new ReadLockCookie (this);
 		}
 
+		public IDisposable EnterUpgradeableReadLock ()
+		{
+			return new UpgradeableReadLockCookie (this);
+		}
+
 		public IDisposable EnterWriteLock ()
 		{
 			return new WriteLockCookie (this);
@@ -60,6 +65,22 @@ namespace p2pncs.Threading
 			public void Dispose ()
 			{
 				_owner._lock.ExitReadLock ();
+			}
+		}
+
+		class UpgradeableReadLockCookie : IDisposable
+		{
+			ReaderWriterLockWrapper _owner;
+
+			public UpgradeableReadLockCookie (ReaderWriterLockWrapper owner)
+			{
+				_owner = owner;
+				_owner._lock.EnterUpgradeableReadLock ();
+			}
+
+			public void Dispose ()
+			{
+				_owner._lock.ExitUpgradeableReadLock ();
 			}
 		}
 
