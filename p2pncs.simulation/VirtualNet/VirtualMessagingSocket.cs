@@ -60,13 +60,19 @@ namespace p2pncs.Simulation.VirtualNet
 				throw new ArgumentNullException ();
 
 			VirtualDatagramEventSocket vsock = (VirtualDatagramEventSocket)_sock;
-			vsock.VirtualNetwork.AddSendQueue (vsock.BindedPublicEndPoint, remoteEP, new OneWayMessage (obj));
+			try {
+				if (vsock.VirtualNetwork != null)
+					vsock.VirtualNetwork.AddSendQueue (vsock.BindedPublicEndPoint, remoteEP, new OneWayMessage (obj));
+			} catch {}
 		}
 
 		protected override void StartResponse_Internal (MessagingSocketBase.InquiredResponseState state, object response)
 		{
-			VirtualDatagramEventSocket vsock = (VirtualDatagramEventSocket)_sock;
-			vsock.VirtualNetwork.AddSendQueue (vsock.BindedPublicEndPoint, state.EndPoint, new ResponseWrapper (response, state.ID));
+			try {
+				VirtualDatagramEventSocket vsock = (VirtualDatagramEventSocket)_sock;
+				if (vsock.VirtualNetwork != null)
+					vsock.VirtualNetwork.AddSendQueue (vsock.BindedPublicEndPoint, state.EndPoint, new ResponseWrapper (response, state.ID));
+			} catch {}
 		}
 
 		protected override InquiredAsyncResultBase CreateInquiredAsyncResult (ushort id, object obj, EndPoint remoteEP, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state)
