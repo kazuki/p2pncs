@@ -74,7 +74,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 		static int MCR_EstablishRelayMaxRetry = MCR_EstablishMaxRetry;
 
 		/// <summary>多重暗号経路を利用してメッセージを送る際に利用するタイムアウト時間</summary>
-		static TimeSpan MCR_RelayTimeout = MaxRRT;
+		static TimeSpan MCR_RelayTimeout = TimeSpan.FromMilliseconds (200);
 
 		/// <summary>多重暗号経路を利用してメッセージを送る際に利用する最大再送回数</summary>
 		static int MCR_RelayMaxRetry = 2;
@@ -151,7 +151,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			EstablishRoutePayload payload = MultipleCipherHelper.DecryptEstablishPayload (msg.Payload, _ecdh, _kbr.SelftNodeId.KeyBytes);
 			if (payload.NextHopEndPoint != null) {
 				RouteLabel label = GenerateRouteLabel ();
-				Logger.Log (LogLevel.Trace, this, "Recv Establish {0}@{1} -> (this) -> {2}@{3}", e.EndPoint, msg.Label, payload.NextHopEndPoint, label);
+				Logger.Log (LogLevel.Trace, this, "Recv Establish {0}#{1:x} -> (this) -> {2}#{3:x}", e.EndPoint, msg.Label, payload.NextHopEndPoint, label);
 				EstablishRouteMessage msg2 = new EstablishRouteMessage (label, payload.NextHopPayload);
 				sock.BeginInquire (msg2, payload.NextHopEndPoint, MCR_EstablishRelayTimeout, MCR_EstablishRelayMaxRetry,
 					MessagingSocket_Inquired_EstablishRouteMessage_Callback, new object[] {sock, e, msg, payload, msg2});
@@ -161,7 +161,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				EstablishedMessage ack = new EstablishedMessage (boundaryInfo.LabelOnlyAnonymousEndPoint.Label);
 				sock.StartResponse (e, new AcknowledgeMessage (MultipleCipherHelper.CreateRoutedPayload (payload.SharedKey, ack)));
 				if (_dupCheck.Check (payload.DuplicationCheckId)) {
-					Logger.Log (LogLevel.Trace, this, "Recv Establish {0}@{1} -> (end) Subcribe {2}", e.EndPoint, msg.Label, key);
+					Logger.Log (LogLevel.Trace, this, "Recv Establish {0}#{1:x} -> (end, #{3:x}) Subcribe {2}", e.EndPoint, msg.Label, key, ack.Label);
 					RouteInfo info = new RouteInfo (boundaryInfo.Previous, boundaryInfo, payload.SharedKey);
 					boundaryInfo.RouteInfo = info;
 					using (IDisposable cookie = _routingMapLock.EnterWriteLock ()) {
@@ -1601,7 +1601,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public override string ToString ()
 			{
-				return (_ep == null ? "localhost" : _ep.ToString ()) + "@" + _label.ToString ();
+				return (_ep == null ? "localhost" : _ep.ToString ()) + "#" + _label.ToString ("x");
 			}
 
 			public bool Equals (DHTEntry other)
