@@ -138,7 +138,6 @@ namespace p2pncs.Net.Overlay.Anonymous
 			_sock.AddInquiredHandler (typeof (RoutedMessage), MessagingSocket_Inquired_RoutedMessage);
 			_sock.AddInquiredHandler (typeof (ConnectionEstablishMessage), MessagingSocket_Inquired_ConnectionEstablishMessage);
 			_sock.AddInquiredHandler (typeof (ConnectionMessage), MessagingSocket_Inquired_ConnectionMessage);
-			_sock.InquirySuccess += new InquiredEventHandler (MessagingSocket_Success);
 			interrupter.AddInterruption (RouteTimeoutCheck);
 		}
 
@@ -218,6 +217,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 			}
 
 			if (routeInfo != null) {
+				_sock.StartResponse (e, DummyAckMsg);
+
 				bool direction = (routeInfo.Previous != null && routeInfo.Previous.EndPoint.Equals (e.EndPoint));
 				byte[] payload;
 				if (direction) {
@@ -226,7 +227,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					if (routeInfo.BoundaryInfo == null) {
 						payload = MultipleCipherHelper.DecryptRoutedPayload (routeInfo.Key, msg.Payload);
 						_sock.BeginInquire (new RoutedMessage (routeInfo.Next.Label, payload), routeInfo.Next.EndPoint,
-							MCR_RelayTimeout, MCR_RelayMaxRetry, null, null);
+							MCR_RelayTimeout, MCR_RelayMaxRetry, MessagingSocket_Inquired_RoutedMessage_Callback, new object[]{routeInfo, routeInfo.Next});
 						Logger.Log (LogLevel.Trace, this, "Recv Routed {0} -> {1}", routeInfo.Previous, routeInfo.Next);
 					} else {
 						long dupCheckId;
@@ -236,14 +237,13 @@ namespace p2pncs.Net.Overlay.Anonymous
 							ProcessMessage (routedMsg, routeInfo.BoundaryInfo);
 						}
 					}
-					_sock.StartResponse (e, DummyAckMsg);
 				} else {
 					// direction: next -> ! -> prev
 					routeInfo.ReceiveMessageFromNextNode ();
 					if (routeInfo.StartPointInfo == null) {
 						payload = MultipleCipherHelper.EncryptRoutedPayload (routeInfo.Key, msg.Payload);
 						_sock.BeginInquire (new RoutedMessage (routeInfo.Previous.Label, payload), routeInfo.Previous.EndPoint,
-							MCR_RelayTimeout, MCR_RelayMaxRetry, null, null);
+							MCR_RelayTimeout, MCR_RelayMaxRetry, MessagingSocket_Inquired_RoutedMessage_Callback, new object[]{routeInfo, routeInfo.Previous});
 						Logger.Log (LogLevel.Trace, this, "Recv Routed {0} <- {1}", routeInfo.Previous, routeInfo.Next);
 					} else {
 						long dupCheckId;
@@ -253,10 +253,30 @@ namespace p2pncs.Net.Overlay.Anonymous
 							ProcessMessage (routedMsg, routeInfo.StartPointInfo);
 						}
 					}
-					_sock.StartResponse (e, DummyAckMsg);
 				}
 			} else {
 				Logger.Log (LogLevel.Trace, this, "No Route from {0}", e.EndPoint, msg.Label);
+				_sock.StartResponse (e, null);
+			}
+		}
+
+		void MessagingSocket_Inquired_RoutedMessage_Callback (IAsyncResult ar)
+		{
+			object res = _sock.EndInquire (ar);
+			object[] states = (object[])ar.AsyncState;
+			RouteInfo routeInfo = states[0] as RouteInfo;
+			AnonymousEndPoint dest = (AnonymousEndPoint)states[1];
+			if (res == null) {
+				// failed
+				Logger.Log (LogLevel.Trace, this, "Call Timeout by RoutedMessage_Callback, dest={0}", dest);
+				routeInfo.Timeout ();
+			} else {
+				if (routeInfo.Previous == dest)
+					routeInfo.ReceiveMessageFromPreviousNode ();
+				else if (routeInfo.Next == dest)
+					routeInfo.ReceiveMessageFromNextNode ();
+				else
+					Logger.Log (LogLevel.Error, this, "BUG?");
 			}
 		}
 
@@ -297,24 +317,6 @@ namespace p2pncs.Net.Overlay.Anonymous
 				return;
 
 			routeInfo.BoundaryInfo.SendMessage (_sock, msg);
-		}
-
-		void MessagingSocket_Success (object sender, InquiredEventArgs e)
-		{
-			RoutedMessage msg = e.InquireMessage as RoutedMessage;
-			if (msg == null) return;
-
-			RouteInfo routeInfo;
-			AnonymousEndPoint aep = new AnonymousEndPoint (e.EndPoint, msg.Label);
-			using (IDisposable cookie = _routingMapLock.EnterReadLock ()) {
-				if (!_routingMap.TryGetValue (aep, out routeInfo))
-					return;
-			}
-
-			if (aep.Equals (routeInfo.Next))
-				routeInfo.ReceiveMessageFromNextNode ();
-			else if (aep.Equals (routeInfo.Previous))
-				routeInfo.ReceiveMessageFromPreviousNode ();
 		}
 		#endregion
 
@@ -582,7 +584,6 @@ namespace p2pncs.Net.Overlay.Anonymous
 			_sock.RemoveInquiredHandler (typeof (RoutedMessage), MessagingSocket_Inquired_RoutedMessage);
 			_sock.RemoveInquiredHandler (typeof (ConnectionEstablishMessage), MessagingSocket_Inquired_ConnectionEstablishMessage);
 			_sock.RemoveInquiredHandler (typeof (ConnectionMessage), MessagingSocket_Inquired_ConnectionMessage);
-			_sock.InquirySuccess -= MessagingSocket_Success;
 			_interrupter.RemoveInterruption (RouteTimeoutCheck);
 
 			using (IDisposable cookie = _subscribeMapLock.EnterWriteLock ()) {
