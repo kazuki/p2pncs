@@ -737,7 +737,14 @@ namespace p2pncs.Net.Overlay.Anonymous
 					Logger.Log (LogLevel.Trace, this, "ESTABLISH FAILED");
 					CheckNumberOfEstablishedRoutes ();
 				} else {
-					Logger.Log (LogLevel.Trace, this, "ESTABLISHED !!");
+					Logger.Log (LogLevel.Debug, this, "ESTABLISHED Label=#{0:x}", msg.Label);
+					lock (_router._connections) { // 新しい終端ノードの情報をすべてのコネクションの相手先に送信する
+						foreach (ConnectionInfo conn in _router._connections) {
+							if (conn.RecipientID.GetHashCode () != _recipientId.GetHashCode ())
+								continue;
+							conn.Send (new byte[0], 0, 0);
+						}
+					}
 					RouteInfo routeInfo = new RouteInfo (startInfo, new AnonymousEndPoint (startInfo.RelayNodes[0].EndPoint, startInfo.Label), null);
 					startInfo.Established (msg, routeInfo);
 					lock (_listLock) {
