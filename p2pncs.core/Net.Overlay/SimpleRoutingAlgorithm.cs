@@ -30,6 +30,7 @@ namespace p2pncs.Net.Overlay
 		IKeyBasedRouter _router = null;
 		List<NodeHandle>[] _routingTable = null;
 		List<NodeHandle> _flatList = new List<NodeHandle> ();
+		Dictionary<EndPoint, NodeHandle> _epMapping = new Dictionary<EndPoint, NodeHandle> ();
 
 		public SimpleRoutingAlgorithm ()
 		{
@@ -159,13 +160,16 @@ namespace p2pncs.Net.Overlay
 				//_logger.Debug ("{0}: add routing-table entry to {1}", _selfNodeId, node.NodeID);
 				list.Add (node);
 				_flatList.Add (node);
+				_epMapping[node.EndPoint] = node;
 			}
 		}
 
 		public void Fail (NodeHandle node)
 		{
-			if (node.NodeID == null)
+			if (node.NodeID == null) {
+				Fail (node.EndPoint);
 				return;
+			}
 			List<NodeHandle> list = LookupNodeList (node.NodeID);
 			if (list == null)
 				return;
@@ -179,6 +183,17 @@ namespace p2pncs.Net.Overlay
 					}
 				}
 			}
+		}
+
+		void Fail (EndPoint ep)
+		{
+			NodeHandle node;
+			lock (_routingTable) {
+				if (!_epMapping.TryGetValue (ep, out node))
+					return;
+				_epMapping.Remove (ep);
+			}
+			Fail (node);
 		}
 
 		List<NodeHandle> LookupNodeList (Key target)
