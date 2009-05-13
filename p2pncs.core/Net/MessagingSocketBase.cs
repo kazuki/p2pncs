@@ -83,6 +83,7 @@ namespace p2pncs.Net
 				_retryList.Add (ar);
 			}
 			if (overflow != null) {
+				Logger.Log (LogLevel.Error, this, "Overflow Retry Buffer");
 				overflow.Fail ();
 				if (InquiryFailure != null)
 					InquiryFailure (this, new InquiredEventArgs (overflow.Request, overflow.Response, overflow.RemoteEndPoint));
@@ -154,6 +155,7 @@ namespace p2pncs.Net
 					_retryList[i].Fail ();
 				_retryList.Clear ();
 			}
+			_inquiredHandlersLock.Dispose ();
 		}
 
 		#endregion

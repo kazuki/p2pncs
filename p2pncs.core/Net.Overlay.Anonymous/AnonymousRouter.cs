@@ -590,6 +590,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 					info.Close ();
 				_subscribeMap.Clear ();
 			}
+
+			_routingMapLock.Dispose ();
+			_subscribeMapLock.Dispose ();
+			_boundMapLock.Dispose ();
 		}
 
 		public ISubscribeInfo GetSubscribeInfo (Key recipientId)

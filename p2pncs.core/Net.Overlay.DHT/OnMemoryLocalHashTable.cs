@@ -171,8 +171,9 @@ namespace p2pncs.Net.Overlay.DHT
 
 		public void Dispose ()
 		{
-			Clear ();
+			_dic.Clear ();
 			_int.RemoveInterruption (CheckExpiry);
+			_lock.Dispose ();
 		}
 
 		#endregion

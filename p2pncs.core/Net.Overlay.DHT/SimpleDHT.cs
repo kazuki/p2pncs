@@ -107,6 +107,7 @@ namespace p2pncs.Net.Overlay.DHT
 		{
 			_sock.RemoveInquiredHandler (typeof (GetRequest), MessagingSocket_Inquired_GetRequest);
 			_sock.RemoveInquiredHandler (typeof (PutRequest), MessagingSocket_Inquired_PutRequest);
+			_lht.Dispose ();
 		}
 
 		#endregion
