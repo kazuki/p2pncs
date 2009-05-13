@@ -138,6 +138,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			_sock.AddInquiredHandler (typeof (RoutedMessage), MessagingSocket_Inquired_RoutedMessage);
 			_sock.AddInquiredHandler (typeof (ConnectionEstablishMessage), MessagingSocket_Inquired_ConnectionEstablishMessage);
 			_sock.AddInquiredHandler (typeof (ConnectionMessage), MessagingSocket_Inquired_ConnectionMessage);
+			_sock.AddInquiredHandler (typeof (DisconnectMessage), MessagingSocket_Inquired_DisconnectMessage);
 			interrupter.AddInterruption (RouteTimeoutCheck);
 		}
 
@@ -156,7 +157,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					MessagingSocket_Inquired_EstablishRouteMessage_Callback, new object[] {sock, e, msg, payload, msg2});
 			} else {
 				Key key = new Key (payload.NextHopPayload);
-				BoundaryInfo boundaryInfo = new BoundaryInfo (payload.SharedKey, new AnonymousEndPoint (e.EndPoint, msg.Label), key);
+				BoundaryInfo boundaryInfo = new BoundaryInfo (this, payload.SharedKey, new AnonymousEndPoint (e.EndPoint, msg.Label), key);
 				EstablishedMessage ack = new EstablishedMessage (boundaryInfo.LabelOnlyAnonymousEndPoint.Label);
 				sock.StartResponse (e, new AcknowledgeMessage (MultipleCipherHelper.CreateRoutedPayload (payload.SharedKey, ack)));
 				if (_dupCheck.Check (payload.DuplicationCheckId)) {
@@ -269,6 +270,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 			if (res == null) {
 				// failed
 				Logger.Log (LogLevel.Trace, this, "Call Timeout by RoutedMessage_Callback, dest={0}", dest);
+				if (routeInfo.Next == dest && routeInfo.Previous != null)
+					_sock.BeginInquire (new DisconnectMessage (routeInfo.Previous.Label), routeInfo.Previous.EndPoint, null, null);
 				routeInfo.Timeout ();
 			} else {
 				if (routeInfo.Previous == dest)
@@ -323,6 +326,27 @@ namespace p2pncs.Net.Overlay.Anonymous
 			_sock.StartResponse (e, DummyAckMsg);
 			Logger.Log (LogLevel.Trace, this, "Recv ConnectionMsg from {0}", new AnonymousEndPoint (e.EndPoint, msg.Label));
 			routeInfo.BoundaryInfo.SendMessage (_sock, msg);
+		}
+
+		void MessagingSocket_Inquired_DisconnectMessage (object sender, InquiredEventArgs e)
+		{
+			_sock.StartResponse (e, DummyAckMsg);
+
+			DisconnectMessage msg = (DisconnectMessage)e.InquireMessage;
+			RouteInfo routeInfo;
+			using (IDisposable cookie = _routingMapLock.EnterReadLock ()) {
+				if (!_routingMap.TryGetValue (new AnonymousEndPoint (e.EndPoint, msg.Label), out routeInfo))
+					return;
+			}
+
+			Logger.Log (LogLevel.Debug, this, "Call RouteInfo.Timeout because received disconnect-message");
+			routeInfo.Timeout ();
+			if (routeInfo.Previous != null && !routeInfo.Previous.EndPoint.Equals (e.EndPoint)) {
+				_sock.BeginInquire (new DisconnectMessage (routeInfo.Previous.Label), routeInfo.Previous.EndPoint, null, null);
+			} else if (routeInfo.Previous == null && routeInfo.StartPointInfo != null) {
+				routeInfo.StartPointInfo.Timeout ();
+				Logger.Log (LogLevel.Debug, this, "Disconnect because received disconnect-message");
+			}
 		}
 		#endregion
 
@@ -489,7 +513,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				foreach (RouteInfo info in _routingMap.Values) {
 					if (!checkedList.Add (info))
 						continue;
-					if (info.IsExpiry ()) {
+					if (info.IsExpiry (_sock)) {
 						if (timeoutRoutes == null) {
 							timeoutRoutes = new List<AnonymousEndPoint> ();
 							timeoutRouteEnds = new List<RouteInfo> ();
@@ -590,6 +614,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			_sock.RemoveInquiredHandler (typeof (RoutedMessage), MessagingSocket_Inquired_RoutedMessage);
 			_sock.RemoveInquiredHandler (typeof (ConnectionEstablishMessage), MessagingSocket_Inquired_ConnectionEstablishMessage);
 			_sock.RemoveInquiredHandler (typeof (ConnectionMessage), MessagingSocket_Inquired_ConnectionMessage);
+			_sock.RemoveInquiredHandler (typeof (DisconnectMessage), MessagingSocket_Inquired_DisconnectMessage);
 			_interrupter.RemoveInterruption (RouteTimeoutCheck);
 
 			using (IDisposable cookie = _subscribeMapLock.EnterWriteLock ()) {
@@ -894,9 +919,11 @@ namespace p2pncs.Net.Overlay.Anonymous
 			AnonymousEndPoint _dummyEP;
 			Key _recipientKey;
 			RouteInfo _routeInfo = null;
+			AnonymousRouter _router;
 
-			public BoundaryInfo (SymmetricKey key, AnonymousEndPoint prev, Key recipientKey)
+			public BoundaryInfo (AnonymousRouter router, SymmetricKey key, AnonymousEndPoint prev, Key recipientKey)
 			{
+				_router = router;
 				_key = key;
 				_prevEP = prev;
 				_recipientKey = recipientKey;
@@ -914,8 +941,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 			void SendMessage_Callback (IAsyncResult ar)
 			{
 				IMessagingSocket sock = (IMessagingSocket)ar.AsyncState;
-				if (sock.EndInquire (ar) == null)
+				if (sock.EndInquire (ar) == null) {
+					Logger.Log (LogLevel.Debug, _router, "Call BoundaryInfo.Timeout because inquire failed");
 					Timeout ();
+				}
 			}
 
 			public void PutToDHT (IDistributedHashTable dht)
@@ -1022,8 +1051,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_prevExpiry = DateTime.Now + MCR_TimeoutWithMargin;
 			}
 
-			public bool IsExpiry ()
+			public bool IsExpiry (IMessagingSocket sock)
 			{
+				if (_nextExpiry < DateTime.Now && _prevEP != null)
+					sock.BeginInquire (new DisconnectMessage (_prevEP.Label), _prevEP.EndPoint, null, null);
 				return _nextExpiry < DateTime.Now || _prevExpiry < DateTime.Now;
 			}
 
@@ -1193,8 +1224,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public bool CheckTimeout ()
 			{
-				if (_recvExpiry <= DateTime.Now)
+				if (_recvExpiry <= DateTime.Now) {
+					Logger.Log (LogLevel.Debug, _subscribeInfo, "Timeout because ConnectionInfo.CheckTimeout");
 					return false; // Timeout...
+				}
 
 				if (_connected && _sendExpiry <= DateTime.Now)
 					Send_Internal (new byte[0], 0, 0);
@@ -1999,6 +2032,23 @@ namespace p2pncs.Net.Overlay.Anonymous
 		[SerializableTypeId (0x20c)]
 		class ACK
 		{
+		}
+
+		[Serializable]
+		[SerializableTypeId (0x20d)]
+		class DisconnectMessage
+		{
+			[SerializableFieldId (0)]
+			RouteLabel _label;
+
+			public DisconnectMessage (RouteLabel label)
+			{
+				_label = label;
+			}
+
+			public RouteLabel Label {
+				get { return _label; }
+			}
 		}
 		#endregion
 	}
