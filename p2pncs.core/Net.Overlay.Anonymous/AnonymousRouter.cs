@@ -304,18 +304,24 @@ namespace p2pncs.Net.Overlay.Anonymous
 		void MessagingSocket_Inquired_ConnectionMessage (object sender, InquiredEventArgs e)
 		{
 			ConnectionMessage msg = (ConnectionMessage)e.InquireMessage;
-			_sock.StartResponse (e, DummyAckMsg);
-			if (!_dupCheck.Check (msg.DuplicationCheckId))
+			if (!_dupCheck.Check (msg.DuplicationCheckId)) {
+				_sock.StartResponse (e, DummyAckMsg);
 				return;
+			}
 
 			RouteInfo routeInfo;
 			using (IDisposable cookie = _routingMapLock.EnterReadLock ()) {
 				if (!_routingMap.TryGetValue (new AnonymousEndPoint (DummyEndPoint, msg.Label), out routeInfo))
 					routeInfo = null;
 			}
-			if (routeInfo == null)
+			if (routeInfo == null) {
+				_sock.StartResponse (e, null);
+				Logger.Log (LogLevel.Trace, this, "Unknown Route from {0}", new AnonymousEndPoint (e.EndPoint, msg.Label));
 				return;
+			}
 
+			_sock.StartResponse (e, DummyAckMsg);
+			Logger.Log (LogLevel.Trace, this, "Recv ConnectionMsg from {0}", new AnonymousEndPoint (e.EndPoint, msg.Label));
 			routeInfo.BoundaryInfo.SendMessage (_sock, msg);
 		}
 		#endregion
