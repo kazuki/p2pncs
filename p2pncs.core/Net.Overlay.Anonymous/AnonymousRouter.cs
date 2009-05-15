@@ -886,6 +886,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 				IMessagingSocket sock = (IMessagingSocket)ar.AsyncState;
 				if (sock.EndInquire (ar) == null)
 					Timeout ();
+				else
+					_routeInfo.ReceiveMessageFromNextNode ();
 			}
 
 			public byte[] CreateEstablishData (Key recipientId, ECDomainNames domain)
@@ -951,6 +953,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 				if (sock.EndInquire (ar) == null) {
 					Logger.Log (LogLevel.Debug, _router, "Call BoundaryInfo.Timeout because inquire failed");
 					Timeout ();
+				} else {
+					_routeInfo.ReceiveMessageFromPreviousNode ();
 				}
 			}
 
