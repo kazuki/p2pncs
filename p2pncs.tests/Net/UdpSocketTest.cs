@@ -27,9 +27,9 @@ namespace p2pncs.tests.Net
 		[Test]
 		public void Test1 ()
 		{
-			using (UdpSocket sock1 = UdpSocket.CreateIPv4 (1000))
-			using (UdpSocket sock2 = UdpSocket.CreateIPv4 (1000))
-			using (UdpSocket sock3 = UdpSocket.CreateIPv4 (1000)) {
+			using (UdpSocket sock1 = UdpSocket.CreateIPv4 ())
+			using (UdpSocket sock2 = UdpSocket.CreateIPv4 ())
+			using (UdpSocket sock3 = UdpSocket.CreateIPv4 ()) {
 				EndPoint ep1 = new IPEndPoint (IPAddress.Loopback, 10000);
 				EndPoint ep2 = new IPEndPoint (IPAddress.Loopback, 10001);
 				EndPoint ep3 = new IPEndPoint (IPAddress.Loopback, 10002);

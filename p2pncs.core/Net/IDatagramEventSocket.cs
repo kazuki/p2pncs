@@ -60,5 +60,10 @@ namespace p2pncs.Net
 		/// データグラムの受信時に発生するイベント
 		/// </summary>
 		event DatagramReceiveEventHandler Received;
+
+		long ReceivedBytes { get; }
+		long SentBytes { get; }
+		long ReceivedDatagrams { get; }
+		long SentDatagrams { get; }
 	}
 }

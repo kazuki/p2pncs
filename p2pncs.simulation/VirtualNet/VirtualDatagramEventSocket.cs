@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Net;
 using p2pncs.Net;
 
@@ -28,6 +29,7 @@ namespace p2pncs.Simulation.VirtualNet
 		VirtualNetwork.VirtualNetworkNode _vnet_node = null;
 		EndPoint _bindPubEP;
 		IPAddress _pubIP;
+		long _recvBytes = 0, _sentBytes = 0, _recvDgrams = 0, _sentDgrams = 0;
 
 		public VirtualDatagramEventSocket (VirtualNetwork vnet, IPAddress publicIPAddress)
 		{
@@ -81,17 +83,37 @@ namespace p2pncs.Simulation.VirtualNet
 			if (_vnet == null)
 				return;
 			_vnet.AddSendQueue (_bindPubEP, remoteEP, buffer, offset, size);
+			Interlocked.Add (ref _sentBytes, size);
+			Interlocked.Increment (ref _sentDgrams);
 		}
 
 		public event DatagramReceiveEventHandler Received;
 
 		internal void InvokeReceivedEvent (object sender, DatagramReceiveEventArgs e)
 		{
+			Interlocked.Add (ref _recvBytes, e.Size);
+			Interlocked.Increment (ref _recvDgrams);
 			if (Received != null) {
 				try {
 					Received (sender, e);
 				} catch {}
 			}
+		}
+
+		public long ReceivedBytes {
+			get { return _recvBytes; }
+		}
+
+		public long SentBytes {
+			get { return _sentBytes; }
+		}
+
+		public long ReceivedDatagrams {
+			get { return _recvDgrams; }
+		}
+
+		public long SentDatagrams {
+			get { return _sentDgrams; }
 		}
 
 		#endregion

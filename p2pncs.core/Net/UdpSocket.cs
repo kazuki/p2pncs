@@ -25,20 +25,20 @@ namespace p2pncs.Net
 {
 	public class UdpSocket : IDatagramEventSocket
 	{
+		const int MAX_DATAGRAM_SIZE = 1000;
 		Socket _sock;
 		IPAddress _receiveAdrs;
-		byte[] _receiveBuffer;
+		long _recvBytes = 0, _sentBytes = 0, _recvDgrams = 0, _sentDgrams = 0;
 
 		static Thread _receiveThread = null;
 		static Dictionary<Socket, UdpSocket> _socketMap = new Dictionary<Socket, UdpSocket> ();
 		static List<Socket> _sockets = new List<Socket> ();
 
 		#region Constructor
-		UdpSocket (AddressFamily addressFamily, int receiveBufferSize)
+		UdpSocket (AddressFamily addressFamily)
 		{
 			_receiveAdrs = (addressFamily == AddressFamily.InterNetwork ? IPAddress.Any : IPAddress.IPv6Any);
 			_sock = new Socket (addressFamily, SocketType.Dgram, ProtocolType.Udp);
-			_receiveBuffer = new byte[receiveBufferSize];
 
 			lock (_sockets) {
 				_sockets.Add (_sock);
@@ -50,13 +50,13 @@ namespace p2pncs.Net
 				}
 			}
 		}
-		public static UdpSocket CreateIPv4 (int receiveBufferSize)
+		public static UdpSocket CreateIPv4 ()
 		{
-			return new UdpSocket (AddressFamily.InterNetwork, receiveBufferSize);
+			return new UdpSocket (AddressFamily.InterNetwork);
 		}
-		public static UdpSocket CreateIPv6 (int receiveBufferSize)
+		public static UdpSocket CreateIPv6 ()
 		{
-			return new UdpSocket (AddressFamily.InterNetworkV6, receiveBufferSize);
+			return new UdpSocket (AddressFamily.InterNetworkV6);
 		}
 		#endregion
 
@@ -64,6 +64,7 @@ namespace p2pncs.Net
 		static void ReceiveThread ()
 		{
 			List<Socket> list = new List<Socket> ();
+			byte[] recvBuffer = new byte[MAX_DATAGRAM_SIZE];
 			while (true) {
 				list.Clear ();
 				lock (_sockets) {
@@ -81,13 +82,16 @@ namespace p2pncs.Net
 							continue;
 						}
 						if (usock.Received == null) {
-							//_logger.Warn ("Receive event handler is not set");
 							continue;
 						}
 						try {
 							EndPoint remoteEP = new IPEndPoint (usock._receiveAdrs, 0);
-							int receiveSize = usock._sock.ReceiveFrom (usock._receiveBuffer, ref remoteEP);
-							DatagramReceiveEventArgs e = new DatagramReceiveEventArgs (usock._receiveBuffer, receiveSize, remoteEP);
+							int receiveSize = usock._sock.ReceiveFrom (recvBuffer, 0, recvBuffer.Length, SocketFlags.None, ref remoteEP);
+							usock._recvBytes += receiveSize;
+							usock._recvDgrams ++;
+							byte[] recvData = new byte[receiveSize];
+							Buffer.BlockCopy (recvBuffer, 0, recvData, 0, recvData.Length);
+							DatagramReceiveEventArgs e = new DatagramReceiveEventArgs (recvData, receiveSize, remoteEP);
 							ThreadPool.QueueUserWorkItem (new InvokeHelper (usock, e).Invoke, null);
 						} catch {}
 					}
@@ -139,18 +143,38 @@ namespace p2pncs.Net
 
 		public void SendTo (byte[] buffer, int offset, int size, EndPoint remoteEP)
 		{
-			if (!_sock.Poll (-1, SelectMode.SelectWrite)) {
-				//_logger.Debug ("Polling(SelectWrite) Failed");
-				throw new Exception ("Polling failed");
+			if (size > MAX_DATAGRAM_SIZE) {
+				Logger.Log (LogLevel.Fatal, this, "Send data-size is too big. ({0} bytes)", size);
+				throw new SocketException ();
 			}
+			if (!_sock.Poll (-1, SelectMode.SelectWrite))
+				throw new Exception ("Polling failed");
 			int ret = _sock.SendTo (buffer, offset, size, SocketFlags.None, remoteEP);
 			if (ret != size) {
-				//_logger.Error ("Sent size is unexpected. except={0}, actual={1}", size, ret);
+				Logger.Log (LogLevel.Fatal, this, "Sent size is unexpected. except={0}, actual={1}", size, ret);
 				throw new Exception ("Sent size is unexpected");
 			}
+			Interlocked.Add (ref _sentBytes, size);
+			Interlocked.Increment (ref _sentDgrams);
 		}
 
 		public event DatagramReceiveEventHandler Received;
+
+		public long ReceivedBytes {
+			get { return _recvBytes; }
+		}
+
+		public long SentBytes {
+			get { return _sentBytes; }
+		}
+
+		public long ReceivedDatagrams {
+			get { return _recvDgrams; }
+		}
+
+		public long SentDatagrams {
+			get { return _sentDgrams; }
+		}
 
 		#endregion
 

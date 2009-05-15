@@ -44,7 +44,7 @@ namespace p2pncs.tests.Net
 			endPoints = new IPEndPoint[count];
 			noRouteEP = new IPEndPoint (IPAddress.Loopback, ushort.MaxValue);
 			for (int i = 0; i < sockets.Length; i++) {
-				udpSockets[i] = UdpSocket.CreateIPv4 (1000);
+				udpSockets[i] = UdpSocket.CreateIPv4 ();
 				endPoints[i] = new IPEndPoint (IPAddress.Loopback, 10000 + i);
 				udpSockets[i].Bind (endPoints[i]);
 				sockets[i] = new MessagingSocket (udpSockets[i], true, null, _formatter, null, _interrupter, DefaultTimeout, DefaultRetryCount, 1024);
