@@ -83,7 +83,7 @@ namespace p2pncs.Net
 					InquiredAsyncResultBase ar = RemoveFromRetryList (id, e.RemoteEndPoint);
 					if (ar == null)
 						return;
-					ar.Complete (obj);
+					ar.Complete (obj, this);
 					InvokeInquirySuccess (this, new InquiredEventArgs (ar.Request, obj, e.RemoteEndPoint));
 					break;
 				case MessageType.OneWay:

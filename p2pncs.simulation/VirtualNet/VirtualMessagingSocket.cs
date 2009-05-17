@@ -45,7 +45,7 @@ namespace p2pncs.Simulation.VirtualNet
 				InquiredAsyncResultBase ar = RemoveFromRetryList (res.ID, remoteEP);
 				if (ar == null)
 					return;
-				ar.Complete (res.Message);
+				ar.Complete (res.Message, this);
 				InvokeInquirySuccess (this, new InquiredEventArgs (ar.Request, res.Message, remoteEP));
 			} else if (obj is OneWayMessage) {
 				InvokeReceived (this, new ReceivedEventArgs ((obj as OneWayMessage).Message, remoteEP));

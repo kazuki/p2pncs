@@ -74,6 +74,9 @@ namespace p2pncs.Net
 
 		IDatagramEventSocket BaseSocket { get; }
 
+		long NumberOfInquiries { get; }
+		long NumberOfReinquiries { get; }
+
 		void Close ();
 	}
 }

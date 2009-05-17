@@ -37,6 +37,7 @@ namespace p2pncs.Net
 
 		ReaderWriterLockWrapper _inquiredHandlersLock = new ReaderWriterLockWrapper ();
 		Dictionary<Type, InquiredEventHandler> _inquiredHandlers = new Dictionary<Type, InquiredEventHandler> ();
+		long _numInq = 0, _numReinq = 0;
 
 		public event ReceivedEventHandler Received;
 		public event InquiredEventHandler InquiredUnknownMessage;
@@ -73,6 +74,7 @@ namespace p2pncs.Net
 			ushort id = CreateMessageID ();
 			InquiredAsyncResultBase ar = CreateInquiredAsyncResult (id, obj, remoteEP, timeout, maxRetry, callback, state);
 			ar.Transmit (_sock);
+			Interlocked.Increment (ref _numInq);
 
 			InquiredAsyncResultBase overflow = null;
 			lock (_retryList) {
@@ -156,6 +158,14 @@ namespace p2pncs.Net
 				_retryList.Clear ();
 			}
 			_inquiredHandlersLock.Dispose ();
+		}
+
+		public long NumberOfInquiries {
+			get { return _numInq; }
+		}
+
+		public long NumberOfReinquiries {
+			get { return _numReinq; }
 		}
 
 		#endregion
@@ -349,8 +359,10 @@ namespace p2pncs.Net
 				get { return _maxRetry; }
 			}
 
-			public void Complete (object obj)
+			public void Complete (object obj, MessagingSocketBase ms)
 			{
+				if (_retries > 0 && ms != null)
+					Interlocked.Add (ref ms._numReinq, _retries);
 				_response = obj;
 				_isCompleted = true;
 				_waitHandle.Set ();
@@ -363,7 +375,7 @@ namespace p2pncs.Net
 
 			public void Fail ()
 			{
-				Complete (null);
+				Complete (null, null);
 			}
 
 			public object AsyncState {
