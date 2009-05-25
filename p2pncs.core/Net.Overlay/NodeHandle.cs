@@ -47,7 +47,7 @@ namespace p2pncs.Net.Overlay
 
 		public override string ToString ()
 		{
-			return _id.ToString () + (_ep == null ? "@null" : "@" + _ep.ToString ());
+			return (_id == null ? "null" : _id.ToString ()) + (_ep == null ? "@null" : "@" + _ep.ToString ());
 		}
 	}
 }

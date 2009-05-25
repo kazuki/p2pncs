@@ -142,6 +142,23 @@ namespace p2pncs.Net.Overlay
 			return list.ToArray ();
 		}
 
+		public NodeHandle[] GetCloseNodes (Key target, int maxNum)
+		{
+			NodeHandle[] nodes;
+			lock (_routingTable) {
+				nodes = _flatList.ToArray ();
+			}
+			Array.Sort<NodeHandle> (nodes, delegate (NodeHandle x, NodeHandle y) {
+				Key diffX = target.Xor (x.NodeID);
+				Key diffY = target.Xor (y.NodeID);
+				return diffX.CompareTo (diffY);
+			});
+
+			NodeHandle[] results = new NodeHandle[Math.Min (nodes.Length, maxNum)];
+			Array.Copy (nodes, 0, results, 0, results.Length);
+			return results;
+		}
+
 		public void Touch (NodeHandle node)
 		{
 			if (node.NodeID == null)
@@ -157,7 +174,7 @@ namespace p2pncs.Net.Overlay
 					if (list[i].NodeID.Equals (node.NodeID))
 						return;
 				}
-				//_logger.Debug ("{0}: add routing-table entry to {1}", _selfNodeId, node.NodeID);
+				//Logger.Log (LogLevel.Trace, this, "{0}: add routing-table entry to {1}", _selfNodeId, node.NodeID);
 				list.Add (node);
 				_flatList.Add (node);
 				_epMapping[node.EndPoint] = node;

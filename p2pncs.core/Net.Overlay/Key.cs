@@ -168,6 +168,15 @@ namespace p2pncs.Net.Overlay
 		{
 			return (byte[])_data.Clone ();
 		}
+
+		public static bool Equals (Key keyA, Key keyB)
+		{
+			if (keyA == keyB)
+				return true;
+			if (keyA == null)
+				return false;
+			return keyA.Equals (keyB);
+		}
 		#endregion
 
 		#region Convert to/from ECKeyPair

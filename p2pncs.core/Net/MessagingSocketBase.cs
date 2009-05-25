@@ -157,6 +157,9 @@ namespace p2pncs.Net
 					_retryList[i].Fail ();
 				_retryList.Clear ();
 			}
+			using (IDisposable cookie = _inquiredHandlersLock.EnterWriteLock ()) {
+				_inquiredHandlers.Clear ();
+			}
 			_inquiredHandlersLock.Dispose ();
 		}
 
