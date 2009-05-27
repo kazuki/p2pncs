@@ -16,6 +16,7 @@
  */
 
 using System;
+using System.Collections.Generic;
 using NUnit.Framework;
 using p2pncs.Net.Overlay;
 
@@ -48,6 +49,55 @@ namespace p2pncs.tests.Net.Overlay
 				Assert.AreEqual (1, rr.RootCandidates.Length);
 				Assert.AreEqual (keys[3], rr.RootCandidates[0].NodeID);
 				Assert.AreEqual (env.EndPoints[3], rr.RootCandidates[0].EndPoint);
+			}
+		}
+
+		[Test]
+		public void RootCandidateTest ()
+		{
+			Random rnd = new Random ();
+			int keyBytes = 24;
+			using (KBREnvironment env = new KBREnvironment (false, false)) {
+				Key[] keys = new Key[1024];
+				HashSet<Key> keySet = new HashSet<Key> ();
+				for (int i = 0; i < keys.Length; i++) {
+					keys[i] = Key.CreateRandom (keyBytes);
+					while (!keySet.Add (keys[i]))
+						keys[i] = Key.CreateRandom (keyBytes);
+				}
+				env.AddNodes (keys, null);
+				for (int i = 0; i < keys.Length; i ++) {
+					env.KeyBasedRouters[i].RoutingAlgorithm.Stabilize ();
+					System.Threading.Thread.Sleep (10);
+				}
+				System.Threading.Thread.Sleep (500);
+				
+				int numOfRootCandidates = 3, TestCount = 100;
+				int[] success_candidates = new int[numOfRootCandidates];
+				int success_count = 0;
+				for (int testLoop = 0; testLoop < TestCount; testLoop++) {
+					Key target = Key.CreateRandom (keys[0].KeyBytes);
+					List<IKeyBasedRouter> sorted;
+					lock (env) {
+						sorted = new List<IKeyBasedRouter> (env.KeyBasedRouters);
+					}
+					sorted.Sort (delegate (IKeyBasedRouter x, IKeyBasedRouter y) {
+						Key diffX = target.Xor (x.SelftNodeId);
+						Key diffY = target.Xor (y.SelftNodeId);
+						return diffX.CompareTo (diffY);
+					});
+
+					IKeyBasedRouter kbrNode = env.KeyBasedRouters[0];
+					DateTime dt = DateTime.Now;
+					RoutingResult result = kbrNode.EndRoute (kbrNode.BeginRoute (target, null, numOfRootCandidates, 3, null, null));
+					Assert.IsNotNull (result);
+					Assert.IsNotNull (result.RootCandidates);
+					for (int i = 0; i < Math.Min (numOfRootCandidates, result.RootCandidates.Length); i++)
+						if (Key.Equals (sorted[i].SelftNodeId, result.RootCandidates[i].NodeID))
+							success_count ++;
+				}
+				Console.WriteLine ("{0} / {1}", success_count, (TestCount * numOfRootCandidates * 90 / 100));
+				Assert.IsTrue (success_count >= (TestCount * numOfRootCandidates * 90 / 100));
 			}
 		}
 	}
