@@ -25,6 +25,7 @@ using p2pncs.Net.Overlay;
 using p2pncs.Net.Overlay.Anonymous;
 using p2pncs.Net.Overlay.DHT;
 using p2pncs.Security.Cryptography;
+using p2pncs.Simulation;
 using p2pncs.Simulation.VirtualNet;
 using p2pncs.Threading;
 
@@ -39,6 +40,8 @@ namespace p2pncs.tests.Net.Overlay
 		List<IKeyBasedRouter> _routers = new List<IKeyBasedRouter> ();
 		List<IDistributedHashTable> _dhts = null;
 		List<IAnonymousRouter> _anons = null;
+		RandomIPAddressGenerator _ipGenerator = new RandomIPAddressGenerator ();
+		EndPoint[] _initEPs = null;
 
 		public KBREnvironment (bool enableDHT, bool enableAnon)
 		{
@@ -60,11 +63,12 @@ namespace p2pncs.tests.Net.Overlay
 		public void AddNodes (Key[] keys, ECKeyPair[] keyPairs)
 		{
 			for (int i = 0; i < keys.Length; i++) {
-				IPAddress adrs = IPAddress.Parse ("10.0.0." + (_endPoints.Count + 1).ToString ());
+				IPAddress adrs = _ipGenerator.Next ();
 				IPEndPoint ep = new IPEndPoint (adrs, 10000);
 				VirtualDatagramEventSocket sock = new VirtualDatagramEventSocket (_network, adrs);
 				sock.Bind (new IPEndPoint (IPAddress.Loopback, ep.Port));
-				IMessagingSocket msock = new MessagingSocket (sock, true, SymmetricKey.NoneKey, Serializer.Instance, null, _interrupter, TimeSpan.FromSeconds (1), 2, 1024);
+				//IMessagingSocket msock = new MessagingSocket (sock, true, SymmetricKey.NoneKey, Serializer.Instance, null, _interrupter, TimeSpan.FromSeconds (1), 2, 1024);
+				IMessagingSocket msock = new VirtualMessagingSocket (sock, true, _interrupter, TimeSpan.FromSeconds (1), 2, 1024);
 				_sockets.Add (msock);
 				IKeyBasedRouter router = new SimpleIterativeRouter (keys[i], msock, new SimpleRoutingAlgorithm (), Serializer.Instance);
 				_routers.Add (router);
@@ -76,9 +80,13 @@ namespace p2pncs.tests.Net.Overlay
 						_anons.Add (anonRouter);
 					}
 				}
-				if (_endPoints.Count != 0)
-					router.Join (_endPoints.ToArray ());
+				if (_endPoints.Count != 0) {
+					if (_initEPs == null || _endPoints.Count < 3)
+						_initEPs = _endPoints.ToArray ();
+					router.Join (_initEPs);
+				}
 				_endPoints.Add (ep);
+				Thread.Sleep (5);
 			}
 			Thread.Sleep (500);
 		}
