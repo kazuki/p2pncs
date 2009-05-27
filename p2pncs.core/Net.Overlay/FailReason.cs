@@ -17,35 +17,10 @@
 
 namespace p2pncs.Net.Overlay
 {
-	public class RoutingResult
+	public enum FailReason
 	{
-		NodeHandle[] _candidates;
-		int _hops;
-		FailReason _reason = FailReason.None;
-
-		public RoutingResult (NodeHandle[] candidates, int hops)
-		{
-			_candidates = candidates;
-			_hops = hops;
-		}
-
-		public RoutingResult (FailReason reason, int hops)
-		{
-			_reason = reason;
-			_hops = hops;
-		}
-
-		/// <remarks>配列の要素のEndPointがnullだった場合は、自身のノードを意味する</remarks>
-		public NodeHandle[] RootCandidates {
-			get { return _candidates; }
-		}
-
-		public int Hops {
-			get { return _hops; }
-		}
-
-		public FailReason FailReason {
-			get { return _reason; }
-		}
+		None,
+		Timeout,
+		NoRoot
 	}
 }
