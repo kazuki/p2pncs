@@ -87,6 +87,7 @@
     <Compile Include="SerializableFieldIndexAttribute.cs" />
     <Compile Include="SerializableTypeIdAttribute.cs" />
     <Compile Include="Serializer.cs" />
+    <Compile Include="Utility\KeyValueCache.cs" />
     <Compile Include="Utility\SerializeHelper.cs" />
   </ItemGroup>
   <ItemGroup>

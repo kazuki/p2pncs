@@ -23,6 +23,7 @@ using System.Runtime.Serialization;
 using System.Threading;
 using p2pncs.Security.Cryptography;
 using p2pncs.Threading;
+using p2pncs.Utility;
 
 namespace p2pncs.Net
 {
@@ -34,6 +35,7 @@ namespace p2pncs.Net
 		bool _ownSocket, _active = true;
 		List<InquiredAsyncResultBase> _retryList = new List<InquiredAsyncResultBase> ();
 		IntervalInterrupter _interrupter;
+		KeyValueCache<MessageIdentity, object> _inquiryDupCheckCache;
 
 		ReaderWriterLockWrapper _inquiredHandlersLock = new ReaderWriterLockWrapper ();
 		Dictionary<Type, InquiredEventHandler> _inquiredHandlers = new Dictionary<Type, InquiredEventHandler> ();
@@ -45,7 +47,7 @@ namespace p2pncs.Net
 		public event InquiredEventHandler InquiryFailure;
 
 		protected MessagingSocketBase (IDatagramEventSocket sock, bool ownSocket, IntervalInterrupter interrupter,
-			TimeSpan defaultInquiryTimeout, int defaultMaxRetries, int retryListSize)
+			TimeSpan defaultInquiryTimeout, int defaultMaxRetries, int retryListSize, int inquiryDupCheckSize)
 		{
 			_sock = sock;
 			_ownSocket = ownSocket;
@@ -53,6 +55,7 @@ namespace p2pncs.Net
 			_inquiryTimeout = defaultInquiryTimeout;
 			_maxRetries = defaultMaxRetries;
 			_retryListSize = retryListSize;
+			_inquiryDupCheckCache = new KeyValueCache<MessageIdentity,object> (inquiryDupCheckSize);
 
 			interrupter.AddInterruption (TimeoutCheck);
 		}
@@ -111,6 +114,7 @@ namespace p2pncs.Net
 			if (state.SentFlag)
 				throw new ApplicationException ();
 			state.SentFlag = true;
+			_inquiryDupCheckCache.SetValue (state.MessageIdentity, response);
 			StartResponse_Internal (state, response);
 		}
 		protected abstract void StartResponse_Internal (InquiredResponseState state, object response);
@@ -232,6 +236,12 @@ namespace p2pncs.Net
 
 		protected void InvokeInquired (object sender, InquiredEventArgs e)
 		{
+			object value;
+			if (!_inquiryDupCheckCache.CheckAndReserve ((e as InquiredResponseState).MessageIdentity, out value)) {
+				StartResponse (e, value);
+				return;
+			}
+
 			using (IDisposable cookie = _inquiredHandlersLock.EnterReadLock ()) {
 				InquiredEventHandler handler;
 				if (e.InquireMessage != null && _inquiredHandlers.TryGetValue (e.InquireMessage.GetType (), out handler)) {
@@ -401,10 +411,12 @@ namespace p2pncs.Net
 		{
 			ushort _id;
 			bool _sentFlag = false;
+			MessageIdentity _mid;
 
 			public InquiredResponseState (object inq, EndPoint ep, ushort id) : base (inq, ep)
 			{
 				_id = id;
+				_mid = new MessageIdentity (ep, id);
 			}
 
 			public ushort ID {
@@ -414,6 +426,24 @@ namespace p2pncs.Net
 			public bool SentFlag {
 				get { return _sentFlag; }
 				set { _sentFlag = value;}
+			}
+
+			 public MessageIdentity MessageIdentity {
+				get { return _mid; }
+			}
+		}
+		protected class MessageIdentity
+		{
+			int _hash;
+
+			public MessageIdentity (EndPoint sender, ushort msgId)
+			{
+				_hash = sender.GetHashCode () ^ msgId.GetHashCode ();
+			}
+
+			public override int  GetHashCode()
+			{
+ 				 return _hash;
 			}
 		}
 		#endregion
