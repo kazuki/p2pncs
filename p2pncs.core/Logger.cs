@@ -34,6 +34,7 @@ namespace p2pncs
 	{
 		static Dictionary<LogLevel, NLog.LogLevel> _levelMap = new Dictionary<LogLevel, NLog.LogLevel> ();
 		static NLogLogger _logger = NLog.LogManager.GetLogger (string.Empty);
+		const int KeyShortLength = 6;
 
 		static Logger ()
 		{
@@ -60,7 +61,7 @@ namespace p2pncs
 			{
 				IKeyBasedRouter kbr = logEvent.Context["sender"] as IKeyBasedRouter;
 				if (kbr == null) return;
-				builder.Append (kbr.SelftNodeId.ToString ());
+				builder.Append (kbr.SelftNodeId.ToString ().Substring (0, KeyShortLength));
 			}
 
 			protected override int GetEstimatedBufferSize (LogEventInfo logEvent)
@@ -76,7 +77,7 @@ namespace p2pncs
 			{
 				IAnonymousRouter ar = logEvent.Context["sender"] as IAnonymousRouter;
 				if (ar == null) return;
-				builder.Append (ar.KeyBasedRouter.SelftNodeId.ToString ());
+				builder.Append (ar.KeyBasedRouter.SelftNodeId.ToString ().Substring (0, KeyShortLength));
 			}
 
 			protected override int GetEstimatedBufferSize (LogEventInfo logEvent)
@@ -92,9 +93,9 @@ namespace p2pncs
 			{
 				ISubscribeInfo subscribe = logEvent.Context["sender"] as ISubscribeInfo;
 				if (subscribe == null) return;
-				builder.Append (subscribe.AnonymousRouter.KeyBasedRouter.SelftNodeId.ToString ());
+				builder.Append (subscribe.AnonymousRouter.KeyBasedRouter.SelftNodeId.ToString ().Substring (0, KeyShortLength));
 				builder.Append ('+');
-				builder.Append (subscribe.Key);
+				builder.Append (subscribe.Key.ToString ().Substring (0, KeyShortLength));
 			}
 
 			protected override int GetEstimatedBufferSize (LogEventInfo logEvent)
