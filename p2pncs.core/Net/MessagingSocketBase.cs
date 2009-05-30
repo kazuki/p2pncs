@@ -36,6 +36,8 @@ namespace p2pncs.Net
 		List<InquiredAsyncResultBase> _retryList = new List<InquiredAsyncResultBase> ();
 		IntervalInterrupter _interrupter;
 		KeyValueCache<MessageIdentity, object> _inquiryDupCheckCache;
+		HashSet<Type> _inquiryDupCheckTypeSet = new HashSet<Type> ();
+		ReaderWriterLockWrapper _inquiryDupCheckTypeSetLock = new ReaderWriterLockWrapper ();
 
 		ReaderWriterLockWrapper _inquiredHandlersLock = new ReaderWriterLockWrapper ();
 		Dictionary<Type, InquiredEventHandler> _inquiredHandlers = new Dictionary<Type, InquiredEventHandler> ();
@@ -114,7 +116,8 @@ namespace p2pncs.Net
 			if (state.SentFlag)
 				throw new ApplicationException ();
 			state.SentFlag = true;
-			_inquiryDupCheckCache.SetValue (state.MessageIdentity, response);
+			if (IsDuplicateCheckType (args.InquireMessage))
+				_inquiryDupCheckCache.SetValue (state.MessageIdentity, response);
 			StartResponse_Internal (state, response);
 		}
 		protected abstract void StartResponse_Internal (InquiredResponseState state, object response);
@@ -140,6 +143,20 @@ namespace p2pncs.Net
 					if (value == null)
 						_inquiredHandlers.Remove (inquiryMessageType);
 				}
+			}
+		}
+
+		public void AddInquiryDuplicationCheckType (Type type)
+		{
+			using (IDisposable cookie = _inquiryDupCheckTypeSetLock.EnterWriteLock ()) {
+				_inquiryDupCheckTypeSet.Add (type);
+			}
+		}
+
+		public void RemoveInquiryDuplicationCheckType (Type type)
+		{
+			using (IDisposable cookie = _inquiryDupCheckTypeSetLock.EnterWriteLock ()) {
+				_inquiryDupCheckTypeSet.Remove (type);
 			}
 		}
 
@@ -234,10 +251,19 @@ namespace p2pncs.Net
 			get { return _active; }
 		}
 
+		bool IsDuplicateCheckType (object msg)
+		{
+			if (msg == null)
+				return false;
+			using (IDisposable cookie = _inquiryDupCheckTypeSetLock.EnterReadLock ()) {
+				return _inquiryDupCheckTypeSet.Contains (msg.GetType ());
+			}
+		}
+
 		protected void InvokeInquired (object sender, InquiredEventArgs e)
 		{
 			object value;
-			if (!_inquiryDupCheckCache.CheckAndReserve ((e as InquiredResponseState).MessageIdentity, out value)) {
+			if (IsDuplicateCheckType (e.InquireMessage) && !_inquiryDupCheckCache.CheckAndReserve ((e as InquiredResponseState).MessageIdentity, out value)) {
 				StartResponse (e, value);
 				return;
 			}

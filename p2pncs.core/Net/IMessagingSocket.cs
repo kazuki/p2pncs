@@ -64,13 +64,40 @@ namespace p2pncs.Net
 		/// <returns>問い合わせに対するレスポンス。問い合わせに失敗した場合は null が返る</returns>
 		object EndInquire (IAsyncResult ar);
 
-		event InquiredEventHandler InquiredUnknownMessage;
+		/// <summary>
+		/// 引数にて指定する型の問い合わせに対して処理を行うハンドラを登録します
+		/// </summary>
+		/// <param name="inquiredMessageType">ハンドラに結びつける問い合わせメッセージの型</param>
+		/// <param name="handler">処理を行うハンドラ</param>
 		void AddInquiredHandler (Type inquiredMessageType, InquiredEventHandler handler);
+
+		/// <summary>
+		/// AddInquiredHandlerメソッドで登録した型とハンドラの組を削除します
+		/// </summary>
 		void RemoveInquiredHandler (Type inquiredMessageType, InquiredEventHandler handler);
+
+		/// <summary>
+		/// AddInquiredHandlerメソッドを利用して登録していない問い合わせがあったときに発生するイベント
+		/// </summary>
+		event InquiredEventHandler InquiredUnknownMessage;
+
+		/// <summary>
+		/// 問い合わせに対して応答を返します
+		/// </summary>
 		void StartResponse (InquiredEventArgs args, object response);
 
 		event InquiredEventHandler InquiryFailure;
 		event InquiredEventHandler InquirySuccess;
+
+		/// <summary>
+		/// 問い合わせの重複をチェックする型を追加します
+		/// </summary>
+		void AddInquiryDuplicationCheckType (Type type);
+
+		/// <summary>
+		/// 問い合わせの重複をチェックする型を削除します
+		/// </summary>
+		void RemoveInquiryDuplicationCheckType (Type type);
 
 		IDatagramEventSocket BaseSocket { get; }
 
