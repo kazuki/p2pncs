@@ -31,6 +31,7 @@ namespace p2pncs.tests.Net.Overlay
 			Array domains = Enum.GetValues (typeof (ECDomainNames));
 			foreach (object domain in domains) {
 				ECDomainNames d = (ECDomainNames)domain;
+				if (d == ECDomainNames.none) continue;
 				if (d == ECDomainNames.secp224r1) continue; // not support point-compression
 
 				ECKeyPair pair1 = ECKeyPair.Create (d);
