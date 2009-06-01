@@ -69,6 +69,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 		static TimeSpan MCR_MaxMessageIntervalWithMargin = MCR_MaxMessageInterval + new TimeSpan (Messaging_Timeout.Ticks * Messaging_MaxRetry);
 
 		// Static parameters for Anonymous Connection (AC)
+		static TimeSpan AC_EstablishTimeout = new TimeSpan (MCR_EstablishingTimeout.Ticks * 2);
 		static TimeSpan AC_MaxMessageInterval = MCR_MaxMessageInterval;
 		static TimeSpan AC_AliveCheckScheduleInterval = MCR_AliveCheckScheduleInterval;
 		static TimeSpan AC_MaxMessageIntervalWithMargin = new TimeSpan (AC_MaxMessageInterval.Ticks * 3);
@@ -184,6 +185,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 		{
 			ConnectionInfo.EstablishRouteAsyncResult ar2 = (ConnectionInfo.EstablishRouteAsyncResult)ar;
 			ar.AsyncWaitHandle.WaitOne ();
+			if (!ar2.ConnectionInfo.IsConnected)
+				throw new System.Net.Sockets.SocketException ();
 			return ar2.ConnectionInfo.Socket;
 		}
 
@@ -639,6 +642,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 						foreach (ConnectionInfo cinfo in timeoutConnections) {
 							if (cinfo.IsInitiator)
 								_usedConnectionIDs.Remove ((ushort)(cinfo.ConnectionId >> 16));
+							cinfo.Close ();
 							_connectionMap.Remove (cinfo.ConnectionId);
 							Logger.Log (LogLevel.Info, this, "Timeout AC {0}", cinfo.ConnectionId);
 						}
@@ -1219,6 +1223,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 				byte[] mac = ComputeMAC (tmpKey, encrypted_payload);
 				ConnectionEstablishMessage msg = new ConnectionEstablishMessage (_destKey, publicKey, GenerateDuplicationCheckValue (), mac, encrypted_payload);
 				_subscribeInfo.SendMessage (msg);
+				lock (_dtLock) {
+					_expiry = DateTime.Now + AC_EstablishTimeout;
+				}
 			}
 
 			public void Start (byte[] sharedInfo)
@@ -1314,10 +1321,16 @@ namespace p2pncs.Net.Overlay.Anonymous
 				get { return _expiry <= DateTime.Now; }
 			}
 
-			void Close ()
+			public void Close ()
 			{
 				lock (_dtLock) {
 					_expiry = DateTime.MinValue;
+				}
+				if (_connected) {
+					_connected = false;
+					_sock.Dispose_Internal ();
+				} else if (_ar != null && !_ar.IsCompleted) {
+					_ar.Done ();
 				}
 			}
 
@@ -1388,6 +1401,11 @@ namespace p2pncs.Net.Overlay.Anonymous
 					}
 				}
 
+				public void Dispose_Internal ()
+				{
+					_info = null;
+				}
+
 				#region IAnonymousSocket Members
 
 				public void Send (byte[] buffer)
@@ -1415,7 +1433,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				{
 					if (_info != null) {
 						_info.Close ();
-						_info = null;
+						Dispose_Internal ();
 					}
 				}
 
