@@ -60,7 +60,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 		public void Close ()
 		{
-			_sock.Close ();
+			if (_sock != null)
+				_sock.Close ();
 		}
 
 		public void SendTo (byte[] buffer, EndPoint remoteEP)
@@ -98,7 +99,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 		public void Dispose ()
 		{
-			_sock.Dispose ();
+			if (_sock != null)
+				_sock.Dispose ();
 		}
 	}
 }
