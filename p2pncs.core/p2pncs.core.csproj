@@ -47,6 +47,7 @@
     <Compile Include="Net.Overlay.Anonymous\AcceptingEventArgs.cs" />
     <Compile Include="Net.Overlay.Anonymous\AcceptingEventHandler.cs" />
     <Compile Include="Net.Overlay.Anonymous\AnonymousRouter.cs" />
+    <Compile Include="Net.Overlay.Anonymous\AnonymousRouter2.cs" />
     <Compile Include="Net.Overlay.Anonymous\DatagramEventSocketWrapper.cs" />
     <Compile Include="Net.Overlay.Anonymous\IAnonymousRouter.cs" />
     <Compile Include="Net.Overlay.Anonymous\IAnonymousSocket.cs" />
