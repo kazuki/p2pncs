@@ -458,19 +458,32 @@ namespace p2pncs.Net
 				get { return _mid; }
 			}
 		}
-		protected class MessageIdentity
+		protected class MessageIdentity : IEquatable<MessageIdentity>
 		{
+			EndPoint _sender;
+			ushort _msgId;
 			int _hash;
 
 			public MessageIdentity (EndPoint sender, ushort msgId)
 			{
-				_hash = sender.GetHashCode () ^ msgId.GetHashCode ();
+				_sender = sender;
+				_msgId = msgId;
+				_hash = _sender.GetHashCode () ^ _msgId.GetHashCode ();
 			}
 
-			public override int  GetHashCode()
+			public override int GetHashCode()
 			{
- 				 return _hash;
+				return _hash;
 			}
+
+			#region IEquatable<MessageIdentity> Members
+
+			public bool Equals (MessageIdentity other)
+			{
+				return this._msgId == other._msgId && this._sender.Equals (other._sender);
+			}
+
+			#endregion
 		}
 		#endregion
 	}

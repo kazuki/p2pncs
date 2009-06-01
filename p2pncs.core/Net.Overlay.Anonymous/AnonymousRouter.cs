@@ -1559,7 +1559,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 		#region AnonymousEndPoint
 		[Serializable]
 		[SerializableTypeId (0x20a)]
-		class AnonymousEndPoint// : EndPoint
+		public class AnonymousEndPoint : IEquatable<AnonymousEndPoint>
 		{
 			[SerializableFieldId (0)]
 			EndPoint _ep;
@@ -1590,7 +1590,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				AnonymousEndPoint other = obj as AnonymousEndPoint;
 				if (other == null)
 					return false;
-				return this._ep.Equals (other._ep) && (this._label == other._label);
+				return Equals (other);
 			}
 
 			public override int GetHashCode ()
@@ -1602,13 +1602,18 @@ namespace p2pncs.Net.Overlay.Anonymous
 			{
 				return _ep.ToString () + "#" + _label.ToString ("x");
 			}
+
+			public bool Equals (AnonymousEndPoint other)
+			{
+				return this._ep.Equals (other._ep) && (this._label == other._label);
+			}
 		}
 		#endregion
 
 		#region DHT Entry
 		[Serializable]
 		[SerializableTypeId (0x20b)]
-		class DHTEntry : IPutterEndPointStore, IEquatable<DHTEntry>
+		public class DHTEntry : IPutterEndPointStore, IEquatable<DHTEntry>
 		{
 			[SerializableFieldId (0)]
 			RouteLabel _label;
