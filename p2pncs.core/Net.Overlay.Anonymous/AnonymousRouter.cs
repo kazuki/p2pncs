@@ -58,11 +58,23 @@ namespace p2pncs.Net.Overlay.Anonymous
 		/// <summary>多重暗号経路構築時に選択する中継ノード数 (終端ノード込み)</summary>
 		const int DefaultRealyNodes = 3;
 
+		/// <summary>多重暗号経路の終端ノードがDHTに自身の情報を保存する間隔</summary>
+		static TimeSpan DHTPutInterval = TimeSpan.FromSeconds (60);
+
+		/// <summary>DHT.Getのタイムアウト</summary>
+		static TimeSpan DHTGetTimeout = TimeSpan.FromSeconds (5);
+
+		/// <summary>多重暗号経路の終端ノードがDHTに自身の情報を保存する際に利用する有効期限</summary>
+		static TimeSpan DHTPutValueLifeTime = DHTPutInterval + DHTGetTimeout;
+
+		/// <summary>多重暗号経路を利用してメッセージを送る際に利用するタイムアウト時間</summary>
+		static TimeSpan MCR_RelayTimeout = TimeSpan.FromMilliseconds (200);
+
 		/// <summary>各ノード間の最大RTT</summary>
-		static TimeSpan MaxRRT = TimeSpan.FromMilliseconds (1000);
+		static TimeSpan MaxRRT = TimeSpan.FromMilliseconds (MCR_RelayTimeout.TotalMilliseconds * 2);
 
 		/// <summary>多重暗号経路(MCR)の始点と終点間の最大RTT</summary>
-		static TimeSpan MCR_MaxRTT = new TimeSpan ((long)(MaxRRT.Ticks * DefaultRealyNodes * 1.2));
+		static TimeSpan MCR_MaxRTT = new TimeSpan ((long)(MaxRRT.Ticks * DefaultRealyNodes));
 
 		/// <summary>多重暗号経路確立時に始点ノードが再送する最大回数</summary>
 		static int MCR_EstablishMaxRetry = 1;
@@ -73,23 +85,17 @@ namespace p2pncs.Net.Overlay.Anonymous
 		/// <summary>多重暗号経路確立時に中継ノードが利用する最大再送回数</summary>
 		static int MCR_EstablishRelayMaxRetry = MCR_EstablishMaxRetry;
 
-		/// <summary>多重暗号経路を利用してメッセージを送る際に利用するタイムアウト時間</summary>
-		static TimeSpan MCR_RelayTimeout = TimeSpan.FromMilliseconds (200);
-
 		/// <summary>多重暗号経路を利用してメッセージを送る際に利用する最大再送回数</summary>
 		static int MCR_RelayMaxRetry = 2;
-
-		/// <summary>多重暗号経路の終端ノードがDHTに自身の情報を保存する間隔</summary>
-		static TimeSpan DHTPutInterval = TimeSpan.FromSeconds (60);
-
-		/// <summary>多重暗号経路の終端ノードがDHTに自身の情報を保存する際に利用する有効期限</summary>
-		static TimeSpan DHTPutValueLifeTime = DHTPutInterval + TimeSpan.FromSeconds (5);
 
 		/// <summary>多重暗号経路を流れるメッセージの最大間隔 (これより長い間隔が開くと経路エラーと判断する基準になる)</summary>
 		static TimeSpan MCR_Timeout = TimeSpan.FromSeconds (10);
 
 		/// <summary>多重暗号経路が壊れているためメッセージが届かないと認識するために利用するタイムアウト時間</summary>
 		static TimeSpan MCR_TimeoutWithMargin = MCR_Timeout + (MCR_MaxRTT + MCR_MaxRTT);
+
+		/// <summary>匿名コネクションを確立するときのタイムアウト時間</summary>
+		static TimeSpan Connection_EstablishTimeout = MCR_MaxRTT + MCR_MaxRTT + DHTGetTimeout;
 
 		static IFormatter DefaultFormatter = Serializer.Instance;
 		static EndPoint DummyEndPoint = new IPEndPoint (IPAddress.Loopback, 0);
@@ -1102,7 +1108,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_router = router;
 				_subscribeInfo = subscribeInfo;
 				_destKey = destKey;
-				_recvExpiry = DateTime.Now + MCR_MaxRTT;
+				_recvExpiry = DateTime.Now + Connection_EstablishTimeout;
 				_destPubKey = destKey.ToECPublicKey (_subscribeInfo.DiffieHellman.Parameters.DomainName);
 				_connectionId = BitConverter.ToInt32 (RNG.GetRNGBytes (4), 0);
 				_ar = new EstablishRouteAsyncResult (this, callback, state);

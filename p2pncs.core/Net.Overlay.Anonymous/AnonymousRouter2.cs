@@ -62,6 +62,11 @@ namespace p2pncs.Net.Overlay.Anonymous
 		static TimeSpan DisconnectMessaging_Timeout = Messaging_Timeout;
 		const int DisconnectMessaging_MaxRetry = Messaging_MaxRetry;
 
+		// Static parameters for DHT
+		static TimeSpan DHT_GetTimeout = TimeSpan.FromSeconds (5);
+		static TimeSpan DHT_PutInterval = TimeSpan.FromSeconds (60);
+		static TimeSpan DHT_Lifetime = DHT_PutInterval + DHT_GetTimeout;
+
 		// Static parameters for Multiple Cipher Route (MCR)
 		static TimeSpan MCR_EstablishingTimeout = TimeSpan.FromSeconds (DefaultRelayNodes * 2 * Messaging_Timeout.TotalSeconds);
 		static TimeSpan MCR_MaxMessageInterval = TimeSpan.FromSeconds (10);
@@ -69,13 +74,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 		static TimeSpan MCR_MaxMessageIntervalWithMargin = MCR_MaxMessageInterval + new TimeSpan (Messaging_Timeout.Ticks * Messaging_MaxRetry);
 
 		// Static parameters for Anonymous Connection (AC)
-		static TimeSpan AC_EstablishTimeout = new TimeSpan (MCR_EstablishingTimeout.Ticks * 2);
+		static TimeSpan AC_EstablishTimeout = new TimeSpan (MCR_EstablishingTimeout.Ticks * 2) + DHT_GetTimeout;
 		static TimeSpan AC_MaxMessageInterval = MCR_MaxMessageInterval;
 		static TimeSpan AC_AliveCheckScheduleInterval = MCR_AliveCheckScheduleInterval;
 		static TimeSpan AC_MaxMessageIntervalWithMargin = new TimeSpan (AC_MaxMessageInterval.Ticks * 3);
-
-		static TimeSpan DHT_PutInterval = TimeSpan.FromSeconds (60);
-		static TimeSpan DHT_Lifetime = DHT_PutInterval + TimeSpan.FromSeconds (5);
 
 		static object AckMessage = "ACK";
 
@@ -450,9 +452,11 @@ namespace p2pncs.Net.Overlay.Anonymous
 				if (msg != null) {
 					ConnectionInfo cinfo;
 					using (IDisposable cookie = _connectionMapLock.EnterReadLock ()) {
-						if (!_connectionMap.TryGetValue (msg.ConnectionId & 0xFFFF0000, out cinfo)) {
-							Logger.Log (LogLevel.Trace, this, "Unknown Connection");
-							return;
+						if (!_connectionMap.TryGetValue (msg.ConnectionId, out cinfo)) {
+							if (!_connectionMap.TryGetValue (msg.ConnectionId & 0xFFFF0000, out cinfo) && !cinfo.IsInitiator && !cinfo.IsConnected) {
+								Logger.Log (LogLevel.Trace, this, "Unknown Connection");
+								return;
+							}
 						}
 					}
 					if (!cinfo.IsConnected && (msg.PayloadMAC == null || msg.PayloadMAC.Length == 0)) {
