@@ -6,7 +6,7 @@
     <ProductVersion>9.0.30729</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>{A7ABCCD1-20B9-41A7-8C54-7E2B4C958B23}</ProjectGuid>
-    <OutputType>Exe</OutputType>
+    <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>p2pncs.Simulation</RootNamespace>
     <AssemblyName>p2pncs.simulation</AssemblyName>
@@ -37,7 +37,6 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Program.cs" />
     <Compile Include="AssemblyInfo.cs" />
     <Compile Include="RandomIPAddressGenerator.cs" />
     <Compile Include="VirtualNet\LatencyTypes.cs" />
