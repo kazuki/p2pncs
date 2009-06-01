@@ -86,7 +86,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 		static TimeSpan DHTPutValueLifeTime = DHTPutInterval + TimeSpan.FromSeconds (5);
 
 		/// <summary>多重暗号経路を流れるメッセージの最大間隔 (これより長い間隔が開くと経路エラーと判断する基準になる)</summary>
-		static TimeSpan MCR_Timeout = TimeSpan.FromSeconds (30);
+		static TimeSpan MCR_Timeout = TimeSpan.FromSeconds (10);
 
 		/// <summary>多重暗号経路が壊れているためメッセージが届かないと認識するために利用するタイムアウト時間</summary>
 		static TimeSpan MCR_TimeoutWithMargin = MCR_Timeout + (MCR_MaxRTT + MCR_MaxRTT);
