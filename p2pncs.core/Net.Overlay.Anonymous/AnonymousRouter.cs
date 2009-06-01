@@ -133,7 +133,6 @@ namespace p2pncs.Net.Overlay.Anonymous
 			_interrupter = interrupter;
 
 			dht.RegisterTypeID (typeof (DHTEntry), DHT_TYPEID);
-			(dht as SimpleDHT).NumberOfReplicas = 1;
 			_sock.AddInquiredHandler (typeof (EstablishRouteMessage), MessagingSocket_Inquired_EstablishRouteMessage);
 			_sock.AddInquiredHandler (typeof (RoutedMessage), MessagingSocket_Inquired_RoutedMessage);
 			_sock.AddInquiredHandler (typeof (ConnectionEstablishMessage), MessagingSocket_Inquired_ConnectionEstablishMessage);
