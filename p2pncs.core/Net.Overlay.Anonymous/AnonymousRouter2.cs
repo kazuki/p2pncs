@@ -470,7 +470,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 							}
 						}
 						cinfo.Established (key, msg.SenderSideTerminalEndPoints);
-						Logger.Log (LogLevel.Info, cinfo, "Connection Established");
+						Logger.Log (LogLevel.Trace, cinfo, "Connection Established");
 					} else {
 						cinfo.Received (msg);
 					}
@@ -514,7 +514,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			ConnectionEstablishMessage msg = (ConnectionEstablishMessage)ar.AsyncState;
 			GetResult result = _dht.EndGet (ar);
 			if (result == null || result.Values == null || result.Values.Length == 0) {
-				Logger.Log (LogLevel.Info, this, "DHT Lookup Failed. Key={0}", msg.DestinationId);
+				Logger.Log (LogLevel.Trace, this, "DHT Lookup Failed. Key={0}", msg.DestinationId);
 				return;
 			}
 			for (int i = 0; i < result.Values.Length; i ++) {
@@ -550,7 +550,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			InterterminalState state = (InterterminalState)ar.AsyncState;
 			GetResult ret = _dht.EndGet (ar);
 			if (ret == null || ret.Values == null || ret.Values.Length == 0) {
-				Logger.Log (LogLevel.Info, this, "DHT Lookup Failed (Inter-terminal)");
+				Logger.Log (LogLevel.Trace, this, "DHT Lookup Failed (Inter-terminal)");
 				return;
 			}
 
@@ -563,7 +563,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					list.Add (ep);
 			}
 			if (list.Count == 0) {
-				Logger.Log (LogLevel.Info, this, "DHT result data is too old (Inter-terminal)");
+				Logger.Log (LogLevel.Trace, this, "DHT result data is too old (Inter-terminal)");
 				return;
 			}
 			foreach (AnonymousEndPoint ep in list) {
@@ -644,7 +644,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 								_usedConnectionIDs.Remove ((ushort)(cinfo.ConnectionId >> 16));
 							cinfo.Close ();
 							_connectionMap.Remove (cinfo.ConnectionId);
-							Logger.Log (LogLevel.Info, this, "Timeout AC {0}", cinfo.ConnectionId);
+							Logger.Log (LogLevel.Trace, this, "Timeout AC {0}", cinfo.ConnectionId);
 						}
 					}
 				}
@@ -675,7 +675,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			if (!_active) return;
 			if (timeouts != null) {
-				Logger.Log (LogLevel.Info, this, "Timeout {0} Relay Nodes", timeouts.Count);
+				Logger.Log (LogLevel.Trace, this, "Timeout {0} Relay Nodes", timeouts.Count);
 				for (int i = 0; i < timeouts.Count; i ++) {
 					RouteInfo ri = timeouts[i].Value;
 					if (ri.StartPointInfo != null)
@@ -763,7 +763,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 						while (count-- > 0) {
 							NodeHandle[] relays = _router.KeyBasedRouter.RoutingAlgorithm.GetRandomNodes (_numOfRelays);
 							if (relays.Length < _numOfRelays) {
-								Logger.Log (LogLevel.Info, this, "Relay node selection failed");
+								Logger.Log (LogLevel.Trace, this, "Relay node selection failed");
 								return;
 							}
 
