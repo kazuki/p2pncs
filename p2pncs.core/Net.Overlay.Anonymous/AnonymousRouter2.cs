@@ -657,6 +657,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			if (!_active) return;
 			List<KeyValuePair<AnonymousEndPoint, RouteInfo>> timeouts = null;
 			List<StartPointInfo> aliveCheckList = null;
+			List<TerminalPointInfo> dhtPutList = null;
 			using (IDisposable cookie = _routingMapLock.EnterUpgradeableReadLock ()) {
 				foreach (KeyValuePair<AnonymousEndPoint, RouteInfo> pair in _routingMap) {
 					if (pair.Value.IsExpiry ()) {
@@ -667,6 +668,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 						if (aliveCheckList == null)
 							aliveCheckList = new List<StartPointInfo> ();
 						aliveCheckList.Add (pair.Value.StartPointInfo);
+					} else if (pair.Value.TerminalPointInfo != null && pair.Value.TerminalPointInfo.NextPutTime <= DateTime.Now) {
+						if (dhtPutList == null)
+							dhtPutList = new List<TerminalPointInfo> ();
+						dhtPutList.Add (pair.Value.TerminalPointInfo);
 					}
 				}
 				if (timeouts != null && timeouts.Count > 0) {
@@ -689,6 +694,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 			if (aliveCheckList != null) {
 				for (int i = 0; i < aliveCheckList.Count; i ++)
 					aliveCheckList[i].SendMessage (_kbr.MessagingSocket, Ping.Instance);
+			}
+			if (dhtPutList != null) {
+				for (int i = 0; i < dhtPutList.Count; i ++)
+					dhtPutList[i].PutToDHT ();
 			}
 
 			if (!_active) return;
