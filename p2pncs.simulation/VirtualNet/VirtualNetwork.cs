@@ -46,9 +46,8 @@ namespace p2pncs.Simulation.VirtualNet
 		long _packets = 0, _noDestPackets = 0;
 		long _totalTraffic = 0;
 
-		int _minJitter = int.MaxValue, _maxJitter = int.MinValue, _jitterPackets = 0;
-		double _avgJitter = 0.0;
 		object _jitterLock = new object ();
+		StandardDeviation _jitterSD = new StandardDeviation (false);
 
 		ILatency _latency;
 		IPacketLossRate _packetLossrate;
@@ -132,10 +131,7 @@ namespace p2pncs.Simulation.VirtualNet
 
 					int jitter = (int)((DateTime.Now.Subtract (dgram.StartDateTime) - dgram.ExpectedDelay).TotalMilliseconds);
 					lock (_jitterLock) {
-						_minJitter = Math.Min (_minJitter, jitter);
-						_maxJitter = Math.Max (_maxJitter, jitter);
-						_avgJitter = ((_avgJitter * _jitterPackets) + jitter) / (_jitterPackets + 1);
-						_jitterPackets ++;
+						_jitterSD.AddSample (jitter);
 						Interlocked.Increment (ref _packets);
 					}
 
@@ -211,16 +207,14 @@ namespace p2pncs.Simulation.VirtualNet
 			get { return Interlocked.Read (ref _totalTraffic); }
 		}
 
-		public void GetAndResetJitterHistory (out int min, out double avg, out int max)
+		public void GetAndResetJitterHistory (out int min, out double avg, out double sd, out int max)
 		{
 			lock (_jitterLock) {
-				min = _minJitter;
-				avg = _avgJitter;
-				max = _maxJitter;
-				_minJitter = int.MaxValue;
-				_maxJitter = int.MinValue;
-				_avgJitter = 0;
-				_jitterPackets = 0;
+				min = (int)_jitterSD.Minimum;
+				avg = _jitterSD.Average;
+				max = (int)_jitterSD.Maximum;
+				sd = _jitterSD.ComputeStandardDeviation ();
+				_jitterSD.Clear ();
 			}
 		}
 

@@ -36,6 +36,7 @@ namespace p2pncs.Evaluation
 			NumberOfNodes = 1000;
 			ChurnInterval = 500;
 			UseNewKeyBasedRouter = true;
+			NewKBRStrictMode = true;
 			UseNewAnonymousRouter = true;
 			BypassMessagingSerializer = true;
 			EvalutionType = EvaluationTypes.AnonymousRouter;

@@ -33,6 +33,7 @@ namespace p2pncs.Evaluation
 				return;
 			}
 
+			p2pncs.Simulation.OSTimerPrecision.SetCurrentThreadToHighPrecision ();
 			Console.WriteLine ("p2pncs Evalution Program");
 			options.WriteOptions (Console.Out, "  ");
 

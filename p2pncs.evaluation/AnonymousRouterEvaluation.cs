@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net;
 using System.Threading;
 using openCrypto.EllipticCurve;
@@ -24,6 +25,7 @@ using p2pncs.Net;
 using p2pncs.Net.Overlay;
 using p2pncs.Net.Overlay.Anonymous;
 using p2pncs.Security.Cryptography;
+using p2pncs.Simulation;
 using p2pncs.Simulation.VirtualNet;
 using p2pncs.Threading;
 
@@ -144,6 +146,7 @@ namespace p2pncs.Evaluation
 						Thread.Sleep (10);
 					}
 
+					StandardDeviation rtt_sd = new StandardDeviation (false);
 					try {
 						Logger.Log (LogLevel.Debug, this, "Test #{0}", i + 1);
 						sock1.Socket = nodes[0].AnonymousRouter.EndEstablishRoute (nodes[0].AnonymousRouter.BeginEstablishRoute (recipientKey1, recipientKey2, sock1.ReceivedHandler, null, null));
@@ -160,25 +163,34 @@ namespace p2pncs.Evaluation
 						};
 
 						DateTime dt = DateTime.Now;
+						Stopwatch sw = new Stopwatch ();
 						while (true) {
 							IAsyncResult ar; object ret;
+
+							sw.Reset (); sw.Start ();
 							ar = msock1.BeginInquire ("Hello", DatagramEventSocketWrapper.DummyEP, null, null);
 							ret = msock1.EndInquire (ar);
 							if (ret == null) break;
+							sw.Stop ();
+							rtt_sd.AddSample ((float)sw.Elapsed.TotalMilliseconds);
 							Console.Write ("*");
 
+							sw.Reset (); sw.Start ();
 							ar = msock2.BeginInquire ("Hello", DatagramEventSocketWrapper.DummyEP, null, null);
 							ret = msock2.EndInquire (ar);
 							if (ret == null) break;
+							sw.Stop ();
+							rtt_sd.AddSample ((float)sw.Elapsed.TotalMilliseconds);
 							Console.Write ("=");
 						}
 
 						int minJitter, maxJitter;
-						double avgJitter;
-						network.GetAndResetJitterHistory (out minJitter, out avgJitter, out maxJitter);
-						Logger.Log (LogLevel.Info, this, "Time: {0:f2}sec, Jitter: {1}/{1:f1}/{3}, EstablishSuccessRate={4:p}", DateTime.Now.Subtract (dt).TotalSeconds, minJitter, avgJitter, maxJitter, (double)established / (double)(i + 1.0));
-					} catch {
-						Logger.Log (LogLevel.Info, this, "EstablishSuccessRate={0:p}", (double)established / (double)(i + 1.0));
+						double avgJitter, sdJitter;
+						network.GetAndResetJitterHistory (out minJitter, out avgJitter, out sdJitter, out maxJitter);
+						Logger.Log (LogLevel.Info, this, "Time: {0:f2}sec, Jitter: {1}/{2:f1}({3:f1})/{4}, EstablishSuccessRate={5:p}, RTT: Avg={6:f1}({7:f1})",
+							DateTime.Now.Subtract (dt).TotalSeconds, minJitter, avgJitter, sdJitter, maxJitter, (double)established / (double)(i + 1.0), rtt_sd.Average, rtt_sd.ComputeStandardDeviation ());
+					} catch (Exception exception) {
+						Logger.Log (LogLevel.Info, this, "EstablishSuccessRate={0:p} ({1}:{2})", (double)established / (double)(i + 1.0), exception.GetType (), exception.Message);
 					} finally {
 						if (msock1 != null) msock1.Dispose ();
 						if (msock2 != null) msock2.Dispose ();

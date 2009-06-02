@@ -38,7 +38,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="OSTimerPrecision.cs" />
     <Compile Include="RandomIPAddressGenerator.cs" />
+    <Compile Include="StandardDeviation.cs" />
     <Compile Include="VirtualNet\LatencyTypes.cs" />
     <Compile Include="VirtualNet\ILatency.cs" />
     <Compile Include="VirtualNet\IPacketLossRate.cs" />
