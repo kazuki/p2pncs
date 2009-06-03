@@ -53,8 +53,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 		/// <summary>多重暗号化されたメッセージのメッセージ長 (常にここで指定したサイズになる)</summary>
 		const int PayloadFixedSize = 896;
 
-		const int DefaultRelayNodes = 3;
-		const int DefaultSubscribeRoutes = 2;
+		public static int DefaultRelayNodes = 3;
+		public static int DefaultSubscribeRoutes = 2;
 		const float DefaultSubscribeRouteFactor = 1.0F;
 
 		static TimeSpan Messaging_Timeout = TimeSpan.FromMilliseconds (200);
@@ -74,6 +74,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 		static TimeSpan MCR_MaxMessageIntervalWithMargin = MCR_MaxMessageInterval + new TimeSpan (Messaging_Timeout.Ticks * Messaging_MaxRetry);
 
 		// Static parameters for Anonymous Connection (AC)
+		public static int AC_DefaultUseSubscribeRoutes = DefaultSubscribeRoutes;
 		static TimeSpan AC_EstablishTimeout = new TimeSpan (MCR_EstablishingTimeout.Ticks * 2) + DHT_GetTimeout;
 		static TimeSpan AC_MaxMessageInterval = MCR_MaxMessageInterval;
 		static TimeSpan AC_AliveCheckScheduleInterval = MCR_AliveCheckScheduleInterval;

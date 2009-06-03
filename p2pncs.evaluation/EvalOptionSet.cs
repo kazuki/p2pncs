@@ -35,6 +35,10 @@ namespace p2pncs.Evaluation
 			Latency = 40;
 			NumberOfNodes = 1000;
 			ChurnInterval = 500;
+			AnonymousRouteRelays = 3;
+			AnonymousRouteRoutes = 2;
+			AnonymousRouteBackupRoutes = 1;
+			Tests = 100;
 			UseNewKeyBasedRouter = true;
 			NewKBRStrictMode = true;
 			UseNewAnonymousRouter = true;
@@ -50,9 +54,13 @@ namespace p2pncs.Evaluation
 					{"new-kbr", "新しいKeyBasedRouter実装を利用する", v => UseNewKeyBasedRouter = v != null},
 					{"strict", "新しいKeyBasedRouter実装においてStrictモードを利用する", v => NewKBRStrictMode = v != null},
 					{"new-ar", "新しいAnonymousRouter実装を利用する", v => UseNewAnonymousRouter = v != null},
+					{"ar_relays=", "匿名多重暗号経路の中継ノード数", (int v) => AnonymousRouteRelays = v},
+					{"ar_routes=", "匿名多重暗号経路の同時送信経路数", (int v) => AnonymousRouteRoutes = v},
+					{"ar_backups=", "匿名多重暗号経路のバックアップ経路数", (int v) => AnonymousRouteBackupRoutes = v},
 					{"bypass-serializer", "メッセージングソケットにおいてシリアライザをバイパスする", v => BypassMessagingSerializer = v != null},
 					{"eval=", "実行する評価プログラム", (EvaluationTypes v) => EvalutionType = v},
 					{"eval-list", "利用可能な評価プログラムの一覧を表示する", v => ShowEvalutionTypes = v != null},
+					{"tests=", "選択した評価プログラム内で実行するテスト数", (int v) => Tests = v},
 					{"h|help|?", "ヘルプを表示する", v => ShowHelp = v != null},
 				};
 		}
@@ -99,6 +107,10 @@ namespace p2pncs.Evaluation
 		public bool UseNewAnonymousRouter { get; set; }
 		public bool BypassMessagingSerializer { get; set; }
 		public EvaluationTypes EvalutionType { get; set; }
+		public int AnonymousRouteRelays { get; set; }
+		public int AnonymousRouteRoutes { get; set; }
+		public int AnonymousRouteBackupRoutes { get; set; }
+		public int Tests { get; set; }
 
 		internal bool ShowEvalutionTypes { get; set; }
 		private bool ShowHelp { get; set; }

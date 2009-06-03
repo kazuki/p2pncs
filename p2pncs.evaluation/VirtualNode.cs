@@ -68,6 +68,9 @@ namespace p2pncs.Evaluation
 				? (IKeyBasedRouter)new SimpleIterativeRouter2 (_nodeId, _msock, new SimpleRoutingAlgorithm (), Serializer.Instance, opt.NewKBRStrictMode)
 				: (IKeyBasedRouter)new SimpleIterativeRouter (_nodeId, _msock, new SimpleRoutingAlgorithm (), Serializer.Instance);
 			_dht = new SimpleDHT (_kbr, _msock, new OnMemoryLocalHashTable (dhtInt));
+			AnonymousRouter2.DefaultRelayNodes = opt.AnonymousRouteRelays;
+			AnonymousRouter2.DefaultSubscribeRoutes = opt.AnonymousRouteRoutes + opt.AnonymousRouteBackupRoutes;
+			AnonymousRouter2.AC_DefaultUseSubscribeRoutes = opt.AnonymousRouteRoutes;
 			_anonRouter = opt.UseNewAnonymousRouter
 				? (IAnonymousRouter)new AnonymousRouter2 (_dht, _nodePrivateKey, anonInt)
 				: (IAnonymousRouter)new AnonymousRouter (_dht, _nodePrivateKey, anonInt);

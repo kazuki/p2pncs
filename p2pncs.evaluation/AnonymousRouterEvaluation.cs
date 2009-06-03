@@ -135,23 +135,20 @@ namespace p2pncs.Evaluation
 				TimeSpan timeout = TimeSpan.FromSeconds (2);
 				int retries = 3, retryBufferSize = 8192, dupCheckSize = 8192;
 
-				for (int i = 0, established = 0; ; i++) {
-					DatagramEventSocketWrapper sock1 = new DatagramEventSocketWrapper ();
-					IMessagingSocket msock1 = null, msock2 = null;
-					sock2 = null;
+				DatagramEventSocketWrapper sock1 = new DatagramEventSocketWrapper ();
+				IMessagingSocket msock1 = null, msock2 = null;
+				sock2 = null;
 
-					while (true) {
-						if (subscribeInfo1.Status == SubscribeRouteStatus.Stable && subscribeInfo2.Status == SubscribeRouteStatus.Stable)
-							break;
-						Thread.Sleep (10);
-					}
+				while (true) {
+					if (subscribeInfo1.Status == SubscribeRouteStatus.Stable && subscribeInfo2.Status == SubscribeRouteStatus.Stable)
+						break;
+					Thread.Sleep (10);
+				}
 
-					StandardDeviation rtt_sd = new StandardDeviation (false);
+				do {
 					try {
-						Logger.Log (LogLevel.Debug, this, "Test #{0}", i + 1);
 						sock1.Socket = nodes[0].AnonymousRouter.EndEstablishRoute (nodes[0].AnonymousRouter.BeginEstablishRoute (recipientKey1, recipientKey2, sock1.ReceivedHandler, null, null));
 						acceptedDone.WaitOne ();
-						established++;
 
 						msock1 = new MessagingSocket (sock1, true, SymmetricKey.NoneKey, Serializer.Instance, null, messagingInt2, timeout, retries, retryBufferSize, dupCheckSize);
 						msock2 = new MessagingSocket (sock2, true, SymmetricKey.NoneKey, Serializer.Instance, null, messagingInt2, timeout, retries, retryBufferSize, dupCheckSize);
@@ -164,40 +161,51 @@ namespace p2pncs.Evaluation
 
 						DateTime dt = DateTime.Now;
 						Stopwatch sw = new Stopwatch ();
-						while (true) {
+						StandardDeviation rtt_sd = new StandardDeviation (false);
+						int tests = 0, success = 0;
+						for (int i = 0; i < opt.Tests; i ++) {
 							IAsyncResult ar; object ret;
 
+							tests ++;
 							sw.Reset (); sw.Start ();
 							ar = msock1.BeginInquire ("Hello", DatagramEventSocketWrapper.DummyEP, null, null);
 							ret = msock1.EndInquire (ar);
-							if (ret == null) break;
 							sw.Stop ();
-							rtt_sd.AddSample ((float)sw.Elapsed.TotalMilliseconds);
-							Console.Write ("*");
+							if (ret == null) {
+								Console.Write ("?");
+							} else {
+								rtt_sd.AddSample ((float)sw.Elapsed.TotalMilliseconds);
+								Console.Write ("*");
+								success ++;
+							}
 
+							tests++;
 							sw.Reset (); sw.Start ();
 							ar = msock2.BeginInquire ("Hello", DatagramEventSocketWrapper.DummyEP, null, null);
 							ret = msock2.EndInquire (ar);
-							if (ret == null) break;
 							sw.Stop ();
-							rtt_sd.AddSample ((float)sw.Elapsed.TotalMilliseconds);
-							Console.Write ("=");
+							if (ret == null) {
+								Console.Write ("?");
+							} else {
+								rtt_sd.AddSample ((float)sw.Elapsed.TotalMilliseconds);
+								Console.Write ("=");
+								success++;
+							}
 						}
-
+						Console.WriteLine ();
 						int minJitter, maxJitter;
 						double avgJitter, sdJitter;
 						network.GetAndResetJitterHistory (out minJitter, out avgJitter, out sdJitter, out maxJitter);
-						Logger.Log (LogLevel.Info, this, "Time: {0:f2}sec, Jitter: {1}/{2:f1}({3:f1})/{4}, EstablishSuccessRate={5:p}, RTT: Avg={6:f1}({7:f1})",
-							DateTime.Now.Subtract (dt).TotalSeconds, minJitter, avgJitter, sdJitter, maxJitter, (double)established / (double)(i + 1.0), rtt_sd.Average, rtt_sd.ComputeStandardDeviation ());
-					} catch (Exception exception) {
-						Logger.Log (LogLevel.Info, this, "EstablishSuccessRate={0:p} ({1}:{2})", (double)established / (double)(i + 1.0), exception.GetType (), exception.Message);
+						Logger.Log (LogLevel.Info, this, "Time: {0:f2}sec, Jitter: {1}/{2:f1}({3:f1})/{4}, DeliverSuccess={5:p}, RTT: Avg={6:f1}({7:f1})",
+							DateTime.Now.Subtract (dt).TotalSeconds, minJitter, avgJitter, sdJitter, maxJitter, (double)success / (double)tests, rtt_sd.Average, rtt_sd.ComputeStandardDeviation ());
+					} catch {
 					} finally {
 						if (msock1 != null) msock1.Dispose ();
 						if (msock2 != null) msock2.Dispose ();
 						if (sock1 != null) sock1.Dispose ();
 						if (sock2 != null) sock2.Dispose ();
 					}
-				}
+				} while (sock1.Socket == null);
 			} catch {
 			} finally {
 				messagingInt.Dispose ();
