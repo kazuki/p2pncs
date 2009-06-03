@@ -145,6 +145,7 @@ namespace p2pncs.Evaluation
 					Thread.Sleep (10);
 				}
 
+				bool routeEstablished = false;
 				do {
 					try {
 						sock1.Socket = nodes[0].AnonymousRouter.EndEstablishRoute (nodes[0].AnonymousRouter.BeginEstablishRoute (recipientKey1, recipientKey2, sock1.ReceivedHandler, null, null));
@@ -153,26 +154,30 @@ namespace p2pncs.Evaluation
 						msock1 = new MessagingSocket (sock1, true, SymmetricKey.NoneKey, Serializer.Instance, null, messagingInt2, timeout, retries, retryBufferSize, dupCheckSize);
 						msock2 = new MessagingSocket (sock2, true, SymmetricKey.NoneKey, Serializer.Instance, null, messagingInt2, timeout, retries, retryBufferSize, dupCheckSize);
 						msock1.InquiredUnknownMessage += delegate (object sender, InquiredEventArgs e) {
-							msock1.StartResponse (e, "OK");
+							msock1.StartResponse (e, ((string)e.InquireMessage) + "-ok-1");
 						};
 						msock2.InquiredUnknownMessage += delegate (object sender, InquiredEventArgs e) {
-							msock2.StartResponse (e, "OK");
+							msock2.StartResponse (e, ((string)e.InquireMessage) + "-ok-2");
 						};
+						routeEstablished = true;
 
 						DateTime dt = DateTime.Now;
 						Stopwatch sw = new Stopwatch ();
 						StandardDeviation rtt_sd = new StandardDeviation (false);
 						int tests = 0, success = 0;
 						for (int i = 0; i < opt.Tests; i ++) {
-							IAsyncResult ar; object ret;
+							IAsyncResult ar; string ret;
 
 							tests ++;
+							string msg = "Hello-1-" + i.ToString ();
 							sw.Reset (); sw.Start ();
-							ar = msock1.BeginInquire ("Hello", DatagramEventSocketWrapper.DummyEP, null, null);
-							ret = msock1.EndInquire (ar);
+							ar = msock1.BeginInquire (msg, DatagramEventSocketWrapper.DummyEP, null, null);
+							ret = msock1.EndInquire (ar) as string;
 							sw.Stop ();
 							if (ret == null) {
 								Console.Write ("?");
+							} else if (ret != msg + "-ok-2") {
+								Console.Write ("@");
 							} else {
 								rtt_sd.AddSample ((float)sw.Elapsed.TotalMilliseconds);
 								Console.Write ("*");
@@ -180,12 +185,15 @@ namespace p2pncs.Evaluation
 							}
 
 							tests++;
+							msg = "Hello-2-" + i.ToString ();
 							sw.Reset (); sw.Start ();
-							ar = msock2.BeginInquire ("Hello", DatagramEventSocketWrapper.DummyEP, null, null);
-							ret = msock2.EndInquire (ar);
+							ar = msock2.BeginInquire (msg, DatagramEventSocketWrapper.DummyEP, null, null);
+							ret = msock2.EndInquire (ar) as string;
 							sw.Stop ();
 							if (ret == null) {
 								Console.Write ("?");
+							} else if (ret != msg + "-ok-1") {
+								Console.Write ("@");
 							} else {
 								rtt_sd.AddSample ((float)sw.Elapsed.TotalMilliseconds);
 								Console.Write ("=");
@@ -199,13 +207,14 @@ namespace p2pncs.Evaluation
 						Logger.Log (LogLevel.Info, this, "Time: {0:f2}sec, Jitter: {1}/{2:f1}({3:f1})/{4}, DeliverSuccess={5:p}, RTT: Avg={6:f1}({7:f1})",
 							DateTime.Now.Subtract (dt).TotalSeconds, minJitter, avgJitter, sdJitter, maxJitter, (double)success / (double)tests, rtt_sd.Average, rtt_sd.ComputeStandardDeviation ());
 					} catch {
+						Console.WriteLine ("Establish Failed. Retry...");
 					} finally {
 						if (msock1 != null) msock1.Dispose ();
 						if (msock2 != null) msock2.Dispose ();
 						if (sock1 != null) sock1.Dispose ();
 						if (sock2 != null) sock2.Dispose ();
 					}
-				} while (sock1.Socket == null);
+				} while (!routeEstablished);
 			} catch {
 			} finally {
 				messagingInt.Dispose ();
