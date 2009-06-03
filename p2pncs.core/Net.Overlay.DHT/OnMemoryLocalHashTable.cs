@@ -109,7 +109,7 @@ namespace p2pncs.Net.Overlay.DHT
 					return null;
 			}
 
-			List<object> temp = new List<object> (list.Count);
+			List<Entry> temp = new List<Entry> (list.Count);
 			lock (list) {
 				for (int i = 0; i < list.Count; i ++) {
 					if (list[i].Expiry < DateTime.Now) {
@@ -117,10 +117,24 @@ namespace p2pncs.Net.Overlay.DHT
 						i --;
 						continue;
 					}
-					temp.Add (list[i].Value);
+					temp.Add (list[i]);
 				}
 			}
-			return temp.ToArray ();
+
+			if (temp.Count == 0)
+				return new object[0];
+
+			if (temp.Count == 1)
+				return new object[] {temp[0].Value};
+
+			temp.Sort (delegate (Entry x, Entry y) {
+				return x.Expiry.CompareTo (y.Expiry);
+			});
+
+			object[] objects = new object[temp.Count];
+			for (int i = 0; i < temp.Count; i ++)
+				objects[i] = temp[i].Value;
+			return objects;
 		}
 
 		public void Remove (Key key, int typeId, object value)
