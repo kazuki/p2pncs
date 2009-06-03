@@ -77,7 +77,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 		static TimeSpan AC_EstablishTimeout = new TimeSpan (MCR_EstablishingTimeout.Ticks * 2) + DHT_GetTimeout;
 		static TimeSpan AC_MaxMessageInterval = MCR_MaxMessageInterval;
 		static TimeSpan AC_AliveCheckScheduleInterval = MCR_AliveCheckScheduleInterval;
-		static TimeSpan AC_MaxMessageIntervalWithMargin = new TimeSpan (AC_MaxMessageInterval.Ticks * 3);
+		static TimeSpan AC_MaxMessageIntervalWithMargin = TimeSpan.FromDays (1); //new TimeSpan (AC_MaxMessageInterval.Ticks * 3);
 
 		static object AckMessage = "ACK";
 
@@ -362,19 +362,20 @@ namespace p2pncs.Net.Overlay.Anonymous
 				Logger.Log (LogLevel.Fatal, this, "BUG #1");
 				return;
 			}
-			_sock.StartResponse (e, AckMessage);
-			if (!_duplicationChecker.Check (msg2.DuplicationCheckValue))
-				return;
 
 			using (IDisposable cookie = _routingMapLock.EnterReadLock ()) {
 				if (!_routingMap.TryGetValue (new AnonymousEndPoint (DummyEndPoint, msg.Label), out routeInfo))
 					routeInfo = null;
 			}
 			if (routeInfo == null || routeInfo.TerminalPointInfo == null) {
+				_sock.StartResponse (e, null);
 				Logger.Log (LogLevel.Trace, this, "No Interterminal Route");
 				return;
 			}
 
+			_sock.StartResponse (e, AckMessage);
+			if (!_duplicationChecker.Check (msg2.DuplicationCheckValue))
+				return;
 			routeInfo.TerminalPointInfo.SendMessage (_sock, msg.Message);
 		}
 
@@ -699,13 +700,6 @@ namespace p2pncs.Net.Overlay.Anonymous
 				for (int i = 0; i < dhtPutList.Count; i ++)
 					dhtPutList[i].PutToDHT ();
 			}
-
-			if (!_active) return;
-			using (IDisposable cookie = _subscribeMapLock.EnterReadLock ()) {
-				foreach (SubscribeInfo info in _subscribeMap.Values) {
-					info.CheckEstablishingTimeout ();
-				}
-			}
 		}
 		#endregion
 
@@ -750,20 +744,6 @@ namespace p2pncs.Net.Overlay.Anonymous
 			public void Start ()
 			{
 				CheckNumberOfEstablishedRoutes ();
-			}
-
-			static int _counter = 0;
-			public void CheckEstablishingTimeout ()
-			{
-				int counter = Interlocked.Increment (ref _counter);
-				int hoge1, hoge2;
-				lock (_listLock) {
-					hoge1 = _establishedList.Count;
-					hoge2 = _establishingList.Count;
-				}
-				System.Diagnostics.Debug.Write (hoge1.ToString() + "/" + hoge2.ToString() + ", ");
-				if (counter % 20 == 0)
-					System.Diagnostics.Debug.WriteLine ("");
 			}
 
 			void CheckNumberOfEstablishedRoutes ()
