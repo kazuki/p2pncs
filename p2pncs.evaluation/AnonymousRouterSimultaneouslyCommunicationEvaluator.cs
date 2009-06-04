@@ -35,6 +35,8 @@ namespace p2pncs.Evaluation
 	{
 		int _tests = 0;
 		int _success_count = 0;
+		int _connecting = 0;
+		AutoResetEvent _connectingDone = new AutoResetEvent (true);
 		StandardDeviation _rtt_sd = new StandardDeviation (false);
 
 		public void Evaluate (EvalOptionSet opt)
@@ -46,67 +48,80 @@ namespace p2pncs.Evaluation
 			Random rnd = new Random ();
 			using (EvalEnvironment env = new EvalEnvironment (opt)) {
 				env.AddNodes (opt, opt.NumberOfNodes, true);
-				List<Info> keys = new List<Info> ();
 				List<Info> subscribedList = new List<Info> ();
-				List<Info> waitingList = new List<Info> ();
 				HashSet<Key> aliveRecipients = new HashSet<Key> ();
 				Dictionary<VirtualNode, Info> mapping = new Dictionary<VirtualNode,Info> ();
+				int simultaneouslyProcess = 32;
+				int px, py;
 
 				Console.Write ("Subscribe ALL Nodes...");
+				px = Console.CursorLeft;
+				py = Console.CursorTop;
 				for (int i = 0; i < opt.NumberOfNodes; i++) {
+					_connectingDone.WaitOne ();
+					if (Interlocked.Increment (ref _connecting) < simultaneouslyProcess)
+						_connectingDone.Set ();
+
 					Info info = new Info (env.Nodes[i]);
-					keys.Add (info);
 					aliveRecipients.Add (info.PublicKey);
 					env.Nodes[i].AnonymousRouter.SubscribeRecipient (info.PublicKey, info.PrivateKey);
 					env.Nodes[i].SubscribeKey = info.PublicKey.ToString ();
 					info.SubscribeInfo = env.Nodes[i].AnonymousRouter.GetSubscribeInfo (info.PublicKey);
 					mapping.Add (env.Nodes[i], info);
-					waitingList.Add (info);
+					subscribedList.Add (info);
+					ThreadPool.QueueUserWorkItem (SubscribeWait_Thread, info);
+					Console.CursorLeft = px;
+					Console.CursorTop = py;
+					Console.Write ("{0}/{1}", i, opt.NumberOfNodes);
 				}
 
-				Console.Write ("waiting...");
-				while (waitingList.Count > 0) {
-					for (int i = 0; i < waitingList.Count; i ++) {
-						Info info = waitingList[i];
-						if (info.SubscribeInfo.Status != SubscribeRouteStatus.Stable)
-							continue;
-						waitingList.RemoveAt (i --);
-						subscribedList.Add (info);
-						if (subscribedList.Count == 1)
-							continue;
-					}
-					Thread.Sleep (0);
+				Console.CursorLeft = px;
+				Console.CursorTop = py;
+				Console.Write ("waiting...{0}", new string (' ', Console.WindowWidth - px - 11));
+				while (true) {
+					_connectingDone.WaitOne ();
+					if (Interlocked.Add (ref _connecting, 0) == 0)
+						break;
 				}
-				Console.WriteLine ("ok");
+				Console.CursorLeft = px;
+				Console.CursorTop = py;
+				Console.WriteLine ("ok{0}", new string (' ', Console.WindowWidth - px - 3));
 
 				Console.Write ("Establishing ALL Connection...");
+				_connectingDone.Set ();
+				px = Console.CursorLeft;
+				py = Console.CursorTop;
 				for (int i = 0; i < subscribedList.Count; i ++) {
+					_connectingDone.WaitOne ();
+					if (Interlocked.Increment (ref _connecting) < simultaneouslyProcess)
+						_connectingDone.Set ();
+
 					Info info = subscribedList[i];
+					Info destInfo;
 					info.TempSocket = new DatagramEventSocketWrapper ();
 					while (true) {
 						int idx = rnd.Next (subscribedList.Count);
-						info.TempDest = subscribedList[idx].PublicKey;
-						if (subscribedList[idx] != info)
+						destInfo = subscribedList[idx];
+						info.TempDest = destInfo.PublicKey;
+						if (destInfo != info)
 							break;
 					}
-					info.Node.AnonymousRouter.BeginEstablishRoute (info.PublicKey, info.TempDest,
-						info.TempSocket.ReceivedHandler, EstablishRoute_Callback, info);
-					Thread.Sleep (5);
+					ThreadPool.QueueUserWorkItem (EstablishConnect_Thread, new object[] {info, destInfo});
+					Console.CursorLeft = px;
+					Console.CursorTop = py;
+					Console.Write ("{0}/{1}", i, subscribedList.Count);
 				}
-				Console.Write ("waiting...");
+				Console.CursorLeft = px;
+				Console.CursorTop = py;
+				Console.Write ("waiting...{0}", new string (' ', Console.WindowWidth - px - 11));
 				while (true) {
-					bool hasIncompleted = false;
-					for (int i = 0; i < subscribedList.Count; i ++) {
-						Info info = subscribedList[i];
-						if (info.TempSocket.Socket == null) {
-							hasIncompleted = true;
-							break;
-						}
-					}
-					if (!hasIncompleted)
+					_connectingDone.WaitOne ();
+					if (Interlocked.Add (ref _connecting, 0) == 0)
 						break;
 				}
-				Console.WriteLine ("ok");
+				Console.CursorLeft = px;
+				Console.CursorTop = py;
+				Console.WriteLine ("ok{0}", new string (' ', Console.WindowWidth - px - 3));
 
 				Console.WriteLine ("Start");
 				long lastPackets = env.Network.Packets;
@@ -122,6 +137,7 @@ namespace p2pncs.Evaluation
 							list[k].MessagingSocket.BeginInquire (msg, DatagramEventSocketWrapper.DummyEP, Messaging_Callback,
 								new object[] {subscribedList[i], list[k], msg, Stopwatch.StartNew ()});
 						}
+						Thread.Sleep (50);
 					}
 
 					Thread.Sleep (1000);
@@ -143,13 +159,44 @@ namespace p2pncs.Evaluation
 			}
 		}
 
-		static void EstablishRoute_Callback (IAsyncResult ar)
+		void SubscribeWait_Thread (object o)
 		{
-			Info info = (Info)ar.AsyncState;
-			try {
-				info.TempSocket.Socket = info.Node.AnonymousRouter.EndEstablishRoute (ar);
-				info.Node.CreateAnonymousSocket (info.TempDest, info.TempSocket);
-			} catch {}
+			Info info = (Info)o;
+			while (true) {
+				Thread.Sleep (1);
+				if (info.SubscribeInfo.Status == SubscribeRouteStatus.Stable)
+					break;
+			}
+			Interlocked.Decrement (ref _connecting);
+			_connectingDone.Set ();
+		}
+
+		void EstablishConnect_Thread (object o)
+		{
+			object[] objects = (object[])o;
+			Info info = (Info)objects[0];
+			Info destInfo = (Info)objects[1];
+			while (true) {
+				IAsyncResult ar = info.Node.AnonymousRouter.BeginEstablishRoute (info.PublicKey, info.TempDest,
+					info.TempSocket.ReceivedHandler, null, null);
+				try {
+					info.TempSocket.Socket = info.Node.AnonymousRouter.EndEstablishRoute (ar);
+					info.Node.CreateAnonymousSocket (info.TempDest, info.TempSocket);
+					break;
+				} catch {
+					lock (destInfo.Node.AnonymousSocketInfoList) {
+						for (int k = 0; k < destInfo.Node.AnonymousSocketInfoList.Count; k++) {
+							if (!info.PublicKey.Equals (destInfo.Node.AnonymousSocketInfoList[k].Destination)) continue;
+							destInfo.Node.AnonymousSocketInfoList[k].MessagingSocket.Close ();
+							destInfo.Node.AnonymousSocketInfoList.RemoveAt (k);
+							break;
+						}
+					}
+				}
+				Debug.WriteLine (string.Format ("Retry {0} to {1}", info.PublicKey, destInfo.PublicKey));
+			}
+			Interlocked.Decrement (ref _connecting);
+			_connectingDone.Set ();
 		}
 
 		void Messaging_Callback (IAsyncResult ar)
