@@ -83,12 +83,20 @@ namespace p2pncs.Evaluation
 			}
 			if (viewStatusToConsole) {
 				Console.CursorLeft = px; Console.CursorTop = py;
-				Console.Write ("[waiting]");
+				Console.Write ("[stabilizing]");
 			}
-			Thread.Sleep (500);
+			for (int i = 0; i < opt.NumberOfNodes; i++) {
+				_nodes[i].KeyBasedRouter.RoutingAlgorithm.Stabilize ();
+				Thread.Sleep (5);
+			}
 			if (viewStatusToConsole) {
 				Console.CursorLeft = px; Console.CursorTop = py;
-				Console.WriteLine ("[ok]     ");
+				Console.Write ("[waiting]    ");
+			}
+			Thread.Sleep (1000);
+			if (viewStatusToConsole) {
+				Console.CursorLeft = px; Console.CursorTop = py;
+				Console.WriteLine ("[ok]         ");
 			}
 		}
 

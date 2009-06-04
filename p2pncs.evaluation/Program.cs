@@ -38,7 +38,8 @@ namespace p2pncs.Evaluation
 			options.WriteOptions (Console.Out, "  ");
 
 			Dictionary<EvaluationTypes, IEvaluator> evalutions = new Dictionary<EvaluationTypes,IEvaluator> () {
-				{EvaluationTypes.AnonymousRouter, new AnonymousRouterEvaluation ()},
+				{EvaluationTypes.AR, new AnonymousRouterEvaluation ()},
+				{EvaluationTypes.AR_SimCom, new AnonymousRouterSimultaneouslyCommunicationEvaluator ()},
 			};
 			evalutions[options.EvalutionType].Evaluate (options);
 		}

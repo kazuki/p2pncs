@@ -32,9 +32,16 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
+    <Reference Include="System.Core">
+      <RequiredTargetFramework>3.5</RequiredTargetFramework>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AnonymousRouterEvaluation.cs" />
+    <Compile Include="AnonymousRouterSimultaneouslyCommunicationEvaluator.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="AnonymousSocketInfo.cs" />
     <Compile Include="EvalEnvironment.cs" />
     <Compile Include="EvalOptionSet.cs" />
     <Compile Include="EvaluationTypes.cs" />

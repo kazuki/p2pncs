@@ -15,11 +15,20 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+using p2pncs.Net;
+using p2pncs.Net.Overlay;
+
 namespace p2pncs.Evaluation
 {
-	enum EvaluationTypes
+	class AnonymousSocketInfo
 	{
-		AR,
-		AR_SimCom
+		public AnonymousSocketInfo (Key dest, IMessagingSocket msock)
+		{
+			Destination = dest;
+			MessagingSocket = msock;
+		}
+
+		public Key Destination { get; set; }
+		public IMessagingSocket MessagingSocket { get; set; }
 	}
 }

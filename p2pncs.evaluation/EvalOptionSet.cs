@@ -43,7 +43,7 @@ namespace p2pncs.Evaluation
 			NewKBRStrictMode = true;
 			UseNewAnonymousRouter = true;
 			BypassMessagingSerializer = true;
-			EvalutionType = EvaluationTypes.AnonymousRouter;
+			EvalutionType = EvaluationTypes.AR;
 			ShowEvalutionTypes = false;
 
 			_set = new OptionSet () {
