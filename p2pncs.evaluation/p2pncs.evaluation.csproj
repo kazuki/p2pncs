@@ -38,9 +38,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AnonymousRouterEvaluation.cs" />
-    <Compile Include="AnonymousRouterSimultaneouslyCommunicationEvaluator.cs">
-      <SubType>Code</SubType>
-    </Compile>
+    <Compile Include="AnonymousRouterSimultaneouslyCommunicationEvaluator.cs" />
     <Compile Include="AnonymousSocketInfo.cs" />
     <Compile Include="EvalEnvironment.cs" />
     <Compile Include="EvalOptionSet.cs" />
