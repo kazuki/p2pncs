@@ -817,6 +817,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					array = new StartPointInfo[_establishedList.Count];
 					_establishedList.CopyTo (array);
 				}
+				array = array.RandomSelection (AC_DefaultUseSubscribeRoutes);
 				for (int i = 0; i < array.Length; i ++)
 					array[i].SendMessage (_router.KeyBasedRouter.MessagingSocket, msg);
 			}
@@ -1257,8 +1258,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 					payload = data;
 					mac = null;
 				}
-				ConnectionSenderSideMessage msg = new ConnectionSenderSideMessage (_destKey, _subscribeInfo.GetRouteEndPoints (), _otherSideTermEPs,
-					_connectionId, GenerateDuplicationCheckValue (), payload, mac);
+				ConnectionSenderSideMessage msg = new ConnectionSenderSideMessage (_destKey,
+					_subscribeInfo.GetRouteEndPoints ().RandomSelection (AC_DefaultUseSubscribeRoutes),
+					_otherSideTermEPs, _connectionId, GenerateDuplicationCheckValue (), payload, mac);
 				_subscribeInfo.SendMessage (msg);
 			}
 

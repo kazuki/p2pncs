@@ -84,6 +84,7 @@
     <Compile Include="Threading\InterruptHandler.cs" />
     <Compile Include="Threading\IntervalInterrupter.cs" />
     <Compile Include="Threading\ReaderWriterLockWrapper.cs" />
+    <Compile Include="Utility\ArrayExtensions.cs" />
     <Compile Include="Utility\DuplicationChecker.cs" />
     <Compile Include="SerializableFieldIndexAttribute.cs" />
     <Compile Include="SerializableTypeIdAttribute.cs" />
