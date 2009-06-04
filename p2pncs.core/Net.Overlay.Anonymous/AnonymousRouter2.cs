@@ -106,7 +106,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 		HashSet<ushort> _usedConnectionIDs = new HashSet<ushort> ();
 		ReaderWriterLockWrapper _connectionMapLock = new ReaderWriterLockWrapper ();
 
-		DuplicationChecker<DupCheckLabel> _duplicationChecker = new DuplicationChecker<long> (1024);
+		const int DefaultDuplicationCheckerBufferSize = 1024;
+		DuplicationChecker<DupCheckLabel> _startPointDupChecker = new DuplicationChecker<long> (DefaultDuplicationCheckerBufferSize);
+		DuplicationChecker<DupCheckLabel> _terminalDupChecker = new DuplicationChecker<long> (DefaultDuplicationCheckerBufferSize);
+		DuplicationChecker<DupCheckLabel> _interterminalDupChecker = new DuplicationChecker<long> (DefaultDuplicationCheckerBufferSize);
 
 		public AnonymousRouter2 (IDistributedHashTable dht, ECKeyPair privateNodeKey, IntervalInterrupter interrupter)
 		{
@@ -312,7 +315,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				} else {
 					object payload = MultipleCipherHelper.DecryptRoutedPayloadAtTerminal (routeInfo.Key, msg.Payload);
 					ICheckDuplication dupCheckMsg = payload as ICheckDuplication;
-					if (dupCheckMsg != null && !_duplicationChecker.Check (dupCheckMsg.DuplicationCheckValue))
+					if (dupCheckMsg != null && !_terminalDupChecker.Check (dupCheckMsg.DuplicationCheckValue))
 						return;
 					ProcessMessage (payload, routeInfo.TerminalPointInfo);
 					Logger.Log (LogLevel.Trace, this, "TerminalPoint: Received {0}", payload);
@@ -328,7 +331,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				} else {
 					object payload = MultipleCipherHelper.DecryptRoutedPayload (routeInfo.StartPointInfo.RelayKeys, msg.Payload);
 					ICheckDuplication dupCheckMsg = payload as ICheckDuplication;
-					if (dupCheckMsg != null && !_duplicationChecker.Check (dupCheckMsg.DuplicationCheckValue))
+					if (dupCheckMsg != null && !_startPointDupChecker.Check (dupCheckMsg.DuplicationCheckValue))
 						return;
 					ProcessMessage (payload, routeInfo.StartPointInfo);
 					Logger.Log (LogLevel.Trace, this, "StartPoint: Received {0}", payload);
@@ -375,7 +378,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			}
 
 			_sock.StartResponse (e, AckMessage);
-			if (!_duplicationChecker.Check (msg2.DuplicationCheckValue))
+			if (!_interterminalDupChecker.Check (msg2.DuplicationCheckValue))
 				return;
 			routeInfo.TerminalPointInfo.SendMessage (_sock, msg.Message);
 		}
@@ -455,8 +458,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 					ConnectionInfo cinfo;
 					using (IDisposable cookie = _connectionMapLock.EnterReadLock ()) {
 						if (!_connectionMap.TryGetValue (msg.ConnectionId, out cinfo)) {
-							if (!_connectionMap.TryGetValue (msg.ConnectionId & 0xFFFF0000, out cinfo) && !cinfo.IsInitiator && !cinfo.IsConnected) {
-								Logger.Log (LogLevel.Trace, this, "Unknown Connection");
+							if (!_connectionMap.TryGetValue (msg.ConnectionId & 0xFFFF0000, out cinfo) || (!cinfo.IsInitiator && !cinfo.IsConnected)) {
+								Logger.Log (LogLevel.Warn, this, "Unknown Connection");
 								return;
 							}
 						}
@@ -523,8 +526,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 				Logger.Log (LogLevel.Trace, this, "DHT Lookup Failed. Key={0}", msg.DestinationId);
 				return;
 			}
-			for (int i = 0; i < result.Values.Length; i ++) {
-				DHTEntry entry = result.Values[i] as DHTEntry;
+			object[] results = result.Values.RandomSelection (AC_DefaultUseSubscribeRoutes);
+			for (int i = 0; i < results.Length; i++) {
+				DHTEntry entry = results[i] as DHTEntry;
 				if (entry == null) continue;
 				_sock.BeginInquire (new InterterminalMessage (entry.Label, msg), entry.EndPoint, null, null);
 			}
@@ -1119,6 +1123,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 		{
 			bool _initiator;
 			bool _connected = false;
+			ManualResetEvent _estalibhDone;
 			EstablishRouteAsyncResult _ar;
 			AnonymousRouter2 _router;
 			SubscribeInfo _subscribeInfo;
@@ -1140,6 +1145,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_subscribeInfo = subscribeInfo;
 				_destKey = destKey;
 				_connectionId = (uint)connectionId << 16;
+				_estalibhDone = new ManualResetEvent (false);
 				_ar = new EstablishRouteAsyncResult (this, callback, state);
 				_sharedInfo = RNG.GetRNGBytes (DefaultSharedInfoSize);
 				_sock = new ConnectionSocket (this, receivedHandler);
@@ -1271,6 +1277,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public void Received (ConnectionReciverSideMessage msg)
 			{
+				if (_estalibhDone != null) _estalibhDone.WaitOne ();
+
 				if (msg.Payload.Length > 0 && msg.PayloadMAC != null && !CheckMAC (_key, msg.Payload, msg.PayloadMAC)) {
 					Logger.Log (LogLevel.Error, this, "MAC Error");
 					return;
@@ -1336,13 +1344,14 @@ namespace p2pncs.Net.Overlay.Anonymous
 				object _state;
 				AsyncCallback _callback;
 				bool _completed = false;
-				ManualResetEvent _done = new ManualResetEvent (false);
+				ManualResetEvent _done;
 
 				public EstablishRouteAsyncResult (ConnectionInfo owner, AsyncCallback callback, object state)
 				{
 					_owner = owner;
 					_state = state;
 					_callback = callback;
+					_done = owner._estalibhDone;
 				}
 
 				public object AsyncState {
