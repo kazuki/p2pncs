@@ -162,13 +162,13 @@ namespace p2pncs.Evaluation
 			msg += "-" + ainfo.Destination.ToString () + "-ok";
 			string ret = ainfo.MessagingSocket.EndInquire (ar) as string;
 			sw.Stop ();
-			Interlocked.Increment (ref _tests);
 			lock (Console.Out) {
+				Interlocked.Increment (ref _tests);
 				if (ret == null) {
 					Console.Write ("?");
 				} else if (ret == msg) {
-					Console.Write ("*");
 					Interlocked.Increment (ref _success_count);
+					Console.Write ("*");
 					Debug.WriteLine (sw.Elapsed);
 					lock (_rtt_sd) {
 						_rtt_sd.AddSample ((float)sw.Elapsed.TotalMilliseconds);
