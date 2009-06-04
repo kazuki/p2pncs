@@ -61,11 +61,11 @@ namespace p2pncs.Evaluation
 				do {
 					try {
 						sock1.Socket = env.Nodes[0].AnonymousRouter.EndEstablishRoute (env.Nodes[0].AnonymousRouter.BeginEstablishRoute (recipientKey1, recipientKey2, sock1.ReceivedHandler, null, null));
-						if (sock1.Socket == null || env.Nodes[1].AnonymousSockets.Count == 0)
+						if (sock1.Socket == null || env.Nodes[1].AnonymousSocketInfoList.Count == 0)
 							throw new System.Net.Sockets.SocketException ();
 
-						msock1 = env.Nodes[0].CreateAnonymousSocket (sock1);
-						msock2 = env.Nodes[1].AnonymousSockets[0];
+						msock1 = env.Nodes[0].CreateAnonymousSocket (recipientKey2, sock1);
+						msock2 = env.Nodes[1].AnonymousSocketInfoList[0].MessagingSocket;
 						routeEstablished = true;
 
 						DateTime dt = DateTime.Now;
@@ -118,15 +118,6 @@ namespace p2pncs.Evaluation
 					} finally {
 						if (msock1 != null) msock1.Dispose ();
 						if (msock2 != null) msock2.Dispose ();
-						if (sock1 != null) sock1.Dispose ();
-						if (env.Nodes[1].AnonymousSockets.Count > 0) {
-							lock (env.Nodes[1].AnonymousSockets) {
-								while (env.Nodes[1].AnonymousSockets.Count > 0) {
-									env.Nodes[1].AnonymousSockets[0].Dispose ();
-									env.Nodes[1].AnonymousSockets.RemoveAt (0);
-								}
-							}
-						}
 					}
 				} while (!routeEstablished);
 			}

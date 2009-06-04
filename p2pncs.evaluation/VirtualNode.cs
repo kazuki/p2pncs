@@ -41,7 +41,7 @@ namespace p2pncs.Evaluation
 		IAnonymousRouter _anonRouter;
 		IntervalInterrupter _kbrStabilizeInt;
 		EvalEnvironment _env;
-		List<IMessagingSocket> _anonSockets = new List<IMessagingSocket> ();
+		List<AnonymousSocketInfo> _anonSockets = new List<AnonymousSocketInfo> ();
 
 		public static ECDomainNames DefaultECDomain = ECDomainNames.secp112r2;
 		static Random _rnd = new Random ();
@@ -87,14 +87,16 @@ namespace p2pncs.Evaluation
 		void AnonymousRouter_Accepting (object sender, AcceptingEventArgs args)
 		{
 			DatagramEventSocketWrapper sock = new DatagramEventSocketWrapper ();
-			args.Accept (sock.ReceivedHandler, sock);
+			args.Accept (sock.ReceivedHandler, new object[] {args.DestinationId, sock});
 		}
 
 		void AnonymousRouter_Accepted (object sender, AcceptedEventArgs args)
 		{
-			DatagramEventSocketWrapper sock = (DatagramEventSocketWrapper)args.State;
+			object[] states = (object[])args.State;
+			Key dest = (Key)states[0];
+			DatagramEventSocketWrapper sock = (DatagramEventSocketWrapper)states[1];
 			sock.Socket = args.Socket;
-			CreateAnonymousSocket (sock);
+			CreateAnonymousSocket (dest, sock);
 		}
 
 		void InquiredStringMessage (object sender, InquiredEventArgs e)
@@ -104,19 +106,20 @@ namespace p2pncs.Evaluation
 			msock.StartResponse (e, msg);
 		}
 
-		public IMessagingSocket CreateAnonymousSocket (DatagramEventSocketWrapper sock)
+		public IMessagingSocket CreateAnonymousSocket (Key dest, DatagramEventSocketWrapper sock)
 		{
 			IMessagingSocket msock = _env.CreateMessagingSocket (sock);
 			msock.AddInquiredHandler (typeof (string), InquiredStringMessage);
+			AnonymousSocketInfo info = new AnonymousSocketInfo (dest, msock);
 			lock (_anonSockets) {
-				_anonSockets.Add (msock);
+				_anonSockets.Add (info);
 			}
 			return msock;
 		}
 
 		public string SubscribeKey { get; set; }
 
-		public IList<IMessagingSocket> AnonymousSockets {
+		public IList<AnonymousSocketInfo> AnonymousSocketInfoList {
 			get { return _anonSockets; }
 		}
 
@@ -155,6 +158,13 @@ namespace p2pncs.Evaluation
 			_dht.Dispose ();
 			_kbr.Close ();
 			_msock.Dispose ();
+
+			lock (_anonSockets) {
+				for (int i = 0; i < _anonSockets.Count; i ++) {
+					_anonSockets[i].MessagingSocket.Dispose ();
+				}
+				_anonSockets.Clear ();
+			}
 		}
 	}
 }
