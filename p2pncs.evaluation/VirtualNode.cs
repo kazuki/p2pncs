@@ -16,6 +16,7 @@
  */
 
 using System;
+using System.Collections.Generic;
 using System.Net;
 using openCrypto.EllipticCurve;
 using p2pncs.Net;
@@ -39,6 +40,8 @@ namespace p2pncs.Evaluation
 		IDistributedHashTable _dht;
 		IAnonymousRouter _anonRouter;
 		IntervalInterrupter _kbrStabilizeInt;
+		EvalEnvironment _env;
+		List<IMessagingSocket> _anonSockets = new List<IMessagingSocket> ();
 
 		public static ECDomainNames DefaultECDomain = ECDomainNames.secp112r2;
 		static Random _rnd = new Random ();
@@ -48,7 +51,7 @@ namespace p2pncs.Evaluation
 		public static int DefaultMessagingDupCheckSize = 8192;
 		static RandomIPAddressGenerator _ipGenerator = new RandomIPAddressGenerator ();
 
-		public VirtualNode (VirtualNetwork network, EvalOptionSet opt,
+		public VirtualNode (EvalEnvironment env, VirtualNetwork network, EvalOptionSet opt,
 			IntervalInterrupter messagingInt, IntervalInterrupter kbrStabilizeInt, IntervalInterrupter anonInt, IntervalInterrupter dhtInt)
 		{
 			IPAddress pubAdrs = _ipGenerator.Next ();
@@ -76,6 +79,45 @@ namespace p2pncs.Evaluation
 				: (IAnonymousRouter)new AnonymousRouter (_dht, _nodePrivateKey, anonInt);
 			_kbrStabilizeInt = kbrStabilizeInt;
 			_kbrStabilizeInt.AddInterruption (_kbr.RoutingAlgorithm.Stabilize);
+			_env = env;
+			_anonRouter.Accepting += AnonymousRouter_Accepting;
+			_anonRouter.Accepted += AnonymousRouter_Accepted;
+		}
+
+		void AnonymousRouter_Accepting (object sender, AcceptingEventArgs args)
+		{
+			DatagramEventSocketWrapper sock = new DatagramEventSocketWrapper ();
+			args.Accept (sock.ReceivedHandler, sock);
+		}
+
+		void AnonymousRouter_Accepted (object sender, AcceptedEventArgs args)
+		{
+			DatagramEventSocketWrapper sock = (DatagramEventSocketWrapper)args.State;
+			sock.Socket = args.Socket;
+			CreateAnonymousSocket (sock);
+		}
+
+		void InquiredStringMessage (object sender, InquiredEventArgs e)
+		{
+			IMessagingSocket msock = sender as IMessagingSocket;
+			string msg = ((string)e.InquireMessage) + "-" + SubscribeKey + "-ok";
+			msock.StartResponse (e, msg);
+		}
+
+		public IMessagingSocket CreateAnonymousSocket (DatagramEventSocketWrapper sock)
+		{
+			IMessagingSocket msock = _env.CreateMessagingSocket (sock);
+			msock.AddInquiredHandler (typeof (string), InquiredStringMessage);
+			lock (_anonSockets) {
+				_anonSockets.Add (msock);
+			}
+			return msock;
+		}
+
+		public string SubscribeKey { get; set; }
+
+		public IList<IMessagingSocket> AnonymousSockets {
+			get { return _anonSockets; }
 		}
 
 		public IPEndPoint PublicEndPoint {

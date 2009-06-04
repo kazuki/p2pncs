@@ -69,7 +69,7 @@ namespace p2pncs.Evaluation
 					Console.CursorLeft = px; Console.CursorTop = py;
 					Console.Write ("[{0:p0}]", i / (double)count);
 				}
-				VirtualNode node = new VirtualNode (_network, opt, _msgInt1, _kbrInt, _anonInt, _dhtInt);
+				VirtualNode node = CreateNewVirtualNode (opt);
 				lock (_nodes) {
 					_nodes.Add (node);
 				}
@@ -116,7 +116,7 @@ namespace p2pncs.Evaluation
 
 		public VirtualNode CreateNewVirtualNode (EvalOptionSet opt)
 		{
-			return new VirtualNode (_network, opt, _msgInt1, _kbrInt, _anonInt, _dhtInt);
+			return new VirtualNode (this, _network, opt, _msgInt1, _kbrInt, _anonInt, _dhtInt);
 		}
 
 		public IMessagingSocket CreateMessagingSocket (DatagramEventSocketWrapper sock)

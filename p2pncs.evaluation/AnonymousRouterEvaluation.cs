@@ -35,33 +35,21 @@ namespace p2pncs.Evaluation
 				env.StartChurn (opt);
 				Logger.Log (LogLevel.Info, this, "Test ({0})", env.Nodes[0].AnonymousRouter is AnonymousRouter ? "AnonymousRouter" : "AnonymousRouter2");
 
-				ManualResetEvent acceptedDone = new ManualResetEvent (false);
-				AutoResetEvent receivedDone1 = new AutoResetEvent (false), receivedDone2 = new AutoResetEvent (false);
-				DatagramEventSocketWrapper sock2 = null;
 				ECKeyPair privateKey1 = ECKeyPair.Create (VirtualNode.DefaultECDomain);
 				Key recipientKey1 = Key.Create (privateKey1);
 				ECKeyPair privateKey2 = ECKeyPair.Create (VirtualNode.DefaultECDomain);
 				Key recipientKey2 = Key.Create (privateKey2);
+				string strKey1 = recipientKey1.ToString (), strKey2 = recipientKey2.ToString ();
 
 				env.Nodes[0].AnonymousRouter.SubscribeRecipient (recipientKey1, privateKey1);
+				env.Nodes[0].SubscribeKey = recipientKey1.ToString ();
 				ISubscribeInfo subscribeInfo1 = env.Nodes[0].AnonymousRouter.GetSubscribeInfo (recipientKey1);
-
 				env.Nodes[1].AnonymousRouter.SubscribeRecipient (recipientKey2, privateKey2);
-				env.Nodes[1].AnonymousRouter.Accepting += delegate (object sender, AcceptingEventArgs args) {
-					DatagramEventSocketWrapper sock = new DatagramEventSocketWrapper ();
-					args.Accept (sock.ReceivedHandler, sock);
-				};
-				env.Nodes[1].AnonymousRouter.Accepted += delegate (object sender, AcceptedEventArgs args) {
-					DatagramEventSocketWrapper sock = (DatagramEventSocketWrapper)args.State;
-					sock.Socket = args.Socket;
-					sock2 = sock;
-					acceptedDone.Set ();
-				};
+				env.Nodes[1].SubscribeKey = recipientKey2.ToString ();
 				ISubscribeInfo subscribeInfo2 = env.Nodes[1].AnonymousRouter.GetSubscribeInfo (recipientKey2);
 
 				DatagramEventSocketWrapper sock1 = new DatagramEventSocketWrapper ();
 				IMessagingSocket msock1 = null, msock2 = null;
-				sock2 = null;
 
 				while (true) {
 					if (subscribeInfo1.Status == SubscribeRouteStatus.Stable && subscribeInfo2.Status == SubscribeRouteStatus.Stable)
@@ -73,16 +61,11 @@ namespace p2pncs.Evaluation
 				do {
 					try {
 						sock1.Socket = env.Nodes[0].AnonymousRouter.EndEstablishRoute (env.Nodes[0].AnonymousRouter.BeginEstablishRoute (recipientKey1, recipientKey2, sock1.ReceivedHandler, null, null));
-						acceptedDone.WaitOne ();
+						if (sock1.Socket == null || env.Nodes[1].AnonymousSockets.Count == 0)
+							throw new System.Net.Sockets.SocketException ();
 
-						msock1 = env.CreateMessagingSocket (sock1);
-						msock2 = env.CreateMessagingSocket (sock2);
-						msock1.InquiredUnknownMessage += delegate (object sender, InquiredEventArgs e) {
-							msock1.StartResponse (e, ((string)e.InquireMessage) + "-ok-1");
-						};
-						msock2.InquiredUnknownMessage += delegate (object sender, InquiredEventArgs e) {
-							msock2.StartResponse (e, ((string)e.InquireMessage) + "-ok-2");
-						};
+						msock1 = env.Nodes[0].CreateAnonymousSocket (sock1);
+						msock2 = env.Nodes[1].AnonymousSockets[0];
 						routeEstablished = true;
 
 						DateTime dt = DateTime.Now;
@@ -93,14 +76,14 @@ namespace p2pncs.Evaluation
 							IAsyncResult ar; string ret;
 
 							tests ++;
-							string msg = "Hello-1-" + i.ToString ();
+							string msg = "Hello-" + strKey1 + "-" + i.ToString ();
 							sw.Reset (); sw.Start ();
 							ar = msock1.BeginInquire (msg, DatagramEventSocketWrapper.DummyEP, null, null);
 							ret = msock1.EndInquire (ar) as string;
 							sw.Stop ();
 							if (ret == null) {
 								Console.Write ("?");
-							} else if (ret != msg + "-ok-2") {
+							} else if (ret != msg + "-" + strKey2 + "-ok") {
 								Console.Write ("@");
 							} else {
 								rtt_sd.AddSample ((float)sw.Elapsed.TotalMilliseconds);
@@ -109,14 +92,14 @@ namespace p2pncs.Evaluation
 							}
 
 							tests++;
-							msg = "Hello-2-" + i.ToString ();
+							msg = "Hello-" + strKey1 + "-" + i.ToString ();
 							sw.Reset (); sw.Start ();
 							ar = msock2.BeginInquire (msg, DatagramEventSocketWrapper.DummyEP, null, null);
 							ret = msock2.EndInquire (ar) as string;
 							sw.Stop ();
 							if (ret == null) {
 								Console.Write ("?");
-							} else if (ret != msg + "-ok-1") {
+							} else if (ret != msg + "-" + strKey1 + "-ok") {
 								Console.Write ("@");
 							} else {
 								rtt_sd.AddSample ((float)sw.Elapsed.TotalMilliseconds);
@@ -136,7 +119,14 @@ namespace p2pncs.Evaluation
 						if (msock1 != null) msock1.Dispose ();
 						if (msock2 != null) msock2.Dispose ();
 						if (sock1 != null) sock1.Dispose ();
-						if (sock2 != null) sock2.Dispose ();
+						if (env.Nodes[1].AnonymousSockets.Count > 0) {
+							lock (env.Nodes[1].AnonymousSockets) {
+								while (env.Nodes[1].AnonymousSockets.Count > 0) {
+									env.Nodes[1].AnonymousSockets[0].Dispose ();
+									env.Nodes[1].AnonymousSockets.RemoveAt (0);
+								}
+							}
+						}
 					}
 				} while (!routeEstablished);
 			}
