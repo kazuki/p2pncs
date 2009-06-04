@@ -24,6 +24,7 @@ using System.Threading;
 using p2pncs.Security.Cryptography;
 using p2pncs.Threading;
 using p2pncs.Utility;
+using MsgLabel = System.UInt32;
 
 namespace p2pncs.Net
 {
@@ -76,7 +77,7 @@ namespace p2pncs.Net
 			if (remoteEP == null)
 				throw new ArgumentNullException ();
 
-			ushort id = CreateMessageID ();
+			MsgLabel id = CreateMessageID ();
 			InquiredAsyncResultBase ar = CreateInquiredAsyncResult (id, obj, remoteEP, timeout, maxRetry, callback, state);
 			ar.Transmit (_sock);
 			Interlocked.Increment (ref _numInq);
@@ -224,16 +225,16 @@ namespace p2pncs.Net
 		#endregion
 
 		#region Abstract Members
-		protected abstract InquiredAsyncResultBase CreateInquiredAsyncResult (ushort id, object obj, EndPoint remoteEP, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state);
+		protected abstract InquiredAsyncResultBase CreateInquiredAsyncResult (MsgLabel id, object obj, EndPoint remoteEP, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state);
 		#endregion
 
 		#region Misc
-		protected ushort CreateMessageID ()
+		protected MsgLabel CreateMessageID ()
 		{
-			return BitConverter.ToUInt16 (openCrypto.RNG.GetRNGBytes (4), 0);
+			return BitConverter.ToUInt32 (openCrypto.RNG.GetRNGBytes (4), 0);
 		}
 
-		protected InquiredAsyncResultBase RemoveFromRetryList (ushort id, EndPoint ep)
+		protected InquiredAsyncResultBase RemoveFromRetryList (MsgLabel id, EndPoint ep)
 		{
 			lock (_retryList) {
 				for (int i = 0; i < _retryList.Count; i++) {
@@ -264,6 +265,7 @@ namespace p2pncs.Net
 		{
 			object value;
 			if (IsDuplicateCheckType (e.InquireMessage) && !_inquiryDupCheckCache.CheckAndReserve ((e as InquiredResponseState).MessageIdentity, out value)) {
+				Logger.Log (LogLevel.Trace, this, "Responsed {0} from Cache to {1}", value == null ? "null" : value.GetType ().ToString (), e.EndPoint);
 				StartResponse (e, value);
 				return;
 			}
@@ -333,10 +335,10 @@ namespace p2pncs.Net
 			bool _isCompleted = false;
 			DateTime _dt, _expiry;
 			TimeSpan _timeout;
-			protected ushort _id;
+			protected MsgLabel _id;
 			int _retries = 0, _maxRetry;
 
-			public InquiredAsyncResultBase (object req, EndPoint remoteEP, ushort id, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state)
+			public InquiredAsyncResultBase (object req, EndPoint remoteEP, MsgLabel id, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state)
 			{
 				_req = req;
 				_remoteEP = remoteEP;
@@ -360,6 +362,7 @@ namespace p2pncs.Net
 			{
 				_retries++;
 				Transmit (sock);
+				Logger.Log (LogLevel.Trace, sock, "Retry {0} to {1}", _req.GetType (), _remoteEP);
 			}
 
 			public object Request {
@@ -378,7 +381,7 @@ namespace p2pncs.Net
 				get { return _expiry; }
 			}
 
-			public ushort ID {
+			public MsgLabel ID {
 				get { return _id; }
 			}
 
@@ -435,17 +438,17 @@ namespace p2pncs.Net
 		}
 		protected class InquiredResponseState : InquiredEventArgs
 		{
-			ushort _id;
+			MsgLabel _id;
 			bool _sentFlag = false;
 			MessageIdentity _mid;
 
-			public InquiredResponseState (object inq, EndPoint ep, ushort id) : base (inq, ep)
+			public InquiredResponseState (object inq, EndPoint ep, MsgLabel id) : base (inq, ep)
 			{
 				_id = id;
 				_mid = new MessageIdentity (ep, id);
 			}
 
-			public ushort ID {
+			public MsgLabel ID {
 				get { return _id; }
 			}
 
@@ -461,10 +464,10 @@ namespace p2pncs.Net
 		protected class MessageIdentity : IEquatable<MessageIdentity>
 		{
 			EndPoint _sender;
-			ushort _msgId;
+			MsgLabel _msgId;
 			int _hash;
 
-			public MessageIdentity (EndPoint sender, ushort msgId)
+			public MessageIdentity (EndPoint sender, MsgLabel msgId)
 			{
 				_sender = sender;
 				_msgId = msgId;

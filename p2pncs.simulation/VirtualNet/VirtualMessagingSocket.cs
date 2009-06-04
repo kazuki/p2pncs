@@ -75,7 +75,7 @@ namespace p2pncs.Simulation.VirtualNet
 			} catch {}
 		}
 
-		protected override InquiredAsyncResultBase CreateInquiredAsyncResult (ushort id, object obj, EndPoint remoteEP, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state)
+		protected override InquiredAsyncResultBase CreateInquiredAsyncResult (uint id, object obj, EndPoint remoteEP, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state)
 		{
 			return new InquiredAsyncResult (obj, remoteEP, id, timeout, maxRetry, callback, state);
 		}
@@ -86,9 +86,9 @@ namespace p2pncs.Simulation.VirtualNet
 		class RequestWrapper
 		{
 			object _msg;
-			ushort _id;
+			uint _id;
 
-			public RequestWrapper (object msg, ushort id)
+			public RequestWrapper (object msg, uint id)
 			{
 				_msg = msg;
 				_id = id;
@@ -98,16 +98,16 @@ namespace p2pncs.Simulation.VirtualNet
 				get { return _msg; }
 			}
 
-			public ushort ID {
+			public uint ID {
 				get { return _id; }
 			}
 		}
 		class ResponseWrapper
 		{
 			object _msg;
-			ushort _id;
+			uint _id;
 
-			public ResponseWrapper (object msg, ushort id)
+			public ResponseWrapper (object msg, uint id)
 			{
 				_msg = msg;
 				_id = id;
@@ -117,7 +117,7 @@ namespace p2pncs.Simulation.VirtualNet
 				get { return _msg; }
 			}
 
-			public ushort ID {
+			public uint ID {
 				get { return _id; }
 			}
 		}
@@ -136,7 +136,7 @@ namespace p2pncs.Simulation.VirtualNet
 		}
 		class InquiredAsyncResult : InquiredAsyncResultBase
 		{
-			public InquiredAsyncResult (object req, EndPoint remoteEP, ushort id, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state)
+			public InquiredAsyncResult (object req, EndPoint remoteEP, uint id, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state)
 				: base (req, remoteEP, id, timeout, maxRetry, callback, state)
 			{
 			}

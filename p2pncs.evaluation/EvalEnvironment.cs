@@ -93,7 +93,7 @@ namespace p2pncs.Evaluation
 				Console.CursorLeft = px; Console.CursorTop = py;
 				Console.Write ("[waiting]    ");
 			}
-			Thread.Sleep (1000);
+			Thread.Sleep (count * 5);
 			if (viewStatusToConsole) {
 				Console.CursorLeft = px; Console.CursorTop = py;
 				Console.WriteLine ("[ok]         ");

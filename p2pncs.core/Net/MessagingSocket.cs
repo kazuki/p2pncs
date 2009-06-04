@@ -49,7 +49,7 @@ namespace p2pncs.Net
 			MessageType type;
 			object obj;
 			int tmp;
-			ushort id = 0;
+			uint id = 0;
 			try {
 				byte[] msg = _key.Decrypt (e.Buffer, 0, e.Size);
 				using (MemoryStream strm = new MemoryStream (msg, 0, msg.Length, false)) {
@@ -57,10 +57,10 @@ namespace p2pncs.Net
 						goto MessageError;
 					type = (MessageType)tmp;
 					if (type != MessageType.OneWay) {
-						for (int i = 0; i < 16; i += 8) {
+						for (int i = 0; i < 32; i += 8) {
 							if ((tmp = strm.ReadByte ()) < 0)
 								goto MessageError;
-							id |= (ushort)(tmp << i);
+							id |= (uint)(tmp << i);
 						}
 					}
 					obj = _formatter.Deserialize (strm);
@@ -119,7 +119,7 @@ MessageError:
 			_sock.SendTo (raw, state.EndPoint);
 		}
 
-		protected override InquiredAsyncResultBase CreateInquiredAsyncResult (ushort id, object obj, EndPoint remoteEP, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state)
+		protected override InquiredAsyncResultBase CreateInquiredAsyncResult (uint id, object obj, EndPoint remoteEP, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state)
 		{
 			if (obj == null)
 				obj = _nullObject;
@@ -130,13 +130,15 @@ MessageError:
 		#endregion
 
 		#region Misc
-		byte[] SerializeTransmitData (MessageType type, ushort id, object obj)
+		byte[] SerializeTransmitData (MessageType type, uint id, object obj)
 		{
 			using (MemoryStream strm = new MemoryStream ()) {
 				strm.WriteByte ((byte)type);
 				if (type != MessageType.OneWay) {
 					strm.WriteByte ((byte)(id));
 					strm.WriteByte ((byte)(id >> 8));
+					strm.WriteByte ((byte)(id >> 16));
+					strm.WriteByte ((byte)(id >> 24));
 				}
 				_formatter.Serialize (strm, obj);
 				strm.Close ();
@@ -158,7 +160,7 @@ MessageError:
 		{
 			byte[] _dgram;
 
-			public InquiredAsyncResult (object req, byte[] dgram, EndPoint remoteEP, ushort id, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state)
+			public InquiredAsyncResult (object req, byte[] dgram, EndPoint remoteEP, uint id, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state)
 				: base (req, remoteEP, id, timeout, maxRetry, callback, state)
 			{
 				_dgram = dgram;
