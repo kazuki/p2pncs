@@ -35,6 +35,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AnonymousRouterEvaluation.cs" />
+    <Compile Include="EvalEnvironment.cs" />
     <Compile Include="EvalOptionSet.cs" />
     <Compile Include="EvaluationTypes.cs" />
     <Compile Include="IEvaluator.cs" />
