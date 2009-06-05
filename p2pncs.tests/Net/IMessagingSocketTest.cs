@@ -174,7 +174,7 @@ namespace p2pncs.tests.Net
 				CreateMessagingSockets_Internal (2, out msockets, out endPoints, out noRouteEP);
 
 				try {
-					msockets[0].Received += new ReceivedEventHandler(delegate (object sender, ReceivedEventArgs e) {
+					msockets[0].ReceivedUnknownMessage += new ReceivedEventHandler(delegate (object sender, ReceivedEventArgs e) {
 						Assert.Fail ();
 					});
 					msockets[0].InquiredUnknownMessage += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
@@ -186,7 +186,7 @@ namespace p2pncs.tests.Net
 					msockets[0].InquiryFailure += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
 						Assert.Fail ();
 					});
-					msockets[1].Received += new ReceivedEventHandler (delegate (object sender, ReceivedEventArgs e) {
+					msockets[1].ReceivedUnknownMessage += new ReceivedEventHandler (delegate (object sender, ReceivedEventArgs e) {
 						Assert.AreEqual ("HELLO", e.Message as string);
 						done.Set ();
 					});
@@ -217,7 +217,7 @@ namespace p2pncs.tests.Net
 				CreateMessagingSockets_Internal (2, out msockets, out endPoints, out noRouteEP);
 
 				try {
-					msockets[0].Received += new ReceivedEventHandler (delegate (object sender, ReceivedEventArgs e) {
+					msockets[0].ReceivedUnknownMessage += new ReceivedEventHandler (delegate (object sender, ReceivedEventArgs e) {
 						Assert.Fail ();
 					});
 					msockets[0].InquiredUnknownMessage += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
@@ -226,7 +226,7 @@ namespace p2pncs.tests.Net
 					msockets[0].InquiryFailure += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
 						Assert.Fail ();
 					});
-					msockets[1].Received += new ReceivedEventHandler (delegate (object sender, ReceivedEventArgs e) {
+					msockets[1].ReceivedUnknownMessage += new ReceivedEventHandler (delegate (object sender, ReceivedEventArgs e) {
 						Assert.IsNull (e.Message);
 						done.Set ();
 					});
