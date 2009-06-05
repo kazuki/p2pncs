@@ -41,7 +41,6 @@ namespace p2pncs.Evaluation
 			Tests = 100;
 			UseNewKeyBasedRouter = true;
 			NewKBRStrictMode = true;
-			UseNewAnonymousRouter = true;
 			BypassMessagingSerializer = true;
 			EvalutionType = EvaluationTypes.AR;
 			ShowEvalutionTypes = false;
@@ -53,7 +52,6 @@ namespace p2pncs.Evaluation
 					{"loss=", "UDPの損失率を指定 (0.0～1.0)", (double v) => {if (v >= 0.0 && v < 1.0) PacketLossRate = v; else throw new ArgumentOutOfRangeException ();}},
 					{"new-kbr", "新しいKeyBasedRouter実装を利用する", v => UseNewKeyBasedRouter = v != null},
 					{"strict", "新しいKeyBasedRouter実装においてStrictモードを利用する", v => NewKBRStrictMode = v != null},
-					{"new-ar", "新しいAnonymousRouter実装を利用する", v => UseNewAnonymousRouter = v != null},
 					{"ar_relays=", "匿名多重暗号経路の中継ノード数", (int v) => AnonymousRouteRelays = v},
 					{"ar_routes=", "匿名多重暗号経路の同時送信経路数", (int v) => AnonymousRouteRoutes = v},
 					{"ar_backups=", "匿名多重暗号経路のバックアップ経路数", (int v) => AnonymousRouteBackupRoutes = v},
@@ -104,7 +102,6 @@ namespace p2pncs.Evaluation
 		public int ChurnInterval { get; set; }
 		public bool UseNewKeyBasedRouter { get; set; }
 		public bool NewKBRStrictMode { get; set; }
-		public bool UseNewAnonymousRouter { get; set; }
 		public bool BypassMessagingSerializer { get; set; }
 		public EvaluationTypes EvalutionType { get; set; }
 		public int AnonymousRouteRelays { get; set; }
