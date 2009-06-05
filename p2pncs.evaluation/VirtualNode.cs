@@ -47,8 +47,8 @@ namespace p2pncs.Evaluation
 		static Random _rnd = new Random ();
 		public static TimeSpan DefaultMessagingTimeout = TimeSpan.FromSeconds (3);
 		public static int DefaultMessagingRetries = 2;
-		public static int DefaultMessagingRetryBufferSize = 8192;
-		public static int DefaultMessagingDupCheckSize = 8192;
+		public static int DefaultMessagingRetryBufferSize = 1024;
+		public static int DefaultMessagingDupCheckSize = 512;
 		static RandomIPAddressGenerator _ipGenerator = new RandomIPAddressGenerator ();
 
 		public VirtualNode (EvalEnvironment env, VirtualNetwork network, EvalOptionSet opt,

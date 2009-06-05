@@ -25,10 +25,11 @@ namespace p2pncs.Net.Overlay.Anonymous
 		protected object _payload, _state = null;
 		protected bool _accepted = false;
 
-		public AcceptingEventArgs (Key recipientId, Key destId)
+		public AcceptingEventArgs (Key recipientId, Key destId, object payload)
 		{
 			_recipiendId = recipientId;
 			_destId = destId;
+			_payload = payload;
 		}
 
 		public Key RecipientId {
@@ -45,6 +46,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 		public object State {
 			get { return _state; }
+		}
+
+		public object Payload {
+			get { return _payload; }
 		}
 
 		public void Accept (object state)

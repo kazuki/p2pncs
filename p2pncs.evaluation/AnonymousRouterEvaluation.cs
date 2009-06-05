@@ -59,7 +59,7 @@ namespace p2pncs.Evaluation
 				bool routeEstablished = false;
 				do {
 					try {
-						IAnonymousSocket sock1 = env.Nodes[0].AnonymousRouter.EndConnect (env.Nodes[0].AnonymousRouter.BeginConnect (recipientKey1, recipientKey2, AnonymousConnectionType.LowLatency, null, null));
+						IAnonymousSocket sock1 = env.Nodes[0].AnonymousRouter.EndConnect (env.Nodes[0].AnonymousRouter.BeginConnect (recipientKey1, recipientKey2, AnonymousConnectionType.LowLatency, null, null, null));
 						if (env.Nodes[1].AnonymousSocketInfoList.Count == 0)
 							throw new System.Net.Sockets.SocketException ();
 

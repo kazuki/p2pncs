@@ -158,7 +158,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			info.Close ();
 		}
 
-		public IAsyncResult BeginConnect (Key recipientId, Key destinationId, AnonymousConnectionType type, AsyncCallback callback, object state)
+		public IAsyncResult BeginConnect (Key recipientId, Key destinationId, AnonymousConnectionType type, object payload, AsyncCallback callback, object state)
 		{
 			if (type != AnonymousConnectionType.LowLatency)
 				throw new NotImplementedException ();
@@ -180,7 +180,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					id = BitConverter.ToUInt16 (raw_id, 0);
 				} while (!_usedConnectionIDs.Add (id));
 
-				info = new ConnectionInfo (this, subscribeInfo, destinationId, id, callback, state);
+				info = new ConnectionInfo (this, subscribeInfo, destinationId, id, type, payload, callback, state);
 				_connectionMap.Add (info.ConnectionId, info);
 			}
 
@@ -427,7 +427,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 						return;
 					}
 
-					AcceptingEventArgs args = new AcceptingEventArgs (info.SubscribeInfo.Key, payload.InitiatorId);
+					AcceptingEventArgs args = new AcceptingEventArgs (info.SubscribeInfo.Key, payload.InitiatorId, payload.Payload);
 					if (Accepting != null) {
 						try {
 							Accepting (this, args);
@@ -1137,15 +1137,18 @@ namespace p2pncs.Net.Overlay.Anonymous
 			ConnectionSocket _sock = null;
 			DateTime _nextPingTime = DateTime.MaxValue;
 			DateTime _expiry = DateTime.MaxValue;
-			object _dtLock = new object ();
+			AnonymousConnectionType _type;
+			object _dtLock = new object (), _payload;
 
-			public ConnectionInfo (AnonymousRouter router, SubscribeInfo subscribeInfo, Key destKey, ushort connectionId, AsyncCallback callback, object state)
+			public ConnectionInfo (AnonymousRouter router, SubscribeInfo subscribeInfo, Key destKey, ushort connectionId, AnonymousConnectionType type, object payload, AsyncCallback callback, object state)
 			{
 				_initiator = true;
 				_router = router;
 				_subscribeInfo = subscribeInfo;
 				_destKey = destKey;
 				_connectionId = (uint)connectionId << 16;
+				_type = type;
+				_payload = payload;
 				_estalibhDone = new ManualResetEvent (false);
 				_ar = new EstablishRouteAsyncResult (this, callback, state);
 				_sharedInfo = RNG.GetRNGBytes (DefaultSharedInfoSize);
@@ -1218,7 +1221,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_connectionPrivate = ECKeyPair.Create (_subscribeInfo.PrivateKey.DomainName);
 				byte[] publicKey = _connectionPrivate.ExportPublicKey (true);
 				ConnectionEstablishPayload payload = new ConnectionEstablishPayload (_subscribeInfo.Key,
-					(ushort)(_connectionId >> 16), _subscribeInfo.GetRouteEndPoints (), _sharedInfo);
+					(ushort)(_connectionId >> 16), _subscribeInfo.GetRouteEndPoints (), _payload, _sharedInfo);
 				ECKeyPair destPub = _destKey.ToECPublicKey (_connectionPrivate.DomainName);
 				byte[] encrypted_payload = payload.Encrypt (_connectionPrivate, destPub);
 				SymmetricKey tmpKey = MultipleCipherHelper.ComputeSharedKey (_subscribeInfo.PrivateKey, destPub, _sharedInfo, PaddingMode.None, false);
@@ -2040,11 +2043,15 @@ namespace p2pncs.Net.Overlay.Anonymous
 			[SerializableFieldId (3)]
 			AnonymousEndPoint[] _initiatorSideTermEPs;
 
-			public ConnectionEstablishPayload (Key initiator, ConnectionHalfLabel connectionId, AnonymousEndPoint[] eps, byte[] sharedInfo)
+			[SerializableFieldId (4)]
+			object _payload;
+
+			public ConnectionEstablishPayload (Key initiator, ConnectionHalfLabel connectionId, AnonymousEndPoint[] eps, object payload, byte[] sharedInfo)
 			{
 				_initiatorId = initiator;
 				_connectionId = connectionId;
 				_initiatorSideTermEPs = eps;
+				_payload = payload;
 				_sharedInfo = sharedInfo;
 			}
 
@@ -2076,6 +2083,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public AnonymousEndPoint[] InitiatorSideTerminalEndPoints {
 				get { return _initiatorSideTermEPs; }
+			}
+
+			public object Payload {
+				get { return _payload; }
 			}
 		}
 

@@ -176,7 +176,7 @@ namespace p2pncs.Evaluation
 			Info info = (Info)objects[0];
 			Info destInfo = (Info)objects[1];
 			while (true) {
-				IAsyncResult ar = info.Node.AnonymousRouter.BeginConnect (info.PublicKey, info.TempDest, AnonymousConnectionType.LowLatency, null, null);
+				IAsyncResult ar = info.Node.AnonymousRouter.BeginConnect (info.PublicKey, info.TempDest, AnonymousConnectionType.LowLatency, null, null, null);
 				try {
 					IAnonymousSocket sock = info.Node.AnonymousRouter.EndConnect (ar);
 					info.Node.CreateAnonymousSocket (sock);

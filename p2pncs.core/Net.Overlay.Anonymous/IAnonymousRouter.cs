@@ -29,7 +29,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 		void SubscribeRecipient (Key recipientId, ECKeyPair privateKey);
 		void UnsubscribeRecipient (Key recipientId);
 
-		IAsyncResult BeginConnect (Key recipientId, Key destinationId, AnonymousConnectionType type, AsyncCallback callback, object state);
+		IAsyncResult BeginConnect (Key recipientId, Key destinationId, AnonymousConnectionType type, object payload, AsyncCallback callback, object state);
 		IAnonymousSocket EndConnect (IAsyncResult ar);
 
 		ISubscribeInfo GetSubscribeInfo (Key recipientId);

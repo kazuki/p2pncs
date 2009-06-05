@@ -66,6 +66,9 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 				AutoResetEvent accepted_done = new AutoResetEvent (false);
 				IAnonymousSocket sock2 = null;
 				env.AnonymousRouters[1].Accepting += delegate (object sender, AcceptingEventArgs args) {
+					string msg = args.Payload as string;
+					Assert.IsNotNull (msg);
+					Assert.AreEqual ("HELLO", msg);
 					args.Accept (null);
 				};
 				env.AnonymousRouters[1].Accepted += delegate (object sender, AcceptedEventArgs args) {
@@ -77,7 +80,7 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 					}
 				};
 
-				IAsyncResult ar = env.AnonymousRouters[0].BeginConnect (id1, id2, AnonymousConnectionType.LowLatency, null, null);
+				IAsyncResult ar = env.AnonymousRouters[0].BeginConnect (id1, id2, AnonymousConnectionType.LowLatency, "HELLO", null, null);
 				IAnonymousSocket sock1 = env.AnonymousRouters[0].EndConnect (ar);
 				Assert.IsNotNull (sock1, "1.sock");
 				Assert.IsTrue (accepted_done.WaitOne (1000), "2.waiting");
@@ -162,7 +165,7 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 				};
 
 				try {
-					IAsyncResult ar = env.AnonymousRouters[0].BeginConnect (id1, id2, AnonymousConnectionType.LowLatency, null, null);
+					IAsyncResult ar = env.AnonymousRouters[0].BeginConnect (id1, id2, AnonymousConnectionType.LowLatency, null, null, null);
 					env.AnonymousRouters[0].EndConnect (ar);
 					Assert.Fail ();
 				} catch (System.Net.Sockets.SocketException) {}
@@ -208,7 +211,7 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 				};
 
 				// Close Test
-				IAsyncResult ar = env.AnonymousRouters[0].BeginConnect (id1, id2, AnonymousConnectionType.LowLatency, null, null);
+				IAsyncResult ar = env.AnonymousRouters[0].BeginConnect (id1, id2, AnonymousConnectionType.LowLatency, null, null, null);
 				IAnonymousSocket sock1 = env.AnonymousRouters[0].EndConnect (ar);
 				sock1.Close ();
 				try {
