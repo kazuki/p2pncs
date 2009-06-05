@@ -427,7 +427,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 						return;
 					}
 
-					AcceptingEventArgs args = new AcceptingEventArgs (info.SubscribeInfo.Key, payload.InitiatorId, payload.Payload);
+					AcceptingEventArgs args = new AcceptingEventArgs (info.SubscribeInfo.Key, payload.InitiatorId, payload.ConnectionType, payload.Payload);
 					if (Accepting != null) {
 						try {
 							Accepting (this, args);
@@ -442,13 +442,13 @@ namespace p2pncs.Net.Overlay.Anonymous
 					using (IDisposable cookie = _connectionMapLock.EnterWriteLock ()) {
 						while (_connectionMap.ContainsKey (id))
 							id ++;
-						cinfo = new ConnectionInfo (this, info.SubscribeInfo, id, sharedInfo, pubKey, payload);
+						cinfo = new ConnectionInfo (this, info.SubscribeInfo, id, sharedInfo, payload.ConnectionType, pubKey, payload);
 						_connectionMap.Add (id, cinfo);
 					}
 					cinfo.Start (sharedInfo);
 
 					try {
-						Accepted (this, new AcceptedEventArgs (cinfo.Socket, args.State));
+						Accepted (this, new AcceptedEventArgs (cinfo.Socket, payload.ConnectionType, payload.Payload, args.State));
 					} catch {}
 					return;
 				}
@@ -1155,7 +1155,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_sock = new ConnectionSocket (this);
 			}
 
-			public ConnectionInfo (AnonymousRouter router, SubscribeInfo subscribeInfo, uint connectionId, byte[] sharedInfo,
+			public ConnectionInfo (AnonymousRouter router, SubscribeInfo subscribeInfo, uint connectionId, byte[] sharedInfo, AnonymousConnectionType type,
 				ECKeyPair publicKey, ConnectionEstablishPayload payload)
 			{
 				_initiator = false;
@@ -1165,6 +1165,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_ar = null;
 				_destKey = payload.InitiatorId;
 				_connectionId = connectionId;
+				_type = type;
 				_key = ComputeSharedKey (subscribeInfo.PrivateKey, publicKey, payload.SharedInfo, sharedInfo);
 				_otherSideTermEPs = payload.InitiatorSideTerminalEndPoints;
 				_sock = new ConnectionSocket (this);
@@ -1221,7 +1222,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_connectionPrivate = ECKeyPair.Create (_subscribeInfo.PrivateKey.DomainName);
 				byte[] publicKey = _connectionPrivate.ExportPublicKey (true);
 				ConnectionEstablishPayload payload = new ConnectionEstablishPayload (_subscribeInfo.Key,
-					(ushort)(_connectionId >> 16), _subscribeInfo.GetRouteEndPoints (), _payload, _sharedInfo);
+					(ushort)(_connectionId >> 16), _subscribeInfo.GetRouteEndPoints (), _payload, _type, _sharedInfo);
 				ECKeyPair destPub = _destKey.ToECPublicKey (_connectionPrivate.DomainName);
 				byte[] encrypted_payload = payload.Encrypt (_connectionPrivate, destPub);
 				SymmetricKey tmpKey = MultipleCipherHelper.ComputeSharedKey (_subscribeInfo.PrivateKey, destPub, _sharedInfo, PaddingMode.None, false);
@@ -2046,12 +2047,16 @@ namespace p2pncs.Net.Overlay.Anonymous
 			[SerializableFieldId (4)]
 			object _payload;
 
-			public ConnectionEstablishPayload (Key initiator, ConnectionHalfLabel connectionId, AnonymousEndPoint[] eps, object payload, byte[] sharedInfo)
+			[SerializableFieldId (5)]
+			AnonymousConnectionType _type;
+
+			public ConnectionEstablishPayload (Key initiator, ConnectionHalfLabel connectionId, AnonymousEndPoint[] eps, object payload, AnonymousConnectionType type, byte[] sharedInfo)
 			{
 				_initiatorId = initiator;
 				_connectionId = connectionId;
 				_initiatorSideTermEPs = eps;
 				_payload = payload;
+				_type = type;
 				_sharedInfo = sharedInfo;
 			}
 
@@ -2087,6 +2092,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public object Payload {
 				get { return _payload; }
+			}
+
+			public AnonymousConnectionType ConnectionType {
+				get { return _type; }
 			}
 		}
 

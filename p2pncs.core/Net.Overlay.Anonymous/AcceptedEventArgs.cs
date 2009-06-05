@@ -22,16 +22,27 @@ namespace p2pncs.Net.Overlay.Anonymous
 	public class AcceptedEventArgs : EventArgs
 	{
 		IAnonymousSocket _sock;
-		object _state;
+		AnonymousConnectionType _type;
+		object _state, _payload;
 
-		public AcceptedEventArgs (IAnonymousSocket sock, object state)
+		public AcceptedEventArgs (IAnonymousSocket sock, AnonymousConnectionType type, object payload, object state)
 		{
 			_sock = sock;
+			_type = type;
+			_payload = payload;
 			_state = state;
 		}
 
 		public IAnonymousSocket Socket {
 			get { return _sock; }
+		}
+
+		public AnonymousConnectionType ConnectionType {
+			get { return _type; }
+		}
+
+		public object Payload {
+			get { return _payload; }
 		}
 
 		public object State {

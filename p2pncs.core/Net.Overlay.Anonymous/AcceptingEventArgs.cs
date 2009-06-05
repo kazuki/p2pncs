@@ -24,11 +24,13 @@ namespace p2pncs.Net.Overlay.Anonymous
 		protected Key _recipiendId, _destId;
 		protected object _payload, _state = null;
 		protected bool _accepted = false;
+		protected AnonymousConnectionType _type;
 
-		public AcceptingEventArgs (Key recipientId, Key destId, object payload)
+		public AcceptingEventArgs (Key recipientId, Key destId, AnonymousConnectionType type, object payload)
 		{
 			_recipiendId = recipientId;
 			_destId = destId;
+			_type = type;
 			_payload = payload;
 		}
 
@@ -46,6 +48,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 		public object State {
 			get { return _state; }
+		}
+
+		public AnonymousConnectionType ConnectionType {
+			get { return _type; }
 		}
 
 		public object Payload {
