@@ -66,14 +66,7 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 				AutoResetEvent accepted_done = new AutoResetEvent (false);
 				IAnonymousSocket sock2 = null;
 				env.AnonymousRouters[1].Accepting += delegate (object sender, AcceptingEventArgs args) {
-					args.Accept (delegate (object sender2, DatagramReceiveEventArgs args2) {
-						lock (received2_lock) {
-							Assert.IsNull (received2, "2.received.#1");
-							received2 = new byte[args2.Size];
-							Buffer.BlockCopy (args2.Buffer, 0, received2, 0, received2.Length);
-							received2_done.Set ();
-						}
-					}, null);
+					args.Accept (null);
 				};
 				env.AnonymousRouters[1].Accepted += delegate (object sender, AcceptedEventArgs args) {
 					lock (received2_lock) {
@@ -84,22 +77,33 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 					}
 				};
 
-				IAsyncResult ar = env.AnonymousRouters[0].BeginEstablishRoute (id1, id2, delegate (object sender, DatagramReceiveEventArgs args) {
+				IAsyncResult ar = env.AnonymousRouters[0].BeginConnect (id1, id2, AnonymousConnectionType.LowLatency, null, null);
+				IAnonymousSocket sock1 = env.AnonymousRouters[0].EndConnect (ar);
+				Assert.IsNotNull (sock1, "1.sock");
+				Assert.IsTrue (accepted_done.WaitOne (1000), "2.waiting");
+				Assert.IsNotNull (sock2, "2.sock");
+				sock1.Received += delegate (object sender, DatagramReceiveEventArgs args) {
 					lock (received1_lock) {
 						Assert.IsNull (received1, "1.received.#1");
 						received1 = new byte[args.Size];
 						Buffer.BlockCopy (args.Buffer, 0, received1, 0, received1.Length);
 						received1_done.Set ();
 					}
-				}, null, null);
-				IAnonymousSocket sock1 = env.AnonymousRouters[0].EndEstablishRoute (ar);
-				Assert.IsNotNull (sock1, "1.sock");
-				Assert.IsTrue (accepted_done.WaitOne (1000), "2.waiting");
-				Assert.IsNotNull (sock2, "2.sock");
+				};
+				sock2.Received += delegate (object sender2, DatagramReceiveEventArgs args2) {
+					lock (received2_lock) {
+						Assert.IsNull (received2, "2.received.#1");
+						received2 = new byte[args2.Size];
+						Buffer.BlockCopy (args2.Buffer, 0, received2, 0, received2.Length);
+						received2_done.Set ();
+					}
+				};
+				sock1.InitializedEventHandlers ();
+				sock2.InitializedEventHandlers ();
 
 				for (int i = 0; i < 3; i ++) {
 					string msg = "HELLO " + i.ToString ();
-					sock1.Send (Encoding.UTF8.GetBytes (msg));
+					sock1.SendTo (Encoding.UTF8.GetBytes (msg), AnonymousRouter.DummyEndPoint);
 					Assert.IsTrue (received2_done.WaitOne (5000), "2.received.#2");
 					Assert.IsNotNull (received2, "2.received.#3");
 					Assert.AreEqual (msg, Encoding.UTF8.GetString (received2));
@@ -108,7 +112,7 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 					}
 
 					msg = "OK " + i.ToString ();
-					sock2.Send (Encoding.UTF8.GetBytes (msg));
+					sock2.SendTo (Encoding.UTF8.GetBytes (msg), AnonymousRouter.DummyEndPoint);
 					Assert.IsTrue (received1_done.WaitOne (5000), "1.received.#2");
 					Assert.IsNotNull (received1, "1.received.#3");
 					Assert.AreEqual (msg, Encoding.UTF8.GetString (received1));
@@ -150,8 +154,7 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 				AutoResetEvent accepted_done = new AutoResetEvent (false);
 				IAnonymousSocket sock2 = null;
 				env.AnonymousRouters[1].Accepting += delegate (object sender, AcceptingEventArgs args) {
-					Thread.Sleep (4000); // AnonymousRouter.MCR_MaxRTTに依存
-					args.Accept (delegate (object s, DatagramReceiveEventArgs e) {}, null);
+					args.Reject ();
 				};
 				env.AnonymousRouters[1].Accepted += delegate (object sender, AcceptedEventArgs args) {
 					accepted_done.Set ();
@@ -159,8 +162,8 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 				};
 
 				try {
-					IAsyncResult ar = env.AnonymousRouters[0].BeginEstablishRoute (id1, id2, delegate (object sender, DatagramReceiveEventArgs args) {}, null, null);
-					env.AnonymousRouters[0].EndEstablishRoute (ar);
+					IAsyncResult ar = env.AnonymousRouters[0].BeginConnect (id1, id2, AnonymousConnectionType.LowLatency, null, null);
+					env.AnonymousRouters[0].EndConnect (ar);
 					Assert.Fail ();
 				} catch (System.Net.Sockets.SocketException) {}
 			}
@@ -197,7 +200,7 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 				AutoResetEvent accepted_done = new AutoResetEvent (false);
 				IAnonymousSocket sock2 = null;
 				env.AnonymousRouters[1].Accepting += delegate (object sender, AcceptingEventArgs args) {
-					args.Accept (delegate (object s, DatagramReceiveEventArgs e) { }, null);
+					args.Accept (null);
 				};
 				env.AnonymousRouters[1].Accepted += delegate (object sender, AcceptedEventArgs args) {
 					accepted_done.Set ();
@@ -205,31 +208,13 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 				};
 
 				// Close Test
-				IAsyncResult ar = env.AnonymousRouters[0].BeginEstablishRoute (id1, id2, delegate (object sender, DatagramReceiveEventArgs args) { }, null, null);
-				IAnonymousSocket sock1 = env.AnonymousRouters[0].EndEstablishRoute (ar);
+				IAsyncResult ar = env.AnonymousRouters[0].BeginConnect (id1, id2, AnonymousConnectionType.LowLatency, null, null);
+				IAnonymousSocket sock1 = env.AnonymousRouters[0].EndConnect (ar);
 				sock1.Close ();
 				try {
-					sock1.Send (new byte[] { 1, 2, 3 });
+					sock1.SendTo (new byte[] { 1, 2, 3 }, AnonymousRouter.DummyEndPoint);
 					Assert.Fail ("close test");
-				} catch (System.Net.Sockets.SocketException) { }
-
-				// Timeout Test
-				ar = env.AnonymousRouters[0].BeginEstablishRoute (id1, id2, delegate (object sender, DatagramReceiveEventArgs args) { }, null, null);
-				sock1 = env.AnonymousRouters[0].EndEstablishRoute (ar);
-				env.RemoveNode (1);
-				Thread.Sleep (1000);
-				sock1.Send (new byte[] { 1, 2, 3 });
-				Thread.Sleep (10000);
-				sock1.Send (new byte[] { 1, 2, 3 });
-				Thread.Sleep (10000);
-				sock1.Send (new byte[] { 1, 2, 3 });
-				Thread.Sleep (10000);
-				sock1.Send (new byte[] { 1, 2, 3 });
-				Thread.Sleep (8000); // AnonymousRouter.MCR_TimeoutWithMargin (about 38sec) に依存
-				try {
-					sock1.Send (new byte[] {1, 2, 3});
-					Assert.Fail ();
-				} catch (System.Net.Sockets.SocketException) {}
+				} catch {}
 			}
 		}
 	}
