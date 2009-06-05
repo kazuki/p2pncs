@@ -119,7 +119,7 @@ namespace p2pncs.Net.Overlay
 			bool isRoot = false;
 			if (nextHops == null) {
 				isRoot = true;
-				nextHops = _algo.GetCloseNodes (req.Destination, req.NumberOfRootCandidates);
+				nextHops = _algo.GetCloseNodes (req.Destination, req.NumberOfRootCandidates, req.Sender);
 			}
 			_sock.StartResponse (e, new NextHopResponse (_selfId, isRoot, nextHops));
 			_algo.Touch (new NodeHandle (req.Sender, e.EndPoint));
@@ -131,7 +131,7 @@ namespace p2pncs.Net.Overlay
 				return;
 
 			CloseNodeQuery req = (CloseNodeQuery)e.InquireMessage;
-			NodeHandle[] closeNodes = _algo.GetCloseNodes (req.Destination, req.NumberOfCloseNodes);
+			NodeHandle[] closeNodes = _algo.GetCloseNodes (req.Destination, req.NumberOfCloseNodes, req.Sender);
 			_sock.StartResponse (e, new CloseNodeResponse (_selfId, closeNodes));
 			_algo.Touch (new NodeHandle (req.Sender, e.EndPoint));
 		}
@@ -205,7 +205,10 @@ namespace p2pncs.Net.Overlay
 						nodes = _router.RoutingAlgorithm.GetNextHopNodes (_dest, _numOfSimultaneous, null);
 						if (nodes == null || nodes.Length == 0) {
 							isRoot = true;
-							nodes = _router.RoutingAlgorithm.GetCloseNodes (_dest, _numOfCandidates);
+							List<NodeHandle> list = new List<NodeHandle> (_numOfCandidates + 1);
+							list.Add (new NodeHandle (_router.SelftNodeId, null));
+							list.AddRange (_router.RoutingAlgorithm.GetCloseNodes (_dest, _numOfCandidates, null));
+							nodes = list.ToArray ();
 						}
 					}
 				} else {
@@ -336,6 +339,10 @@ namespace p2pncs.Net.Overlay
 				NodeHandle[] resultNodes = null;
 				int resultHops = 0;
 
+				if (_rootCandidates.Count == 0 && _dest.Equals (_router.SelftNodeId)) {
+					// 自分自身が宛先と同じなので候補に追加する
+					_rootCandidates.Add (new HopSlotEntry (new NodeHandle (_dest, null), 0));
+				}
 				if (senderIsRoot && sender != null) {
 					// senderがルート候補なので追加する
 					if (!_rootCandidates.Exists (delegate (HopSlotEntry entry) {
@@ -520,6 +527,13 @@ namespace p2pncs.Net.Overlay
 					_node = node;
 					_start = DateTime.Now;
 					_hop = hop;
+					if (node.EndPoint == null) {
+						// self
+						_isInquiryStarted = true;
+						_fail = false;
+						_hop = 0;
+						_time = TimeSpan.Zero;
+					}
 				}
 
 				public NodeHandle NodeHandle {

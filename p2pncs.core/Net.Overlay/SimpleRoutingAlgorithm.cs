@@ -142,20 +142,28 @@ namespace p2pncs.Net.Overlay
 			return list.ToArray ();
 		}
 
-		public NodeHandle[] GetCloseNodes (Key target, int maxNum)
+		public NodeHandle[] GetCloseNodes (Key target, int maxNum, Key exclude)
 		{
-			NodeHandle[] nodes;
+			List<NodeHandle> nodes;
 			lock (_routingTable) {
-				nodes = _flatList.ToArray ();
+				nodes = new List<NodeHandle> (_flatList.ToArray ());
 			}
-			Array.Sort<NodeHandle> (nodes, delegate (NodeHandle x, NodeHandle y) {
+			if (exclude != null) {
+				for (int i = 0; i < nodes.Count; i ++) {
+					if (exclude.Equals (nodes[i].NodeID)) {
+						nodes.RemoveAt (i);
+						break;
+					}
+				}
+			}
+			nodes.Sort (delegate (NodeHandle x, NodeHandle y) {
 				Key diffX = target.Xor (x.NodeID);
 				Key diffY = target.Xor (y.NodeID);
 				return diffX.CompareTo (diffY);
 			});
 
-			NodeHandle[] results = new NodeHandle[Math.Min (nodes.Length, maxNum)];
-			Array.Copy (nodes, 0, results, 0, results.Length);
+			NodeHandle[] results = new NodeHandle[Math.Min (nodes.Count, maxNum)];
+			nodes.CopyTo (0, results, 0, results.Length);
 			return results;
 		}
 

@@ -32,7 +32,7 @@ namespace p2pncs.Net.Overlay
 		NodeHandle[] GetNextHopNodes (Key dest, int maxNum, Key exclude);
 		NodeHandle[] GetRandomNodes (int maxNum);
 		NodeHandle[] GetNeighbors (int maxNum);
-		NodeHandle[] GetCloseNodes (Key target, int maxNum);
+		NodeHandle[] GetCloseNodes (Key target, int maxNum, Key exclude);
 
 		void Touch (NodeHandle node);
 		void Fail (NodeHandle node);

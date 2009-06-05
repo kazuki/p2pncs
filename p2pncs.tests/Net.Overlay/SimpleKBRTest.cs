@@ -100,5 +100,54 @@ namespace p2pncs.tests.Net.Overlay
 				Assert.IsTrue (success_count >= (TestCount * numOfRootCandidates * 90 / 100));
 			}
 		}
+
+		[Test]
+		public void SelfRootTest ()
+		{
+			using (KBREnvironment env = new KBREnvironment (false, false)) {
+				Key[] keys = new Key[] {
+					new Key (new byte[]{0x00, 0x80}),
+					new Key (new byte[]{0x00, 0x40}),
+					new Key (new byte[]{0x00, 0x20}),
+					new Key (new byte[]{0x00, 0x10}),
+					new Key (new byte[]{0x00, 0x08}),
+					new Key (new byte[]{0x00, 0x04}),
+					new Key (new byte[]{0x00, 0x02}),
+					new Key (new byte[]{0x00, 0x01}),
+				};
+				env.AddNodes (keys, null);
+
+				Key reqKey = new Key (new byte[] {0x00, 0x81});
+				IAsyncResult ar = env.KeyBasedRouters[0].BeginRoute (reqKey, null, 1, 3, null, null);
+				RoutingResult rr = env.KeyBasedRouters[0].EndRoute (ar);
+				Assert.IsNotNull (rr, "#1");
+				Assert.IsNotNull (rr.RootCandidates, "#2");
+				Assert.AreEqual (1, rr.RootCandidates.Length, "#3");
+				Assert.AreEqual (keys[0], rr.RootCandidates[0].NodeID, "#4");
+				Assert.IsNull (rr.RootCandidates[0].EndPoint, "#5");
+
+				reqKey = new Key (new byte[] {0x00, 0x81});
+				ar = env.KeyBasedRouters[0].BeginRoute (reqKey, null, 2, 3, null, null);
+				rr = env.KeyBasedRouters[0].EndRoute (ar);
+				Assert.IsNotNull (rr, "#6");
+				Assert.IsNotNull (rr.RootCandidates, "#7");
+				Assert.AreEqual (2, rr.RootCandidates.Length, "#8");
+				Assert.AreEqual (keys[0], rr.RootCandidates[0].NodeID, "#9");
+				Assert.AreEqual (keys[7], rr.RootCandidates[1].NodeID, "#a");
+				Assert.IsNull (rr.RootCandidates[0].EndPoint, "#b");
+				Assert.AreEqual (env.EndPoints[7], rr.RootCandidates[1].EndPoint, "#c");
+
+				reqKey = new Key (new byte[] {0x00, 0x80});
+				ar = env.KeyBasedRouters[0].BeginRoute (reqKey, null, 2, 3, null, null);
+				rr = env.KeyBasedRouters[0].EndRoute (ar);
+				Assert.IsNotNull (rr, "#d");
+				Assert.IsNotNull (rr.RootCandidates, "#e");
+				Assert.AreEqual (2, rr.RootCandidates.Length, "#f");
+				Assert.AreEqual (keys[0], rr.RootCandidates[0].NodeID, "#10");
+				Assert.AreEqual (keys[7], rr.RootCandidates[1].NodeID, "#11");
+				Assert.IsNull (rr.RootCandidates[0].EndPoint, "#12");
+				Assert.AreEqual (env.EndPoints[7], rr.RootCandidates[1].EndPoint, "#13");
+			}
+		}
 	}
 }
