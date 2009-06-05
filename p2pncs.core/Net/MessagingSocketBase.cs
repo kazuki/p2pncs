@@ -302,9 +302,11 @@ namespace p2pncs.Net
 				if (e.InquireMessage == null || !_inquiredHandlers.TryGetValue (e.InquireMessage.GetType (), out handler))
 					handler = InquiredUnknownMessage;
 			}
-			try {
-				handler (sender, e);
-			} catch {}
+			if (handler != null) {
+				try {
+					handler (sender, e);
+				} catch {}
+			}
 		}
 
 		protected void InvokeInquirySuccess (object sender, InquiredEventArgs e)
@@ -332,9 +334,11 @@ namespace p2pncs.Net
 				if (e.Message == null || !_receivedHandlers.TryGetValue (e.Message.GetType (), out handler))
 					handler = ReceivedUnknownMessage;
 			}
-			try {
-				handler (this, e);
-			} catch {}
+			if (handler != null) {
+				try {
+					handler (this, e);
+				} catch {}
+			}
 		}
 		#endregion
 
