@@ -131,9 +131,8 @@ namespace p2pncs.Evaluation
 
 		public IMessagingSocket CreateMessagingSocket (IDatagramEventSocket sock)
 		{
-			TimeSpan timeout = TimeSpan.FromSeconds (2);
-			int retries = 3, retryBufferSize = 1024, dupCheckSize = 512;
-			return CreateMessagingSocket (sock, timeout, retries, retryBufferSize, dupCheckSize);
+			return CreateMessagingSocket (sock, VirtualNode.DefaultMessagingTimeout,
+				VirtualNode.DefaultMessagingRetries, VirtualNode.DefaultMessagingRetryBufferSize, VirtualNode.DefaultMessagingDupCheckSize);
 		}
 
 		public IMessagingSocket CreateMessagingSocket (IDatagramEventSocket sock, TimeSpan timeout, int retries, int retryBufferSize, int dupCheckSize)
