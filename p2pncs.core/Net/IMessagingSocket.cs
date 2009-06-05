@@ -33,7 +33,9 @@ namespace p2pncs.Net
 		/// <param name="remoteEP">送信先のエンドポイント</param>
 		void Send (object obj, EndPoint remoteEP);
 
-		event ReceivedEventHandler Received;
+		void AddReceivedHandler (Type msgType, ReceivedEventHandler handler);
+		void RemoveReceivedHandler (Type msgType, ReceivedEventHandler handler);
+		event ReceivedEventHandler ReceivedUnknownMessage;
 
 		/// <summary>
 		/// 非同期問い合わせを開始します

@@ -44,7 +44,10 @@ namespace p2pncs.Net
 		Dictionary<Type, InquiredEventHandler> _inquiredHandlers = new Dictionary<Type, InquiredEventHandler> ();
 		long _numInq = 0, _numReinq = 0;
 
-		public event ReceivedEventHandler Received;
+		ReaderWriterLockWrapper _receivedHandlersLock = new ReaderWriterLockWrapper ();
+		Dictionary<Type, ReceivedEventHandler> _receivedHandlers = new Dictionary<Type, ReceivedEventHandler> ();
+
+		public event ReceivedEventHandler ReceivedUnknownMessage;
 		public event InquiredEventHandler InquiredUnknownMessage;
 		public event InquiredEventHandler InquirySuccess;
 		public event InquiredEventHandler InquiryFailure;
@@ -122,6 +125,30 @@ namespace p2pncs.Net
 			StartResponse_Internal (state, response);
 		}
 		protected abstract void StartResponse_Internal (InquiredResponseState state, object response);
+
+		public void AddReceivedHandler (Type msgType, ReceivedEventHandler handler)
+		{
+			using (IDisposable cookie = _receivedHandlersLock.EnterWriteLock ()) {
+				ReceivedEventHandler value;
+				if (_receivedHandlers.TryGetValue (msgType, out value)) {
+					value += handler;
+				} else {
+					_receivedHandlers.Add (msgType, handler);
+				}
+			}
+		}
+
+		public void RemoveReceivedHandler (Type msgType, ReceivedEventHandler handler)
+		{
+			using (IDisposable cookie = _receivedHandlersLock.EnterWriteLock ()) {
+				ReceivedEventHandler value;
+				if (_receivedHandlers.TryGetValue (msgType, out value)) {
+					value -= handler;
+					if (value == null)
+						_receivedHandlers.Remove (msgType);
+				}
+			}
+		}
 
 		public void AddInquiredHandler (Type inquiryMessageType, InquiredEventHandler handler)
 		{
@@ -270,20 +297,14 @@ namespace p2pncs.Net
 				return;
 			}
 
+			InquiredEventHandler handler;
 			using (IDisposable cookie = _inquiredHandlersLock.EnterReadLock ()) {
-				InquiredEventHandler handler;
-				if (e.InquireMessage != null && _inquiredHandlers.TryGetValue (e.InquireMessage.GetType (), out handler)) {
-					try {
-						handler (sender, e);
-					} catch {}
-				} else {
-					if (InquiredUnknownMessage != null) {
-						try {
-							InquiredUnknownMessage (sender, e);
-						} catch {}
-					}
-				}
+				if (e.InquireMessage == null || !_inquiredHandlers.TryGetValue (e.InquireMessage.GetType (), out handler))
+					handler = InquiredUnknownMessage;
 			}
+			try {
+				handler (sender, e);
+			} catch {}
 		}
 
 		protected void InvokeInquirySuccess (object sender, InquiredEventArgs e)
@@ -306,11 +327,14 @@ namespace p2pncs.Net
 
 		protected void InvokeReceived (object sender, ReceivedEventArgs e)
 		{
-			if (Received != null) {
-				try {
-					Received (sender, e);
-				} catch {}
+			ReceivedEventHandler handler;
+			using (IDisposable cookie = _receivedHandlersLock.EnterReadLock ()) {
+				if (e.Message == null || !_receivedHandlers.TryGetValue (e.Message.GetType (), out handler))
+					handler = ReceivedUnknownMessage;
 			}
+			try {
+				handler (this, e);
+			} catch {}
 		}
 		#endregion
 
