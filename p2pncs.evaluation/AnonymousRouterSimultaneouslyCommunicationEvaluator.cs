@@ -47,7 +47,7 @@ namespace p2pncs.Evaluation
 
 			Random rnd = new Random ();
 			using (EvalEnvironment env = new EvalEnvironment (opt)) {
-				env.AddNodes (opt, opt.NumberOfNodes, true);
+				env.AddNodes (opt.NumberOfNodes, true);
 				List<Info> subscribedList = new List<Info> ();
 				HashSet<Key> aliveRecipients = new HashSet<Key> ();
 				Dictionary<VirtualNode, Info> mapping = new Dictionary<VirtualNode,Info> ();

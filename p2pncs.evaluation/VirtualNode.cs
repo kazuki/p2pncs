@@ -99,18 +99,20 @@ namespace p2pncs.Evaluation
 			msock.StartResponse (e, msg);
 		}
 
-		public IMessagingSocket CreateAnonymousSocket (IDatagramEventSocket sock)
+		public IMessagingSocket CreateAnonymousSocket (IAnonymousSocket sock)
 		{
-			IAnonymousSocket asock = sock as IAnonymousSocket;
-			if (asock == null)
-				throw new ArgumentException ();
-			IMessagingSocket msock = _env.CreateMessagingSocket (sock);
-			msock.AddInquiredHandler (typeof (string), InquiredStringMessage);
-			AnonymousSocketInfo info = new AnonymousSocketInfo (msock);
+			IMessagingSocket msock = null;
+			if (sock.ConnectionType == AnonymousConnectionType.LowLatency) {
+				msock = _env.CreateMessagingSocket (sock);
+				msock.AddInquiredHandler (typeof (string), InquiredStringMessage);
+			}
+			AnonymousSocketInfo info = new AnonymousSocketInfo (sock, msock);
 			lock (_anonSockets) {
 				_anonSockets.Add (info);
 			}
-			asock.InitializedEventHandlers ();
+			if (sock.ConnectionType == AnonymousConnectionType.LowLatency) {
+				sock.InitializedEventHandlers ();
+			}
 			return msock;
 		}
 

@@ -32,8 +32,8 @@ namespace p2pncs.Evaluation
 		public void Evaluate (EvalOptionSet opt)
 		{
 			using (EvalEnvironment env = new EvalEnvironment (opt)) {
-				env.AddNodes (opt, opt.NumberOfNodes, true);
-				env.StartChurn (opt);
+				env.AddNodes (opt.NumberOfNodes, true);
+				env.StartChurn ();
 
 				ECKeyPair privateKey1 = ECKeyPair.Create (VirtualNode.DefaultECDomain);
 				Key recipientKey1 = Key.Create (privateKey1);

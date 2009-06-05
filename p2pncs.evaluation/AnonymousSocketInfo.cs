@@ -23,14 +23,13 @@ namespace p2pncs.Evaluation
 {
 	class AnonymousSocketInfo
 	{
-		public AnonymousSocketInfo (IMessagingSocket msock)
+		public AnonymousSocketInfo (IAnonymousSocket sock, IMessagingSocket msock)
 		{
+			BaseSocket = sock;
 			MessagingSocket = msock;
 		}
 
 		public IMessagingSocket MessagingSocket { get; set; }
-		public IAnonymousSocket BaseSocket {
-			get { return MessagingSocket.BaseSocket as IAnonymousSocket; }
-		}
+		public IAnonymousSocket BaseSocket { get; set; }
 	}
 }

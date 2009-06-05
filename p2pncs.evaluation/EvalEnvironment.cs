@@ -33,9 +33,11 @@ namespace p2pncs.Evaluation
 		List<VirtualNode> _nodes;
 		IntervalInterrupter _msgInt1, _msgInt2, _anonInt, _kbrInt, _dhtInt, _churnInt = null;
 		Random _rnd = new Random ();
+		EvalOptionSet _opt;
 
 		public EvalEnvironment (EvalOptionSet opt)
 		{
+			_opt = opt;
 			_network = new VirtualNetwork (opt.GetLatency (), 5, opt.GetPacketLossRate (), Environment.ProcessorCount);
 			_nodes = new List<VirtualNode> ();
 			_msgInt1 = new IntervalInterrupter (TimeSpan.FromMilliseconds (50), "MessagingSocket Interrupter");
@@ -53,7 +55,7 @@ namespace p2pncs.Evaluation
 				_churnInt = new IntervalInterrupter (TimeSpan.FromMilliseconds (opt.ChurnInterval), "Churn Interrupter");
 		}
 
-		public void AddNodes (EvalOptionSet opt, int count, bool viewStatusToConsole)
+		public void AddNodes (int count, bool viewStatusToConsole)
 		{
 			int initEndPoints = 2;
 			List<EndPoint> endPoints = new List<EndPoint> (initEndPoints);
@@ -69,7 +71,7 @@ namespace p2pncs.Evaluation
 					Console.CursorLeft = px; Console.CursorTop = py;
 					Console.Write ("[{0:p0}]", i / (double)count);
 				}
-				VirtualNode node = CreateNewVirtualNode (opt);
+				VirtualNode node = CreateNewVirtualNode ();
 				lock (_nodes) {
 					_nodes.Add (node);
 				}
@@ -85,7 +87,7 @@ namespace p2pncs.Evaluation
 				Console.CursorLeft = px; Console.CursorTop = py;
 				Console.Write ("[stabilizing]");
 			}
-			for (int i = 0; i < opt.NumberOfNodes; i++) {
+			for (int i = 0; i < _opt.NumberOfNodes; i++) {
 				_nodes[i].KeyBasedRouter.RoutingAlgorithm.Stabilize ();
 				Thread.Sleep (5);
 			}
@@ -100,10 +102,10 @@ namespace p2pncs.Evaluation
 			}
 		}
 
-		public void StartChurn (EvalOptionSet opt)
+		public void StartChurn ()
 		{
-			StartChurn (opt, delegate () {
-				VirtualNode node = CreateNewVirtualNode (opt);
+			StartChurn (delegate () {
+				VirtualNode node = CreateNewVirtualNode ();
 				lock (_nodes) {
 					int idx = _rnd.Next (2, _nodes.Count);
 					Logger.Log (LogLevel.Trace, this, "Drop-out Node {0}, {1}", _nodes[idx].NodeID, _nodes[idx].PublicEndPoint);
@@ -115,23 +117,32 @@ namespace p2pncs.Evaluation
 			});
 		}
 
-		public void StartChurn (EvalOptionSet opt, InterruptHandler handler)
+		public void StartChurn (InterruptHandler handler)
 		{
 			if (_churnInt == null || _churnInt.Active)
 				return;
 			_churnInt.AddInterruption (handler);
 		}
 
-		public VirtualNode CreateNewVirtualNode (EvalOptionSet opt)
+		public VirtualNode CreateNewVirtualNode ()
 		{
-			return new VirtualNode (this, _network, opt, _msgInt1, _kbrInt, _anonInt, _dhtInt);
+			return new VirtualNode (this, _network, _opt, _msgInt1, _kbrInt, _anonInt, _dhtInt);
 		}
 
 		public IMessagingSocket CreateMessagingSocket (IDatagramEventSocket sock)
 		{
 			TimeSpan timeout = TimeSpan.FromSeconds (2);
-			int retries = 3, retryBufferSize = 8192, dupCheckSize = 8192;
-			return new MessagingSocket (sock, true, SymmetricKey.NoneKey, Serializer.Instance, null, _msgInt2, timeout, retries, retryBufferSize, dupCheckSize);
+			int retries = 3, retryBufferSize = 1024, dupCheckSize = 512;
+			return CreateMessagingSocket (sock, timeout, retries, retryBufferSize, dupCheckSize);
+		}
+
+		public IMessagingSocket CreateMessagingSocket (IDatagramEventSocket sock, TimeSpan timeout, int retries, int retryBufferSize, int dupCheckSize)
+		{
+			VirtualDatagramEventSocket vsock = sock as VirtualDatagramEventSocket;
+			if (_opt.BypassMessagingSerializer && vsock != null)
+				return new VirtualMessagingSocket (vsock, true, _msgInt2, timeout, retries, retryBufferSize, dupCheckSize);
+			else
+				return new MessagingSocket (sock, true, SymmetricKey.NoneKey, Serializer.Instance, null, _msgInt2, timeout, retries, retryBufferSize, dupCheckSize);
 		}
 
 		public VirtualNetwork Network {
