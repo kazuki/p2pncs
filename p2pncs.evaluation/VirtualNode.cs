@@ -160,7 +160,11 @@ namespace p2pncs.Evaluation
 
 			lock (_anonSockets) {
 				for (int i = 0; i < _anonSockets.Count; i ++) {
-					_anonSockets[i].MessagingSocket.Dispose ();
+					if (_anonSockets[i].MessagingSocket == null) {
+						_anonSockets[i].BaseSocket.Dispose ();
+					} else {
+						_anonSockets[i].MessagingSocket.Dispose ();
+					}
 				}
 				_anonSockets.Clear ();
 			}

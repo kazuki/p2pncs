@@ -1474,7 +1474,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				#region IAnonymousSocket Members
 
 				public AnonymousConnectionType ConnectionType {
-					get { return AnonymousConnectionType.LowLatency; }
+					get { return _info._type; }
 				}
 
 				public Key LocalEndPoint {
