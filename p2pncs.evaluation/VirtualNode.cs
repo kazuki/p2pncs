@@ -71,12 +71,10 @@ namespace p2pncs.Evaluation
 				? (IKeyBasedRouter)new SimpleIterativeRouter2 (_nodeId, _msock, new SimpleRoutingAlgorithm (), Serializer.Instance, opt.NewKBRStrictMode)
 				: (IKeyBasedRouter)new SimpleIterativeRouter (_nodeId, _msock, new SimpleRoutingAlgorithm (), Serializer.Instance);
 			_dht = new SimpleDHT (_kbr, _msock, new OnMemoryLocalHashTable (dhtInt));
-			AnonymousRouter2.DefaultRelayNodes = opt.AnonymousRouteRelays;
-			AnonymousRouter2.DefaultSubscribeRoutes = opt.AnonymousRouteRoutes + opt.AnonymousRouteBackupRoutes;
-			AnonymousRouter2.AC_DefaultUseSubscribeRoutes = opt.AnonymousRouteRoutes;
-			_anonRouter = opt.UseNewAnonymousRouter
-				? (IAnonymousRouter)new AnonymousRouter2 (_dht, _nodePrivateKey, anonInt)
-				: (IAnonymousRouter)new AnonymousRouter (_dht, _nodePrivateKey, anonInt);
+			p2pncs.Net.Overlay.Anonymous.AnonymousRouter.DefaultRelayNodes = opt.AnonymousRouteRelays;
+			p2pncs.Net.Overlay.Anonymous.AnonymousRouter.DefaultSubscribeRoutes = opt.AnonymousRouteRoutes + opt.AnonymousRouteBackupRoutes;
+			p2pncs.Net.Overlay.Anonymous.AnonymousRouter.AC_DefaultUseSubscribeRoutes = opt.AnonymousRouteRoutes;
+			_anonRouter = new AnonymousRouter (_dht, _nodePrivateKey, anonInt);
 			_kbrStabilizeInt = kbrStabilizeInt;
 			_kbrStabilizeInt.AddInterruption (_kbr.RoutingAlgorithm.Stabilize);
 			_env = env;
@@ -86,17 +84,12 @@ namespace p2pncs.Evaluation
 
 		void AnonymousRouter_Accepting (object sender, AcceptingEventArgs args)
 		{
-			DatagramEventSocketWrapper sock = new DatagramEventSocketWrapper ();
-			args.Accept (sock.ReceivedHandler, new object[] {args.DestinationId, sock});
+			args.Accept (null);
 		}
 
 		void AnonymousRouter_Accepted (object sender, AcceptedEventArgs args)
 		{
-			object[] states = (object[])args.State;
-			Key dest = (Key)states[0];
-			DatagramEventSocketWrapper sock = (DatagramEventSocketWrapper)states[1];
-			sock.Socket = args.Socket;
-			CreateAnonymousSocket (dest, sock);
+			CreateAnonymousSocket (args.Socket);
 		}
 
 		void InquiredStringMessage (object sender, InquiredEventArgs e)
@@ -106,14 +99,18 @@ namespace p2pncs.Evaluation
 			msock.StartResponse (e, msg);
 		}
 
-		public IMessagingSocket CreateAnonymousSocket (Key dest, DatagramEventSocketWrapper sock)
+		public IMessagingSocket CreateAnonymousSocket (IDatagramEventSocket sock)
 		{
+			IAnonymousSocket asock = sock as IAnonymousSocket;
+			if (asock == null)
+				throw new ArgumentException ();
 			IMessagingSocket msock = _env.CreateMessagingSocket (sock);
 			msock.AddInquiredHandler (typeof (string), InquiredStringMessage);
-			AnonymousSocketInfo info = new AnonymousSocketInfo (dest, msock);
+			AnonymousSocketInfo info = new AnonymousSocketInfo (msock);
 			lock (_anonSockets) {
 				_anonSockets.Add (info);
 			}
+			asock.InitializedEventHandlers ();
 			return msock;
 		}
 

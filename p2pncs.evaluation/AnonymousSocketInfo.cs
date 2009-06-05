@@ -17,18 +17,20 @@
 
 using p2pncs.Net;
 using p2pncs.Net.Overlay;
+using p2pncs.Net.Overlay.Anonymous;
 
 namespace p2pncs.Evaluation
 {
 	class AnonymousSocketInfo
 	{
-		public AnonymousSocketInfo (Key dest, IMessagingSocket msock)
+		public AnonymousSocketInfo (IMessagingSocket msock)
 		{
-			Destination = dest;
 			MessagingSocket = msock;
 		}
 
-		public Key Destination { get; set; }
 		public IMessagingSocket MessagingSocket { get; set; }
+		public IAnonymousSocket BaseSocket {
+			get { return MessagingSocket.BaseSocket as IAnonymousSocket; }
+		}
 	}
 }

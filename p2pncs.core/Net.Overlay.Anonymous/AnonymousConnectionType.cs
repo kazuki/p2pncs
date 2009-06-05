@@ -17,11 +17,9 @@
 
 namespace p2pncs.Net.Overlay.Anonymous
 {
-	public interface IAnonymousSocket : IDatagramEventSocket
+	public enum AnonymousConnectionType
 	{
-		AnonymousConnectionType ConnectionType { get; }
-		Key LocalEndPoint { get; }
-		Key RemoteEndPoint { get; }
-		void InitializedEventHandlers ();
+		LowLatency,
+		HighThroughput
 	}
 }

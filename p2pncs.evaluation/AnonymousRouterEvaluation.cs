@@ -18,6 +18,7 @@
 using System;
 using System.Diagnostics;
 using System.Threading;
+using System.Net;
 using openCrypto.EllipticCurve;
 using p2pncs.Net;
 using p2pncs.Net.Overlay;
@@ -33,7 +34,6 @@ namespace p2pncs.Evaluation
 			using (EvalEnvironment env = new EvalEnvironment (opt)) {
 				env.AddNodes (opt, opt.NumberOfNodes, true);
 				env.StartChurn (opt);
-				Logger.Log (LogLevel.Info, this, "Test ({0})", env.Nodes[0].AnonymousRouter is AnonymousRouter ? "AnonymousRouter" : "AnonymousRouter2");
 
 				ECKeyPair privateKey1 = ECKeyPair.Create (VirtualNode.DefaultECDomain);
 				Key recipientKey1 = Key.Create (privateKey1);
@@ -48,7 +48,6 @@ namespace p2pncs.Evaluation
 				env.Nodes[1].SubscribeKey = recipientKey2.ToString ();
 				ISubscribeInfo subscribeInfo2 = env.Nodes[1].AnonymousRouter.GetSubscribeInfo (recipientKey2);
 
-				DatagramEventSocketWrapper sock1 = new DatagramEventSocketWrapper ();
 				IMessagingSocket msock1 = null, msock2 = null;
 
 				while (true) {
@@ -60,11 +59,11 @@ namespace p2pncs.Evaluation
 				bool routeEstablished = false;
 				do {
 					try {
-						sock1.Socket = env.Nodes[0].AnonymousRouter.EndEstablishRoute (env.Nodes[0].AnonymousRouter.BeginEstablishRoute (recipientKey1, recipientKey2, sock1.ReceivedHandler, null, null));
-						if (sock1.Socket == null || env.Nodes[1].AnonymousSocketInfoList.Count == 0)
+						IAnonymousSocket sock1 = env.Nodes[0].AnonymousRouter.EndConnect (env.Nodes[0].AnonymousRouter.BeginConnect (recipientKey1, recipientKey2, AnonymousConnectionType.LowLatency, null, null));
+						if (env.Nodes[1].AnonymousSocketInfoList.Count == 0)
 							throw new System.Net.Sockets.SocketException ();
 
-						msock1 = env.Nodes[0].CreateAnonymousSocket (recipientKey2, sock1);
+						msock1 = env.Nodes[0].CreateAnonymousSocket (sock1);
 						msock2 = env.Nodes[1].AnonymousSocketInfoList[0].MessagingSocket;
 						routeEstablished = true;
 
@@ -78,7 +77,7 @@ namespace p2pncs.Evaluation
 							tests ++;
 							string msg = "Hello-" + strKey1 + "-" + i.ToString ();
 							sw.Reset (); sw.Start ();
-							ar = msock1.BeginInquire (msg, DatagramEventSocketWrapper.DummyEP, null, null);
+							ar = msock1.BeginInquire (msg, AnonymousRouter.DummyEndPoint, null, null);
 							ret = msock1.EndInquire (ar) as string;
 							sw.Stop ();
 							if (ret == null) {
@@ -94,7 +93,7 @@ namespace p2pncs.Evaluation
 							tests++;
 							msg = "Hello-" + strKey1 + "-" + i.ToString ();
 							sw.Reset (); sw.Start ();
-							ar = msock2.BeginInquire (msg, DatagramEventSocketWrapper.DummyEP, null, null);
+							ar = msock2.BeginInquire (msg, AnonymousRouter.DummyEndPoint, null, null);
 							ret = msock2.EndInquire (ar) as string;
 							sw.Stop ();
 							if (ret == null) {

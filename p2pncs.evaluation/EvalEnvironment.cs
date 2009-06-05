@@ -127,7 +127,7 @@ namespace p2pncs.Evaluation
 			return new VirtualNode (this, _network, opt, _msgInt1, _kbrInt, _anonInt, _dhtInt);
 		}
 
-		public IMessagingSocket CreateMessagingSocket (DatagramEventSocketWrapper sock)
+		public IMessagingSocket CreateMessagingSocket (IDatagramEventSocket sock)
 		{
 			TimeSpan timeout = TimeSpan.FromSeconds (2);
 			int retries = 3, retryBufferSize = 8192, dupCheckSize = 8192;

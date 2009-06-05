@@ -98,7 +98,6 @@ namespace p2pncs.Evaluation
 
 					Info info = subscribedList[i];
 					Info destInfo;
-					info.TempSocket = new DatagramEventSocketWrapper ();
 					while (true) {
 						int idx = rnd.Next (subscribedList.Count);
 						destInfo = subscribedList[idx];
@@ -134,7 +133,7 @@ namespace p2pncs.Evaluation
 						if (list.Count == 0) continue;
 						string msg = "Hello-" + DateTime.Now.Ticks.ToString () + "-" + subscribedList[i].PublicKey.ToString ();
 						for (int k = 0; k < list.Count; k ++) {
-							list[k].MessagingSocket.BeginInquire (msg, DatagramEventSocketWrapper.DummyEP, Messaging_Callback,
+							list[k].MessagingSocket.BeginInquire (msg, AnonymousRouter.DummyEndPoint, Messaging_Callback,
 								new object[] {subscribedList[i], list[k], msg, Stopwatch.StartNew ()});
 						}
 						Thread.Sleep (50);
@@ -177,16 +176,15 @@ namespace p2pncs.Evaluation
 			Info info = (Info)objects[0];
 			Info destInfo = (Info)objects[1];
 			while (true) {
-				IAsyncResult ar = info.Node.AnonymousRouter.BeginEstablishRoute (info.PublicKey, info.TempDest,
-					info.TempSocket.ReceivedHandler, null, null);
+				IAsyncResult ar = info.Node.AnonymousRouter.BeginConnect (info.PublicKey, info.TempDest, AnonymousConnectionType.LowLatency, null, null);
 				try {
-					info.TempSocket.Socket = info.Node.AnonymousRouter.EndEstablishRoute (ar);
-					info.Node.CreateAnonymousSocket (info.TempDest, info.TempSocket);
+					IAnonymousSocket sock = info.Node.AnonymousRouter.EndConnect (ar);
+					info.Node.CreateAnonymousSocket (sock);
 					break;
 				} catch {
 					lock (destInfo.Node.AnonymousSocketInfoList) {
 						for (int k = 0; k < destInfo.Node.AnonymousSocketInfoList.Count; k++) {
-							if (!info.PublicKey.Equals (destInfo.Node.AnonymousSocketInfoList[k].Destination)) continue;
+							if (!info.PublicKey.Equals (destInfo.Node.AnonymousSocketInfoList[k].BaseSocket.RemoteEndPoint)) continue;
 							destInfo.Node.AnonymousSocketInfoList[k].MessagingSocket.Close ();
 							destInfo.Node.AnonymousSocketInfoList.RemoveAt (k);
 							break;
@@ -206,7 +204,7 @@ namespace p2pncs.Evaluation
 			AnonymousSocketInfo ainfo = (AnonymousSocketInfo)status[1];
 			string msg = (string)status[2];
 			Stopwatch sw = (Stopwatch)status[3];
-			msg += "-" + ainfo.Destination.ToString () + "-ok";
+			msg += "-" + ainfo.BaseSocket.RemoteEndPoint.ToString () + "-ok";
 			string ret = ainfo.MessagingSocket.EndInquire (ar) as string;
 			sw.Stop ();
 			lock (Console.Out) {
@@ -240,7 +238,6 @@ namespace p2pncs.Evaluation
 			public VirtualNode Node { get; set; }
 			public ISubscribeInfo SubscribeInfo { get; set; }
 
-			public DatagramEventSocketWrapper TempSocket { get; set; }
 			public Key TempDest { get; set; }
 		}
 	}

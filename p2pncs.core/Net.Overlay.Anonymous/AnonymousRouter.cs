@@ -15,14 +15,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/*
- * ToDo:
- * - データグラムサイズを常に900バイト未満に押さえる
- * - 複数経路を利用したコネクションの確立・メッセージのやりとりに対応させる
- * - ConnectionMessageにおいて終端ノードの情報が平文でやりとりされているが、コネクション鍵で暗号化を施すようにする
- * - コネクション間メッセージにはHMACを付けるほか、再送攻撃にも耐えられるようにする
- */
-
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -38,6 +30,9 @@ using p2pncs.Threading;
 using p2pncs.Utility;
 using ECDiffieHellman = openCrypto.EllipticCurve.KeyAgreement.ECDiffieHellman;
 using RouteLabel = System.Int32;
+using ConnectionHalfLabel = System.UInt16;
+using ConnectionLabel = System.UInt32;
+using DupCheckLabel = System.Int64;
 
 namespace p2pncs.Net.Overlay.Anonymous
 {
@@ -45,516 +40,95 @@ namespace p2pncs.Net.Overlay.Anonymous
 	{
 		#region Static Parameters
 		const SymmetricAlgorithmType DefaultSymmetricAlgorithmType = SymmetricAlgorithmType.Camellia;
-		static readonly SymmetricAlgorithmPlus DefaultSymmetricAlgorithm = new CamelliaManaged ();
+		const CipherModePlus DefaultCipherMode = CipherModePlus.CBC;
+		const PaddingMode DefaultPaddingMode = PaddingMode.ISO10126;
 		const int DefaultSymmetricKeyBits = 128;
+		const int DefaultSymmetricKeyBytes = DefaultSymmetricKeyBits / 8;
 		const int DefaultSymmetricBlockBits = 128;
+		const int DefaultSymmetricBlockBytes = DefaultSymmetricBlockBits / 8;
+		const int DefaultSharedInfoSize = 64;
 
 		/// <summary>多重暗号化されたメッセージのメッセージ長 (常にここで指定したサイズになる)</summary>
 		const int PayloadFixedSize = 896;
 
-		/// <summary>1つのIDにつき構築する多重暗号経路の最小数</summary>
-		const int DefaultSubscribeRoutes = 2;
+		public static int DefaultRelayNodes = 3;
+		public static int DefaultSubscribeRoutes = 2;
+		const float DefaultSubscribeRouteFactor = 1.0F;
 
-		/// <summary>多重暗号経路構築時に選択する中継ノード数 (終端ノード込み)</summary>
-		const int DefaultRealyNodes = 3;
+		static TimeSpan Messaging_Timeout = TimeSpan.FromMilliseconds (200);
+		const int Messaging_MaxRetry = 2;
+		static TimeSpan DisconnectMessaging_Timeout = Messaging_Timeout;
+		const int DisconnectMessaging_MaxRetry = Messaging_MaxRetry;
 
-		/// <summary>多重暗号経路の終端ノードがDHTに自身の情報を保存する間隔</summary>
-		static TimeSpan DHTPutInterval = TimeSpan.FromSeconds (60);
+		// Static parameters for DHT
+		static TimeSpan DHT_GetTimeout = TimeSpan.FromSeconds (5);
+		static TimeSpan DHT_PutInterval = TimeSpan.FromSeconds (60);
+		static TimeSpan DHT_Lifetime = DHT_PutInterval + DHT_GetTimeout;
 
-		/// <summary>DHT.Getのタイムアウト</summary>
-		static TimeSpan DHTGetTimeout = TimeSpan.FromSeconds (5);
+		// Static parameters for Multiple Cipher Route (MCR)
+		static TimeSpan MCR_EstablishingTimeout = TimeSpan.FromSeconds (DefaultRelayNodes * 2 * Messaging_Timeout.TotalSeconds);
+		static TimeSpan MCR_MaxMessageInterval = TimeSpan.FromSeconds (10);
+		static TimeSpan MCR_AliveCheckScheduleInterval = MCR_MaxMessageInterval - TimeSpan.FromSeconds (0.5);
+		static TimeSpan MCR_MaxMessageIntervalWithMargin = MCR_MaxMessageInterval + new TimeSpan (Messaging_Timeout.Ticks * Messaging_MaxRetry);
 
-		/// <summary>多重暗号経路の終端ノードがDHTに自身の情報を保存する際に利用する有効期限</summary>
-		static TimeSpan DHTPutValueLifeTime = DHTPutInterval + DHTGetTimeout;
+		// Static parameters for Anonymous Connection (AC)
+		public static int AC_DefaultUseSubscribeRoutes = DefaultSubscribeRoutes;
+		static TimeSpan AC_EstablishTimeout = new TimeSpan (MCR_EstablishingTimeout.Ticks * 2) + DHT_GetTimeout;
+		static TimeSpan AC_MaxMessageInterval = MCR_MaxMessageInterval;
+		static TimeSpan AC_AliveCheckScheduleInterval = MCR_AliveCheckScheduleInterval;
+		static TimeSpan AC_MaxMessageIntervalWithMargin = TimeSpan.FromDays (1); //new TimeSpan (AC_MaxMessageInterval.Ticks * 3);
 
-		/// <summary>多重暗号経路を利用してメッセージを送る際に利用するタイムアウト時間</summary>
-		static TimeSpan MCR_RelayTimeout = TimeSpan.FromMilliseconds (200);
+		static object AckMessage = "ACK";
 
-		/// <summary>各ノード間の最大RTT</summary>
-		static TimeSpan MaxRRT = TimeSpan.FromMilliseconds (MCR_RelayTimeout.TotalMilliseconds * 2);
+		public static EndPoint DummyEndPoint = new IPEndPoint (IPAddress.Loopback, 0);
 
-		/// <summary>多重暗号経路(MCR)の始点と終点間の最大RTT</summary>
-		static TimeSpan MCR_MaxRTT = new TimeSpan ((long)(MaxRRT.Ticks * DefaultRealyNodes));
+		static Serializer DefaultSerializer = Serializer.Instance;
 
-		/// <summary>多重暗号経路確立時に始点ノードが再送する最大回数</summary>
-		static int MCR_EstablishMaxRetry = 1;
-
-		/// <summary>多重暗号経路確立時に中継ノードが利用する問い合わせタイムアウト時間</summary>
-		static TimeSpan MCR_EstablishRelayTimeout = new TimeSpan (MaxRRT.Ticks * (DefaultRealyNodes - 1));
-
-		/// <summary>多重暗号経路確立時に中継ノードが利用する最大再送回数</summary>
-		static int MCR_EstablishRelayMaxRetry = MCR_EstablishMaxRetry;
-
-		/// <summary>多重暗号経路を利用してメッセージを送る際に利用する最大再送回数</summary>
-		static int MCR_RelayMaxRetry = 2;
-
-		/// <summary>多重暗号経路を流れるメッセージの最大間隔 (これより長い間隔が開くと経路エラーと判断する基準になる)</summary>
-		static TimeSpan MCR_Timeout = TimeSpan.FromSeconds (10);
-
-		/// <summary>多重暗号経路が壊れているためメッセージが届かないと認識するために利用するタイムアウト時間</summary>
-		static TimeSpan MCR_TimeoutWithMargin = MCR_Timeout + (MCR_MaxRTT + MCR_MaxRTT);
-
-		/// <summary>匿名コネクションを確立するときのタイムアウト時間</summary>
-		static TimeSpan Connection_EstablishTimeout = MCR_MaxRTT + MCR_MaxRTT + DHTGetTimeout;
-
-		static IFormatter DefaultFormatter = Serializer.Instance;
-		static EndPoint DummyEndPoint = new IPEndPoint (IPAddress.Loopback, 0);
 		const int DHT_TYPEID = 1;
-		static object DummyAckMsg = new ACK ();
-		const int ConnectionEstablishSharedInfoBytes = 16;
 		#endregion
 
-		#region Variables
+		bool _active = true;
 		IMessagingSocket _sock;
 		IKeyBasedRouter _kbr;
 		IDistributedHashTable _dht;
-		ECDiffieHellman _ecdh;
+		ECKeyPair _privateNodeKey;
 		IntervalInterrupter _interrupter;
 
-		Dictionary<AnonymousEndPoint, RouteInfo> _routingMap = new Dictionary<AnonymousEndPoint,RouteInfo> ();
+		Dictionary<AnonymousEndPoint, RouteInfo> _routingMap = new Dictionary<AnonymousEndPoint, RouteInfo> ();
 		ReaderWriterLockWrapper _routingMapLock = new ReaderWriterLockWrapper ();
 
-		Dictionary<Key, SubscribeInfo> _subscribeMap = new Dictionary<Key,SubscribeInfo> ();
+		Dictionary<Key, SubscribeInfo> _subscribeMap = new Dictionary<Key, SubscribeInfo> ();
 		ReaderWriterLockWrapper _subscribeMapLock = new ReaderWriterLockWrapper ();
 
-		Dictionary<Key, List<BoundaryInfo>> _boundMap = new Dictionary<Key, List<BoundaryInfo>> ();
-		ReaderWriterLockWrapper _boundMapLock = new ReaderWriterLockWrapper ();
+		Dictionary<uint, ConnectionInfo> _connectionMap = new Dictionary<uint,ConnectionInfo> ();
+		HashSet<ushort> _usedConnectionIDs = new HashSet<ushort> ();
+		ReaderWriterLockWrapper _connectionMapLock = new ReaderWriterLockWrapper ();
 
-		List<ConnectionInfo> _connections = new List<ConnectionInfo> ();
-		DuplicationChecker<long> _dupCheck = new DuplicationChecker<long> (8192);
-		#endregion
-
-		static AnonymousRouter ()
-		{
-			DefaultSymmetricAlgorithm.Mode = CipherMode.CBC;
-			DefaultSymmetricAlgorithm.Padding = PaddingMode.None;
-		}
+		const int DefaultDuplicationCheckerBufferSize = 1024;
+		DuplicationChecker<DupCheckLabel> _startPointDupChecker = new DuplicationChecker<long> (DefaultDuplicationCheckerBufferSize);
+		DuplicationChecker<DupCheckLabel> _terminalDupChecker = new DuplicationChecker<long> (DefaultDuplicationCheckerBufferSize);
+		DuplicationChecker<DupCheckLabel> _interterminalDupChecker = new DuplicationChecker<long> (DefaultDuplicationCheckerBufferSize);
 
 		public AnonymousRouter (IDistributedHashTable dht, ECKeyPair privateNodeKey, IntervalInterrupter interrupter)
 		{
 			_kbr = dht.KeyBasedRouter;
 			_sock = _kbr.MessagingSocket;
 			_dht = dht;
-			_ecdh = new ECDiffieHellman (privateNodeKey);
+			_privateNodeKey = privateNodeKey;
 			_interrupter = interrupter;
 
 			dht.RegisterTypeID (typeof (DHTEntry), DHT_TYPEID);
-			_sock.AddInquiredHandler (typeof (EstablishRouteMessage), MessagingSocket_Inquired_EstablishRouteMessage);
-			_sock.AddInquiredHandler (typeof (RoutedMessage), MessagingSocket_Inquired_RoutedMessage);
-			_sock.AddInquiredHandler (typeof (ConnectionEstablishMessage), MessagingSocket_Inquired_ConnectionEstablishMessage);
-			_sock.AddInquiredHandler (typeof (ConnectionMessage), MessagingSocket_Inquired_ConnectionMessage);
-			_sock.AddInquiredHandler (typeof (DisconnectMessage), MessagingSocket_Inquired_DisconnectMessage);
-			interrupter.AddInterruption (RouteTimeoutCheck);
+			_sock.AddInquiryDuplicationCheckType (typeof (EstablishRouteMessage));
+			_sock.AddInquiryDuplicationCheckType (typeof (RoutedMessage));
+			_sock.AddInquiredHandler (typeof (EstablishRouteMessage), Messaging_Inquired_EstablishRouteMessage);
+			_sock.AddInquiredHandler (typeof (RoutedMessage), Messaging_Inquired_RoutedMessage);
+			_sock.AddInquiredHandler (typeof (DisconnectMessage), Messaging_Inquired_DisconnectMessage);
+			_sock.AddInquiredHandler (typeof (InterterminalMessage), Messaging_Inquired_InterterminalMessage);
+			_interrupter.AddInterruption (RouteTimeoutCheck);
+			_sock.InquiredUnknownMessage += delegate (object sender, InquiredEventArgs e) {
+				Logger.Log (LogLevel.Error, this, "Unknown Inquired Message {0}", e.InquireMessage);
+			};
 		}
-
-		#region MessagingSocket
-		void MessagingSocket_Inquired_EstablishRouteMessage (object sender, InquiredEventArgs e)
-		{
-			EstablishRouteMessage msg = (EstablishRouteMessage)e.InquireMessage;
-			IMessagingSocket sock = (IMessagingSocket)sender;
-
-			EstablishRoutePayload payload = MultipleCipherHelper.DecryptEstablishPayload (msg.Payload, _ecdh, _kbr.SelftNodeId.KeyBytes);
-			if (payload.NextHopEndPoint != null) {
-				RouteLabel label = GenerateRouteLabel ();
-				Logger.Log (LogLevel.Trace, this, "Recv Establish {0}#{1:x} -> (this) -> {2}#{3:x}", e.EndPoint, msg.Label, payload.NextHopEndPoint, label);
-				EstablishRouteMessage msg2 = new EstablishRouteMessage (label, payload.NextHopPayload);
-				sock.BeginInquire (msg2, payload.NextHopEndPoint, MCR_EstablishRelayTimeout, MCR_EstablishRelayMaxRetry,
-					MessagingSocket_Inquired_EstablishRouteMessage_Callback, new object[] {sock, e, msg, payload, msg2});
-			} else {
-				Key key = new Key (payload.NextHopPayload);
-				BoundaryInfo boundaryInfo = new BoundaryInfo (this, payload.SharedKey, new AnonymousEndPoint (e.EndPoint, msg.Label), key);
-				EstablishedMessage ack = new EstablishedMessage (boundaryInfo.LabelOnlyAnonymousEndPoint.Label);
-				sock.StartResponse (e, new AcknowledgeMessage (MultipleCipherHelper.CreateRoutedPayload (payload.SharedKey, ack)));
-				if (_dupCheck.Check (payload.DuplicationCheckId)) {
-					Logger.Log (LogLevel.Trace, this, "Recv Establish {0}#{1:x} -> (end, #{3:x}) Subcribe {2}", e.EndPoint, msg.Label, key, ack.Label);
-					RouteInfo info = new RouteInfo (boundaryInfo.Previous, boundaryInfo, payload.SharedKey);
-					boundaryInfo.RouteInfo = info;
-					using (IDisposable cookie = _routingMapLock.EnterWriteLock ()) {
-						_routingMap.Add (info.Previous, info);
-						_routingMap.Add (boundaryInfo.LabelOnlyAnonymousEndPoint, info);
-					}
-					using (IDisposable cookie = _boundMapLock.EnterWriteLock ()) {
-						List<BoundaryInfo> list;
-						if (!_boundMap.TryGetValue (key, out list)) {
-							list = new List<BoundaryInfo> (2);
-							_boundMap.Add (key, list);
-						}
-						list.Add (boundaryInfo);
-					}
-					boundaryInfo.PutToDHT (_dht);
-				}
-			}
-		}
-
-		void MessagingSocket_Inquired_EstablishRouteMessage_Callback (IAsyncResult ar)
-		{
-			object[] state = (object[])ar.AsyncState;
-			IMessagingSocket sock = (IMessagingSocket)state[0];
-			InquiredEventArgs e = (InquiredEventArgs)state[1];
-			EstablishRouteMessage msg = (EstablishRouteMessage)state[2];
-			EstablishRoutePayload payload = (EstablishRoutePayload)state[3];
-			EstablishRouteMessage msg2 = (EstablishRouteMessage)state[4];
-			AcknowledgeMessage ack = (AcknowledgeMessage)sock.EndInquire (ar);
-			if (ack == null) {
-				// Inquiry fail.
-				sock.StartResponse (e, null);
-				return;
-			}
-			sock.StartResponse (e, new AcknowledgeMessage (MultipleCipherHelper.EncryptRoutedPayload (payload.SharedKey, ack.Payload)));
-
-			AnonymousEndPoint prevEP = new AnonymousEndPoint (e.EndPoint, msg.Label);
-			AnonymousEndPoint nextEP = new AnonymousEndPoint (payload.NextHopEndPoint, msg2.Label);
-			RouteInfo info = new RouteInfo (prevEP, nextEP, payload.SharedKey);
-			using (IDisposable cookie = _routingMapLock.EnterWriteLock ()) {
-				if (!_routingMap.ContainsKey (prevEP)) {
-					_routingMap.Add (info.Previous, info);
-					_routingMap.Add (info.Next, info);
-				}
-			}
-		}
-
-		void MessagingSocket_Inquired_RoutedMessage (object sender, InquiredEventArgs e)
-		{
-			RoutedMessage msg = (RoutedMessage)e.InquireMessage;
-			RouteInfo routeInfo;
-			using (IDisposable cookie = _routingMapLock.EnterReadLock ()) {
-				if (!_routingMap.TryGetValue (new AnonymousEndPoint (e.EndPoint, msg.Label), out routeInfo))
-					routeInfo = null;
-			}
-
-			if (routeInfo != null) {
-				_sock.StartResponse (e, DummyAckMsg);
-
-				bool direction = (routeInfo.Previous != null && routeInfo.Previous.EndPoint.Equals (e.EndPoint));
-				byte[] payload;
-				if (direction) {
-					// direction: prev -> ! -> next
-					routeInfo.ReceiveMessageFromPreviousNode ();
-					if (routeInfo.BoundaryInfo == null) {
-						payload = MultipleCipherHelper.DecryptRoutedPayload (routeInfo.Key, msg.Payload);
-						_sock.BeginInquire (new RoutedMessage (routeInfo.Next.Label, payload), routeInfo.Next.EndPoint,
-							MCR_RelayTimeout, MCR_RelayMaxRetry, MessagingSocket_Inquired_RoutedMessage_Callback, new object[]{routeInfo, routeInfo.Next});
-						Logger.Log (LogLevel.Trace, this, "Recv Routed {0} -> {1}", routeInfo.Previous, routeInfo.Next);
-					} else {
-						long dupCheckId;
-						object routedMsg = MultipleCipherHelper.DecryptRoutedPayloadAtEnd (routeInfo.Key, msg.Payload, out dupCheckId);
-						if (_dupCheck.Check (dupCheckId)) {
-							Logger.Log (LogLevel.Trace, this, "Recv Routed {0} -> (end), {1}", routeInfo.Previous, routedMsg);
-							ProcessMessage (routedMsg, routeInfo.BoundaryInfo);
-						}
-					}
-				} else {
-					// direction: next -> ! -> prev
-					routeInfo.ReceiveMessageFromNextNode ();
-					if (routeInfo.StartPointInfo == null) {
-						payload = MultipleCipherHelper.EncryptRoutedPayload (routeInfo.Key, msg.Payload);
-						_sock.BeginInquire (new RoutedMessage (routeInfo.Previous.Label, payload), routeInfo.Previous.EndPoint,
-							MCR_RelayTimeout, MCR_RelayMaxRetry, MessagingSocket_Inquired_RoutedMessage_Callback, new object[]{routeInfo, routeInfo.Previous});
-						Logger.Log (LogLevel.Trace, this, "Recv Routed {0} <- {1}", routeInfo.Previous, routeInfo.Next);
-					} else {
-						long dupCheckId;
-						object routedMsg = MultipleCipherHelper.DecryptRoutedPayload (routeInfo.StartPointInfo.RelayNodeKeys, msg.Payload, out dupCheckId);
-						if (_dupCheck.Check (dupCheckId)) {
-							Logger.Log (LogLevel.Trace, this, "Recv Routed (start) <- {0}, {1}", routeInfo.Next, routedMsg);
-							ProcessMessage (routedMsg, routeInfo.StartPointInfo);
-						}
-					}
-				}
-			} else {
-				Logger.Log (LogLevel.Trace, this, "No Route from {0}", e.EndPoint, msg.Label);
-				_sock.StartResponse (e, null);
-			}
-		}
-
-		void MessagingSocket_Inquired_RoutedMessage_Callback (IAsyncResult ar)
-		{
-			object res = _sock.EndInquire (ar);
-			object[] states = (object[])ar.AsyncState;
-			RouteInfo routeInfo = states[0] as RouteInfo;
-			AnonymousEndPoint dest = (AnonymousEndPoint)states[1];
-			if (res == null) {
-				// failed
-				Logger.Log (LogLevel.Trace, this, "Call Timeout by RoutedMessage_Callback, dest={0}", dest);
-				if (routeInfo.Next == dest && routeInfo.Previous != null)
-					_sock.BeginInquire (new DisconnectMessage (routeInfo.Previous.Label), routeInfo.Previous.EndPoint, null, null);
-				routeInfo.Timeout ();
-			} else {
-				if (routeInfo.Previous == dest)
-					routeInfo.ReceiveMessageFromPreviousNode ();
-				else if (routeInfo.Next == dest)
-					routeInfo.ReceiveMessageFromNextNode ();
-				else
-					Logger.Log (LogLevel.Error, this, "BUG?");
-			}
-		}
-
-		void MessagingSocket_Inquired_ConnectionEstablishMessage (object sender, InquiredEventArgs e)
-		{
-			ConnectionEstablishMessage msg = (ConnectionEstablishMessage)e.InquireMessage;
-			if (e.EndPoint == null) {
-				// Call from Process_LookupRecipientProxyMessage_Callback
-			} else {
-				_sock.StartResponse (e, DummyAckMsg);
-			}
-			if (!_dupCheck.Check (msg.DuplicationCheckId))
-				return;
-			RouteInfo routeInfo;
-			using (IDisposable cookie = _routingMapLock.EnterReadLock ()) {
-				if (!_routingMap.TryGetValue (new AnonymousEndPoint (DummyEndPoint, msg.Label), out routeInfo))
-					routeInfo = null;
-			}
-			if (routeInfo == null)
-				return;
-
-			routeInfo.BoundaryInfo.SendMessage (_sock, msg);
-		}
-
-		void MessagingSocket_Inquired_ConnectionMessage (object sender, InquiredEventArgs e)
-		{
-			ConnectionMessage msg = (ConnectionMessage)e.InquireMessage;
-			if (!_dupCheck.Check (msg.DuplicationCheckId)) {
-				_sock.StartResponse (e, DummyAckMsg);
-				return;
-			}
-
-			RouteInfo routeInfo;
-			using (IDisposable cookie = _routingMapLock.EnterReadLock ()) {
-				if (!_routingMap.TryGetValue (new AnonymousEndPoint (DummyEndPoint, msg.Label), out routeInfo))
-					routeInfo = null;
-			}
-			if (routeInfo == null) {
-				_sock.StartResponse (e, null);
-				Logger.Log (LogLevel.Trace, this, "Unknown Route from {0}", new AnonymousEndPoint (e.EndPoint, msg.Label));
-				return;
-			}
-
-			_sock.StartResponse (e, DummyAckMsg);
-			Logger.Log (LogLevel.Trace, this, "Recv ConnectionMsg from {0}", new AnonymousEndPoint (e.EndPoint, msg.Label));
-			routeInfo.BoundaryInfo.SendMessage (_sock, msg);
-		}
-
-		void MessagingSocket_Inquired_DisconnectMessage (object sender, InquiredEventArgs e)
-		{
-			_sock.StartResponse (e, DummyAckMsg);
-
-			DisconnectMessage msg = (DisconnectMessage)e.InquireMessage;
-			RouteInfo routeInfo;
-			using (IDisposable cookie = _routingMapLock.EnterReadLock ()) {
-				if (!_routingMap.TryGetValue (new AnonymousEndPoint (e.EndPoint, msg.Label), out routeInfo))
-					return;
-			}
-
-			Logger.Log (LogLevel.Debug, this, "Call RouteInfo.Timeout because received disconnect-message");
-			routeInfo.Timeout ();
-			if (routeInfo.Previous != null && !routeInfo.Previous.EndPoint.Equals (e.EndPoint)) {
-				_sock.BeginInquire (new DisconnectMessage (routeInfo.Previous.Label), routeInfo.Previous.EndPoint, null, null);
-			} else if (routeInfo.Previous == null && routeInfo.StartPointInfo != null) {
-				routeInfo.StartPointInfo.Timeout ();
-				Logger.Log (LogLevel.Debug, this, "Disconnect because received disconnect-message");
-			}
-		}
-		#endregion
-
-		#region Message Handlers
-		void ProcessMessage (object msg_obj, StartPointInfo info)
-		{
-			{
-				ConnectionEstablishMessage msg = msg_obj as ConnectionEstablishMessage;
-				if (msg != null) {
-					if (!_dupCheck.Check (msg.DuplicationCheckId))
-						return;
-					SubscribeInfo subscribeInfo;
-					using (IDisposable cookie = _subscribeMapLock.EnterReadLock ()) {
-						if (!_subscribeMap.TryGetValue (msg.RecipientID, out subscribeInfo))
-							return;
-					}
-					ConnectionEstablishInfo establishInfo = msg.Decrypt (subscribeInfo.DiffieHellman);
-					AcceptingEventArgs args = new AcceptingEventArgs (subscribeInfo.RecipientID, establishInfo.Initiator);
-					if (Accepting != null) {
-						try {
-							Accepting (this, args);
-						} catch {}
-					}
-					if (args.ReceiveEventHandler == null || Accepted == null)
-						return; // Reject
-
-					byte[] sharedInfo2 = RNG.GetRNGBytes (ConnectionEstablishSharedInfoBytes);
-					byte[] sharedInfo = new byte[establishInfo.SharedInfo.Length + ConnectionEstablishSharedInfoBytes];
-					Buffer.BlockCopy (establishInfo.SharedInfo, 0, sharedInfo, 0, establishInfo.SharedInfo.Length);
-					Buffer.BlockCopy (sharedInfo2, 0, sharedInfo, establishInfo.SharedInfo.Length, sharedInfo2.Length);
-					ECDiffieHellman ecdh = new ECDiffieHellman (subscribeInfo.DiffieHellman.Parameters);
-					ecdh.SharedInfo = sharedInfo;
-					byte[] iv = new byte[DefaultSymmetricBlockBits / 8];
-					byte[] key = new byte[DefaultSymmetricKeyBits / 8];
-					byte[] shared = ecdh.PerformKeyAgreement (establishInfo.Initiator.GetByteArray (), iv.Length + key.Length);
-					Buffer.BlockCopy (shared, 0, iv, 0, iv.Length);
-					Buffer.BlockCopy (shared, iv.Length, key, 0, key.Length);
-					SymmetricKey key2 = new SymmetricKey (DefaultSymmetricAlgorithmType, iv, key);
-					ConnectionInfo connection = new ConnectionInfo (this, subscribeInfo, establishInfo.Initiator, establishInfo.ConnectionId, key2, args.ReceiveEventHandler);
-					connection.DestinationSideTerminalNodes = establishInfo.EndPoints;
-					lock (_connections) {
-						_connections.Add (connection);
-					}
-					subscribeInfo.SendToAllRoutes (new ConnectionMessageBeforeBoundary (subscribeInfo.GetRouteEndPoints(),
-						establishInfo.EndPoints,establishInfo.ConnectionId, sharedInfo2));
-
-					try {
-						Accepted (this, new AcceptedEventArgs (connection.Socket, args.State));
-					} catch {}
-					return;
-				}
-			}
-			{
-				ConnectionMessage msg = msg_obj as ConnectionMessage;
-				if (msg != null) {
-					if (!_dupCheck.Check (msg.DuplicationCheckId))
-						return;
-					ConnectionInfo connection = null;
-					lock (_connections) {
-						for (int i = 0; i < _connections.Count; i ++)
-							if (_connections[i].ConnectionID == msg.ConnectionId) {
-								connection = _connections[i];
-								break;
-							}
-					}
-					if (connection == null)
-						return;
-					if (connection.IsInitiator && !connection.IsConnected) {
-						connection.ReceiveFirstConnectionMessage (msg);
-					} else {
-						connection.Receive (msg);
-					}
-					return;
-				}
-			}
-		}
-
-		void ProcessMessage (object msg_obj, BoundaryInfo info)
-		{
-			{
-				LookupRecipientProxyMessage msg = msg_obj as LookupRecipientProxyMessage;
-				if (msg != null) {
-					_dht.BeginGet (msg.RecipientKey, DHT_TYPEID, Process_LookupRecipientProxyMessage_Callback, msg);
-					return;
-				}
-			}
-			{
-				ConnectionMessageBeforeBoundary msg = msg_obj as ConnectionMessageBeforeBoundary;
-				if (msg != null) {
-					for (int i = 0; i < msg.OtherSideTerminalEndPoints.Length; i ++) {
-						ConnectionMessage msg2 = new ConnectionMessage (msg.MySideTerminalEndPoints,
-							msg.OtherSideTerminalEndPoints[i].Label, msg.ConnectionId, msg.DuplicationCheckId, msg.Payload);
-						_sock.BeginInquire (msg2, msg.OtherSideTerminalEndPoints[i].EndPoint, null, null);
-					}
-					return;
-				}
-			}
-		}
-
-		void Process_LookupRecipientProxyMessage_Callback (IAsyncResult ar)
-		{
-			LookupRecipientProxyMessage msg = (LookupRecipientProxyMessage)ar.AsyncState;
-			GetResult result = _dht.EndGet (ar);
-			if (result == null || result.Values == null || result.Values.Length == 0) {
-				Logger.Log (LogLevel.Trace, this, "DHT Lookup failed {0}", msg.RecipientKey);
-				return;
-			}
-			string temp = "";
-			for (int i = 0; i < result.Values.Length; i ++) {
-				DHTEntry entry = result.Values[i] as DHTEntry;
-				if (entry == null) continue;
-				if (entry.EndPoint != null) {
-					_sock.BeginInquire (msg.Message.Copy (entry.Label), entry.EndPoint, null, null);
-				} else {
-					MessagingSocket_Inquired_ConnectionEstablishMessage (null, new InquiredEventArgs (msg.Message.Copy (entry.Label), null));
-				}
-				temp += entry.ToString () + ", ";
-			}
-			if (temp.Length > 0) {
-				temp = temp.Substring (0, temp.Length - 2);
-				Logger.Log (LogLevel.Trace, this, "Send ConnectionEstablishMessage to " + temp);
-			}
-		}
-		#endregion
-
-		#region TimeoutCheck IntervalInterrupter
-		void RouteTimeoutCheck ()
-		{
-			using (IDisposable cookie = _subscribeMapLock.EnterReadLock ()) {
-				foreach (SubscribeInfo info in _subscribeMap.Values)
-					info.CheckTimeout ();
-			}
-			List<Key> emptyList = null;
-			using (IDisposable cookie = _boundMapLock.EnterReadLock ()) {
-				foreach (KeyValuePair<Key, List<BoundaryInfo>> pair in _boundMap) {
-					if (pair.Value.Count == 0) {
-						if (emptyList == null)
-							emptyList = new List<Key> ();
-						emptyList.Add (pair.Key);
-					}
-				}
-			}
-			if (emptyList != null) {
-				using (IDisposable cookie = _boundMapLock.EnterWriteLock ()) {
-					foreach (Key key in emptyList) {
-						List<BoundaryInfo> list;
-						if (_boundMap.TryGetValue (key, out list) && list.Count == 0)
-							_boundMap.Remove (key);
-					}
-				}
-			}
-			lock (_connections) {
-				for (int i = 0; i < _connections.Count; i ++)
-					if (!_connections[i].CheckTimeout ()) {
-						_connections[i].Close ();
-						i --;
-					}
-			}
-
-			List<AnonymousEndPoint> timeoutRoutes = null;
-			List<RouteInfo> timeoutRouteEnds = null;
-			using (IDisposable cookie = _routingMapLock.EnterReadLock ()) {
-				HashSet<RouteInfo> checkedList = new HashSet<RouteInfo> ();
-				foreach (RouteInfo info in _routingMap.Values) {
-					if (!checkedList.Add (info))
-						continue;
-					if (info.IsExpiry (_sock)) {
-						if (timeoutRoutes == null) {
-							timeoutRoutes = new List<AnonymousEndPoint> ();
-							timeoutRouteEnds = new List<RouteInfo> ();
-						}
-						if (info.Previous != null) timeoutRoutes.Add (info.Previous);
-						if (info.Next != null) timeoutRoutes.Add (info.Next);
-						if (info.StartPointInfo != null || info.BoundaryInfo != null) {
-							if (info.BoundaryInfo != null)
-								timeoutRoutes.Add (info.BoundaryInfo.LabelOnlyAnonymousEndPoint);
-							timeoutRouteEnds.Add (info);
-						}
-						Logger.Log (LogLevel.Trace, this, "Timeout: {0} <- (this) -> {1}",
-							info.Previous == null ? "(null)" : info.Previous.ToString (),
-							info.Next == null ? "(null)" : info.Next.ToString ());
-					} else {
-						if (info.BoundaryInfo != null) {
-							if (info.BoundaryInfo.NextPutToDHTTime <= DateTime.Now)
-								info.BoundaryInfo.PutToDHT (_dht);
-						}
-					}
-				}
-			}
-			if (timeoutRoutes != null) {
-				using (IDisposable cookie = _routingMapLock.EnterWriteLock ()) {
-					for (int i = 0; i < timeoutRoutes.Count; i ++)
-						_routingMap.Remove (timeoutRoutes[i]);
-				}
-				for (int i = 0; i < timeoutRouteEnds.Count; i ++) {
-					if (timeoutRouteEnds[i].StartPointInfo != null)
-						timeoutRouteEnds[i].StartPointInfo.Timeout ();
-					if (timeoutRouteEnds[i].BoundaryInfo != null)
-						timeoutRouteEnds[i].BoundaryInfo.Timeout ();
-				}
-			}
-		}
-		#endregion
 
 		#region IAnonymousRouter Members
 
@@ -564,11 +138,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 		public void SubscribeRecipient (Key recipientId, ECKeyPair privateKey)
 		{
-			SubscribeInfo info;
+			SubscribeInfo info = new SubscribeInfo (this, recipientId, privateKey, DefaultSubscribeRoutes, DefaultRelayNodes, DefaultSubscribeRouteFactor);
 			using (IDisposable cookie = _subscribeMapLock.EnterWriteLock ()) {
 				if (_subscribeMap.ContainsKey (recipientId))
 					return;
-				info = new SubscribeInfo (this, recipientId, privateKey, _kbr);
 				_subscribeMap.Add (recipientId, info);
 			}
 			info.Start ();
@@ -585,8 +158,11 @@ namespace p2pncs.Net.Overlay.Anonymous
 			info.Close ();
 		}
 
-		public IAsyncResult BeginEstablishRoute (Key recipientId, Key destinationId, DatagramReceiveEventHandler receivedHandler, AsyncCallback callback, object state)
+		public IAsyncResult BeginConnect (Key recipientId, Key destinationId, AnonymousConnectionType type, AsyncCallback callback, object state)
 		{
+			if (type != AnonymousConnectionType.LowLatency)
+				throw new NotImplementedException ();
+
 			SubscribeInfo subscribeInfo;
 			using (IDisposable cookie = _subscribeMapLock.EnterReadLock ()) {
 				if (!_subscribeMap.TryGetValue (recipientId, out subscribeInfo))
@@ -595,42 +171,30 @@ namespace p2pncs.Net.Overlay.Anonymous
 					throw new ArgumentException ();
 			}
 
-			ConnectionInfo info = new ConnectionInfo (this, subscribeInfo, destinationId, receivedHandler, callback, state);
-			lock (_connections) {
-				_connections.Add (info);
+			ConnectionInfo info;
+			using (IDisposable cookie = _connectionMapLock.EnterWriteLock ()) {
+				byte[] raw_id = new byte[2];
+				ushort id;
+				do {
+					RNG.Instance.GetBytes (raw_id);
+					id = BitConverter.ToUInt16 (raw_id, 0);
+				} while (!_usedConnectionIDs.Add (id));
+
+				info = new ConnectionInfo (this, subscribeInfo, destinationId, id, callback, state);
+				_connectionMap.Add (info.ConnectionId, info);
 			}
+
+			info.Start ();
 			return info.AsyncResult;
 		}
 
-		public IAnonymousSocket EndEstablishRoute (IAsyncResult ar)
+		public IAnonymousSocket EndConnect (IAsyncResult ar)
 		{
-			IConnectionAsyncResult ar2 = ar as IConnectionAsyncResult;
-			if (ar2 == null)
-				throw new ArgumentException ();
+			ConnectionInfo.EstablishRouteAsyncResult ar2 = (ConnectionInfo.EstablishRouteAsyncResult)ar;
 			ar.AsyncWaitHandle.WaitOne ();
-			if (ar2.ConnectionInfo.Socket == null)
+			if (!ar2.ConnectionInfo.IsConnected)
 				throw new System.Net.Sockets.SocketException ();
 			return ar2.ConnectionInfo.Socket;
-		}
-
-		public void Close ()
-		{
-			_sock.RemoveInquiredHandler (typeof (EstablishRouteMessage), MessagingSocket_Inquired_EstablishRouteMessage);
-			_sock.RemoveInquiredHandler (typeof (RoutedMessage), MessagingSocket_Inquired_RoutedMessage);
-			_sock.RemoveInquiredHandler (typeof (ConnectionEstablishMessage), MessagingSocket_Inquired_ConnectionEstablishMessage);
-			_sock.RemoveInquiredHandler (typeof (ConnectionMessage), MessagingSocket_Inquired_ConnectionMessage);
-			_sock.RemoveInquiredHandler (typeof (DisconnectMessage), MessagingSocket_Inquired_DisconnectMessage);
-			_interrupter.RemoveInterruption (RouteTimeoutCheck);
-
-			using (IDisposable cookie = _subscribeMapLock.EnterWriteLock ()) {
-				foreach (SubscribeInfo info in _subscribeMap.Values)
-					info.Close ();
-				_subscribeMap.Clear ();
-			}
-
-			_routingMapLock.Dispose ();
-			_subscribeMapLock.Dispose ();
-			_boundMapLock.Dispose ();
 		}
 
 		public ISubscribeInfo GetSubscribeInfo (Key recipientId)
@@ -648,6 +212,501 @@ namespace p2pncs.Net.Overlay.Anonymous
 			get { return _dht; }
 		}
 
+		public void Close ()
+		{
+			_active = false;
+			_interrupter.RemoveInterruption (RouteTimeoutCheck);
+			_sock.RemoveInquiryDuplicationCheckType (typeof (EstablishRouteMessage));
+			_sock.RemoveInquiryDuplicationCheckType (typeof (RoutedMessage));
+			_sock.RemoveInquiredHandler (typeof (EstablishRouteMessage), Messaging_Inquired_EstablishRouteMessage);
+			_sock.RemoveInquiredHandler (typeof (RoutedMessage), Messaging_Inquired_RoutedMessage);
+			_sock.RemoveInquiredHandler (typeof (DisconnectMessage), Messaging_Inquired_DisconnectMessage);
+			_sock.RemoveInquiredHandler (typeof (InterterminalMessage), Messaging_Inquired_InterterminalMessage);
+
+			using (IDisposable cookie = _subscribeMapLock.EnterWriteLock ()) {
+				foreach (SubscribeInfo info in _subscribeMap.Values)
+					info.Close ();
+				_subscribeMap.Clear ();
+			}
+
+			_subscribeMapLock.Dispose ();
+			_routingMapLock.Dispose ();
+			_connectionMapLock.Dispose ();
+		}
+
+		#endregion
+
+		#region Messaging Handlers
+		void Messaging_Inquired_EstablishRouteMessage (object sender, InquiredEventArgs e)
+		{
+			_sock.StartResponse (e, AckMessage);
+
+			EstablishRouteMessage msg = (EstablishRouteMessage)e.InquireMessage;
+			EstablishRoutePayload payload = MultipleCipherHelper.DecryptEstablishPayload (msg.Payload, _privateNodeKey, _kbr.SelftNodeId.KeyBytes);
+			RouteLabel label = GenerateRouteLabel ();
+			AnonymousEndPoint prev = new AnonymousEndPoint (e.EndPoint, msg.Label), next = null;
+			RouteInfo routeInfo;
+
+			if (!payload.IsLast) {
+				using (IDisposable cookie = _routingMapLock.EnterWriteLock ()) {
+					if (_routingMap.ContainsKey (prev))
+						return;
+					next = new AnonymousEndPoint (payload.NextHopNode, label);
+					while (_routingMap.ContainsKey (next)) {
+						label = GenerateRouteLabel ();
+						next = new AnonymousEndPoint (payload.NextHopNode, label);
+					}
+					routeInfo = new RouteInfo (prev, next, payload.Key);
+					_routingMap.Add (prev, routeInfo);
+					_routingMap.Add (next, routeInfo);
+				}
+
+				_sock.BeginInquire (new EstablishRouteMessage (label, payload.Payload), payload.NextHopNode, delegate (IAsyncResult ar) {
+					if (_sock.EndInquire (ar) == null) {
+						routeInfo.Timeout (null);
+						_kbr.RoutingAlgorithm.Fail (new NodeHandle (null, payload.NextHopNode));
+					}
+				}, null);
+			} else {
+				TerminalPointInfo termInfo;
+				using (IDisposable cookie = _routingMapLock.EnterWriteLock ()) {
+					if (_routingMap.ContainsKey (prev))
+						return;
+					next = new AnonymousEndPoint (DummyEndPoint, label);
+					while (_routingMap.ContainsKey (next)) {
+						label = GenerateRouteLabel ();
+						next = new AnonymousEndPoint (DummyEndPoint, label);
+					}
+					termInfo = new TerminalPointInfo (this, new Key (payload.Payload), label);
+					routeInfo = new RouteInfo (prev, termInfo, payload.Key);
+					_routingMap.Add (prev, routeInfo);
+					_routingMap.Add (next, routeInfo);
+				}
+				termInfo.SendMessage (_kbr.MessagingSocket, new EstablishedRouteMessage (label));
+				termInfo.PutToDHT ();
+			}
+		}
+
+		void Messaging_Inquired_RoutedMessage (object sender, InquiredEventArgs e)
+		{
+			RoutedMessage msg = (RoutedMessage)e.InquireMessage;
+			RouteInfo routeInfo;
+			AnonymousEndPoint senderEP = new AnonymousEndPoint (e.EndPoint, msg.Label);
+			using (IDisposable cookie = _routingMapLock.EnterReadLock ()) {
+				if (!_routingMap.TryGetValue (senderEP, out routeInfo))
+					routeInfo = null;
+			}
+
+			if (routeInfo == null) {
+				Logger.Log (LogLevel.Trace, this, "No Route from {0}", e.EndPoint, msg.Label);
+				_sock.StartResponse (e, null);
+				return;
+			}
+
+			_sock.StartResponse (e, AckMessage);
+			bool direction = (routeInfo.Previous != null && routeInfo.Previous.Equals (senderEP));
+			if (direction) {
+				// direction: prev -> ! -> next
+				routeInfo.ReceiveMessageFromPreviousNode ();
+				if (routeInfo.TerminalPointInfo == null) {
+					byte[] payload = MultipleCipherHelper.DecryptRoutedPayload (routeInfo.Key, msg.Payload);
+					_sock.BeginInquire (new RoutedMessage (routeInfo.Next.Label, payload), routeInfo.Next.EndPoint,
+							Messaging_Timeout, Messaging_MaxRetry, Messaging_Inquired_RoutedMessage_Callback, new object[] {routeInfo, routeInfo.Next});
+					Logger.Log (LogLevel.Trace, this, "Recv Routed {0} -> {1}", routeInfo.Previous, routeInfo.Next);
+				} else {
+					object payload = MultipleCipherHelper.DecryptRoutedPayloadAtTerminal (routeInfo.Key, msg.Payload);
+					ICheckDuplication dupCheckMsg = payload as ICheckDuplication;
+					if (dupCheckMsg != null && !_terminalDupChecker.Check (dupCheckMsg.DuplicationCheckValue))
+						return;
+					ProcessMessage (payload, routeInfo.TerminalPointInfo);
+					Logger.Log (LogLevel.Trace, this, "TerminalPoint: Received {0}", payload);
+				}
+			} else {
+				// direction: next -> ! -> prev
+				routeInfo.ReceiveMessageFromNextNode ();
+				if (routeInfo.StartPointInfo == null) {
+					byte[] payload = MultipleCipherHelper.EncryptRoutedPayload (routeInfo.Key, msg.Payload);
+					_sock.BeginInquire (new RoutedMessage (routeInfo.Previous.Label, payload), routeInfo.Previous.EndPoint,
+							Messaging_Timeout, Messaging_MaxRetry, Messaging_Inquired_RoutedMessage_Callback, new object[] {routeInfo, routeInfo.Previous});
+					Logger.Log (LogLevel.Trace, this, "Recv Routed {0} <- {1}", routeInfo.Previous, routeInfo.Next);
+				} else {
+					object payload = MultipleCipherHelper.DecryptRoutedPayload (routeInfo.StartPointInfo.RelayKeys, msg.Payload);
+					ICheckDuplication dupCheckMsg = payload as ICheckDuplication;
+					if (dupCheckMsg != null && !_startPointDupChecker.Check (dupCheckMsg.DuplicationCheckValue))
+						return;
+					ProcessMessage (payload, routeInfo.StartPointInfo);
+					Logger.Log (LogLevel.Trace, this, "StartPoint: Received {0}", payload);
+				}
+			}
+		}
+
+		void Messaging_Inquired_RoutedMessage_Callback (IAsyncResult ar)
+		{
+			object res = _sock.EndInquire (ar);
+			object[] states = (object[])ar.AsyncState;
+			RouteInfo routeInfo = states[0] as RouteInfo;
+			AnonymousEndPoint dest = (AnonymousEndPoint)states[1];
+			if (res == null) {
+				routeInfo.Timeout (routeInfo.Next == dest ? _sock : null);
+				_kbr.RoutingAlgorithm.Fail (new NodeHandle (null, dest.EndPoint));
+			} else {
+				if (routeInfo.Previous == dest)
+					routeInfo.ReceiveMessageFromPreviousNode ();
+				else if (routeInfo.Next == dest)
+					routeInfo.ReceiveMessageFromNextNode ();
+			}
+		}
+
+		void Messaging_Inquired_InterterminalMessage (object sender, InquiredEventArgs e)
+		{
+			RouteInfo routeInfo;
+			InterterminalMessage msg = (InterterminalMessage)e.InquireMessage;
+			ICheckDuplication msg2 = msg.Message as ICheckDuplication;
+			if (msg2 == null) {
+				_sock.StartResponse (e, null);
+				Logger.Log (LogLevel.Fatal, this, "BUG #1");
+				return;
+			}
+
+			using (IDisposable cookie = _routingMapLock.EnterReadLock ()) {
+				if (!_routingMap.TryGetValue (new AnonymousEndPoint (DummyEndPoint, msg.Label), out routeInfo))
+					routeInfo = null;
+			}
+			if (routeInfo == null || routeInfo.TerminalPointInfo == null) {
+				_sock.StartResponse (e, null);
+				Logger.Log (LogLevel.Trace, this, "No Interterminal Route");
+				return;
+			}
+
+			_sock.StartResponse (e, AckMessage);
+			if (!_interterminalDupChecker.Check (msg2.DuplicationCheckValue))
+				return;
+			routeInfo.TerminalPointInfo.SendMessage (_sock, msg.Message);
+		}
+
+		void Messaging_Inquired_DisconnectMessage (object sender, InquiredEventArgs e)
+		{
+			_sock.StartResponse (e, AckMessage);
+
+			DisconnectMessage msg = (DisconnectMessage)e.InquireMessage;
+			RouteInfo routeInfo;
+			AnonymousEndPoint senderEP = new AnonymousEndPoint (e.EndPoint, msg.Label);
+			using (IDisposable cookie = _routingMapLock.EnterReadLock ()) {
+				if (!_routingMap.TryGetValue (senderEP, out routeInfo))
+					return;
+			}
+
+			if (routeInfo.Next != null && routeInfo.Next.Equals (senderEP)) {
+				routeInfo.Timeout (_sock);
+			} else {
+				Logger.Log (LogLevel.Error, this, "BUG (Direction of sending disconnect msg)");
+			}
+		}
+		#endregion
+
+		#region Message Handlers
+		void ProcessMessage (object msg_obj, StartPointInfo info)
+		{
+			{
+				EstablishedRouteMessage msg = msg_obj as EstablishedRouteMessage;
+				if (msg != null) {
+					info.Established (msg);
+					return;
+				}
+			}
+			{
+				ConnectionEstablishMessage msg = msg_obj as ConnectionEstablishMessage;
+				if (msg != null) {
+					ECDomainNames domainName = info.SubscribeInfo.PrivateKey.DomainName;
+					ECKeyPair pubKey = ECKeyPair.CreatePublic (domainName, msg.EphemeralPublicKey);
+					ConnectionEstablishPayload payload = ConnectionEstablishPayload.Decrypt (info.SubscribeInfo.PrivateKey, pubKey, msg.Encrypted);
+					SymmetricKey tmpKey = MultipleCipherHelper.ComputeSharedKey (info.SubscribeInfo.PrivateKey,
+						payload.InitiatorId.ToECPublicKey (domainName), payload.SharedInfo, PaddingMode.None, false);
+					if (!ConnectionInfo.CheckMAC (tmpKey, msg.Encrypted, msg.MAC)) {
+						Logger.Log (LogLevel.Error, this, "MAC Error");
+						return;
+					}
+
+					AcceptingEventArgs args = new AcceptingEventArgs (info.SubscribeInfo.Key, payload.InitiatorId);
+					if (Accepting != null) {
+						try {
+							Accepting (this, args);
+						} catch {}
+					}
+					if (!args.Accepted || Accepted == null)
+						return; // Reject
+
+					ConnectionInfo cinfo;
+					uint id = (uint)payload.ConnectionId << 16;
+					byte[] sharedInfo = RNG.GetRNGBytes (DefaultSharedInfoSize);
+					using (IDisposable cookie = _connectionMapLock.EnterWriteLock ()) {
+						while (_connectionMap.ContainsKey (id))
+							id ++;
+						cinfo = new ConnectionInfo (this, info.SubscribeInfo, id, sharedInfo, pubKey, payload);
+						_connectionMap.Add (id, cinfo);
+					}
+					cinfo.Start (sharedInfo);
+
+					try {
+						Accepted (this, new AcceptedEventArgs (cinfo.Socket, args.State));
+					} catch {}
+					return;
+				}
+			}
+			{
+				ConnectionReciverSideMessage msg = msg_obj as ConnectionReciverSideMessage;
+				if (msg != null) {
+					ConnectionInfo cinfo;
+					using (IDisposable cookie = _connectionMapLock.EnterReadLock ()) {
+						if (!_connectionMap.TryGetValue (msg.ConnectionId, out cinfo)) {
+							if (!_connectionMap.TryGetValue (msg.ConnectionId & 0xFFFF0000, out cinfo) || (!cinfo.IsInitiator && !cinfo.IsConnected)) {
+								Logger.Log (LogLevel.Warn, this, "Unknown Connection");
+								return;
+							}
+						}
+					}
+					if (!cinfo.IsConnected && (msg.PayloadMAC == null || msg.PayloadMAC.Length == 0)) {
+						ConnectionEstablishedMessage msg2 = (ConnectionEstablishedMessage)DefaultSerializer.Deserialize (msg.Payload);
+						SymmetricKey key = cinfo.ComputeSharedKey (msg2.SharedInfo);
+						if (!ConnectionInfo.CheckMAC (key, msg2.SharedInfo, msg2.MAC)) {
+							Logger.Log (LogLevel.Error, this, "MAC Error");
+							return;
+						}
+						if (msg.ConnectionId != cinfo.ConnectionId) {
+							using (IDisposable cookie = _connectionMapLock.EnterWriteLock ()) {
+								_connectionMap.Remove (msg.ConnectionId);
+								_connectionMap.Add (msg.ConnectionId, cinfo);
+								cinfo.ConnectionId = msg.ConnectionId;
+							}
+						}
+						cinfo.Established (key, msg.SenderSideTerminalEndPoints);
+						Logger.Log (LogLevel.Trace, cinfo, "Connection Established");
+					} else {
+						cinfo.Received (msg);
+					}
+					return;
+				}
+			}
+			Logger.Log (LogLevel.Error, this, "Unknown Message at StartPoint {0}", msg_obj);
+		}
+
+		void ProcessMessage (object msg_obj, TerminalPointInfo info)
+		{
+			{
+				if (msg_obj is Ping)
+					return;
+			}
+			{
+				ConnectionEstablishMessage msg = msg_obj as ConnectionEstablishMessage;
+				if (msg != null) {
+					_dht.BeginGet (msg.DestinationId, DHT_TYPEID, ProcessMessage_ConnectionEstablish_DHTGet_Callback, msg);
+					return;
+				}
+			}
+			{
+				ConnectionSenderSideMessage msg = msg_obj as ConnectionSenderSideMessage;
+				if (msg != null) {
+					ConnectionReciverSideMessage msg2 = new ConnectionReciverSideMessage (
+						msg.SenderSideTerminalEndPoints, msg.ConnectionId, msg.DuplicationCheckValue, msg.Payload, msg.PayloadMAC);
+					InterterminalState state = new InterterminalState (msg.ReciverSideTerminalEndPoints, msg.Destination, msg2);
+					foreach (AnonymousEndPoint ep in msg.ReciverSideTerminalEndPoints) {
+						_sock.BeginInquire (new InterterminalMessage (ep.Label, msg2), ep.EndPoint,
+							ProcessMessage_ConnectionSenderSide_Interterminal_Callback, new object[]{state, ep.EndPoint});
+					}
+					return;
+				}
+			}
+			Logger.Log (LogLevel.Error, this, "Unknown Message at TerminalPointInfo {0}", msg_obj);
+		}
+
+		void ProcessMessage_ConnectionEstablish_DHTGet_Callback (IAsyncResult ar)
+		{
+			ConnectionEstablishMessage msg = (ConnectionEstablishMessage)ar.AsyncState;
+			GetResult result = _dht.EndGet (ar);
+			if (result == null || result.Values == null || result.Values.Length == 0) {
+				Logger.Log (LogLevel.Trace, this, "DHT Lookup Failed. Key={0}", msg.DestinationId);
+				return;
+			}
+			object[] results = result.Values.RandomSelection (AC_DefaultUseSubscribeRoutes);
+			for (int i = 0; i < results.Length; i++) {
+				DHTEntry entry = results[i] as DHTEntry;
+				if (entry == null) continue;
+				_sock.BeginInquire (new InterterminalMessage (entry.Label, msg), entry.EndPoint, null, null);
+			}
+		}
+
+		void ProcessMessage_ConnectionSenderSide_Interterminal_Callback (IAsyncResult ar)
+		{
+			object[] states = (object[])ar.AsyncState;
+			InterterminalState state = (InterterminalState)states[0];
+			EndPoint ep = (EndPoint)states[1];
+			object ret = _sock.EndInquire (ar);
+			bool completed;
+			if (ret == null) {
+				completed = state.Fail ();
+				_kbr.RoutingAlgorithm.Fail (new NodeHandle (null, ep));
+			} else {
+				completed = state.Success ();
+			}
+			if (completed) {
+				Thread.MemoryBarrier ();
+				if (state.Fails == state.Count) {
+					_dht.BeginGet (state.Destination, DHT_TYPEID, ProcessMessage_ConnectionSenderSide_Interterminal_DHT_Callback, state);
+				}
+			}
+		}
+
+		void ProcessMessage_ConnectionSenderSide_Interterminal_DHT_Callback (IAsyncResult ar)
+		{
+			InterterminalState state = (InterterminalState)ar.AsyncState;
+			GetResult ret = _dht.EndGet (ar);
+			if (ret == null || ret.Values == null || ret.Values.Length == 0) {
+				Logger.Log (LogLevel.Trace, this, "DHT Lookup Failed (Inter-terminal)");
+				return;
+			}
+
+			List<AnonymousEndPoint> list = new List<AnonymousEndPoint> ();
+			for (int i = 0; i < ret.Values.Length; i ++) {
+				DHTEntry entry = ret.Values[i] as DHTEntry;
+				if (entry == null) continue;
+				AnonymousEndPoint ep = new AnonymousEndPoint (entry.EndPoint, entry.Label);
+				if (!state.Set.Contains (ep))
+					list.Add (ep);
+			}
+			if (list.Count == 0) {
+				Logger.Log (LogLevel.Trace, this, "DHT result data is too old (Inter-terminal)");
+				return;
+			}
+			foreach (AnonymousEndPoint ep in list) {
+				_sock.BeginInquire (new InterterminalMessage (ep.Label, state.Message), ep.EndPoint, null, null);
+			}
+		}
+
+		class InterterminalState
+		{
+			int _count;
+			int _fail = 0;
+			int _returned = 0;
+			Key _dest;
+			ConnectionReciverSideMessage _msg;
+			HashSet<AnonymousEndPoint> _set;
+
+			public InterterminalState (AnonymousEndPoint[] eps, Key dest, ConnectionReciverSideMessage msg)
+			{
+				_count = eps.Length;
+				_set = new HashSet<AnonymousEndPoint> (eps);
+				_dest = dest;
+				_msg = msg;
+			}
+
+			public bool Fail ()
+			{
+				Interlocked.Increment (ref _fail);
+				return (Interlocked.Increment (ref _returned) == _count);
+			}
+
+			public bool Success ()
+			{
+				return (Interlocked.Increment (ref _returned) == _count);
+			}
+
+			public Key Destination {
+				get { return _dest; }
+			}
+
+			public ConnectionReciverSideMessage Message {
+				get { return _msg; }
+			}
+
+			public HashSet<AnonymousEndPoint> Set {
+				get { return _set; }
+			}
+
+			public int Fails {
+				get { return _fail; }
+			}
+
+			public int Count {
+				get { return _count; }
+			}
+		}
+		#endregion
+
+		#region Timeout Check
+		void RouteTimeoutCheck ()
+		{
+			if (!_active) return;
+			using (IDisposable cookie = _connectionMapLock.EnterUpgradeableReadLock ()) {
+				List<ConnectionInfo> timeoutConnections = null;
+				foreach (ConnectionInfo cinfo in _connectionMap.Values) {
+					if (cinfo.IsExpiry) {
+						if (timeoutConnections == null)
+							timeoutConnections = new List<ConnectionInfo> ();
+						timeoutConnections.Add (cinfo);
+					} else if (cinfo.NextPingTime <= DateTime.Now) {
+						cinfo.SendPing ();
+					}
+				}
+
+				if (timeoutConnections != null) {
+					using (IDisposable cookie2 = _connectionMapLock.EnterWriteLock ()) {
+						foreach (ConnectionInfo cinfo in timeoutConnections) {
+							if (cinfo.IsInitiator)
+								_usedConnectionIDs.Remove ((ushort)(cinfo.ConnectionId >> 16));
+							cinfo.Close ();
+							_connectionMap.Remove (cinfo.ConnectionId);
+							Logger.Log (LogLevel.Trace, this, "Timeout AC {0}", cinfo.ConnectionId);
+						}
+					}
+				}
+			}
+
+			if (!_active) return;
+			List<KeyValuePair<AnonymousEndPoint, RouteInfo>> timeouts = null;
+			List<StartPointInfo> aliveCheckList = null;
+			List<TerminalPointInfo> dhtPutList = null;
+			using (IDisposable cookie = _routingMapLock.EnterUpgradeableReadLock ()) {
+				foreach (KeyValuePair<AnonymousEndPoint, RouteInfo> pair in _routingMap) {
+					if (pair.Value.IsExpiry ()) {
+						if (timeouts == null)
+							timeouts = new List<KeyValuePair<AnonymousEndPoint, RouteInfo>> ();
+						timeouts.Add (pair);
+					} else if (pair.Value.StartPointInfo != null && pair.Value.StartPointInfo.NextPingTime <= DateTime.Now) {
+						if (aliveCheckList == null)
+							aliveCheckList = new List<StartPointInfo> ();
+						aliveCheckList.Add (pair.Value.StartPointInfo);
+					} else if (pair.Value.TerminalPointInfo != null && pair.Value.TerminalPointInfo.NextPutTime <= DateTime.Now) {
+						if (dhtPutList == null)
+							dhtPutList = new List<TerminalPointInfo> ();
+						dhtPutList.Add (pair.Value.TerminalPointInfo);
+					}
+				}
+				if (timeouts != null && timeouts.Count > 0) {
+					using (IDisposable cookie2 = _routingMapLock.EnterWriteLock ()) {
+						for (int i = 0; i < timeouts.Count; i ++)
+							_routingMap.Remove (timeouts[i].Key);
+					}
+				}
+			}
+
+			if (!_active) return;
+			if (timeouts != null) {
+				Logger.Log (LogLevel.Trace, this, "Timeout {0} Relay Nodes", timeouts.Count);
+				for (int i = 0; i < timeouts.Count; i ++) {
+					RouteInfo ri = timeouts[i].Value;
+					if (ri.StartPointInfo != null)
+						ri.StartPointInfo.SubscribeInfo.Close (ri.StartPointInfo);
+				}
+			}
+			if (aliveCheckList != null) {
+				for (int i = 0; i < aliveCheckList.Count; i ++)
+					aliveCheckList[i].SendMessage (_kbr.MessagingSocket, Ping.Instance);
+			}
+			if (dhtPutList != null) {
+				for (int i = 0; i < dhtPutList.Count; i ++)
+					dhtPutList[i].PutToDHT ();
+			}
+		}
 		#endregion
 
 		#region Misc
@@ -656,46 +715,40 @@ namespace p2pncs.Net.Overlay.Anonymous
 			byte[] raw = RNG.GetRNGBytes (4);
 			return BitConverter.ToInt32 (raw, 0);
 		}
+		static DupCheckLabel GenerateDuplicationCheckValue ()
+		{
+			byte[] raw = RNG.GetRNGBytes (8);
+			return BitConverter.ToInt64 (raw, 0);
+		}
 		#endregion
 
 		#region SubscribeInfo
 		class SubscribeInfo : ISubscribeInfo
 		{
-			bool _active = true;
-			float FACTOR = 1.0F;
-			int _numOfRoutes = DefaultSubscribeRoutes;
-			Key _recipientId;
-			IKeyBasedRouter _kbr;
-			ECDiffieHellman _ecdh;
+			Key _key;
+			ECKeyPair _privateKey;
 			AnonymousRouter _router;
-			object _listLock = new object ();
-			List<StartPointInfo> _establishedList = new List<StartPointInfo> ();
-			List<StartPointInfo> _establishingList = new List<StartPointInfo> ();
-			SubscribeRouteStatus _status = SubscribeRouteStatus.Establishing;
+			int _numOfRoutes, _numOfRelays;
+			float _factor;
 
-			public SubscribeInfo (AnonymousRouter router, Key id, ECKeyPair privateKey, IKeyBasedRouter kbr)
+			bool _active = true;
+			SubscribeRouteStatus _status = SubscribeRouteStatus.Establishing;
+			object _listLock = new object ();
+			HashSet<StartPointInfo> _establishedList = new HashSet<StartPointInfo> ();
+			HashSet<StartPointInfo> _establishingList = new HashSet<StartPointInfo> ();
+
+			public SubscribeInfo (AnonymousRouter router, Key key, ECKeyPair privateKey, int numOfRoutes, int numOfRelays, float factor)
 			{
 				_router = router;
-				_recipientId = id;
-				_ecdh = new ECDiffieHellman (privateKey);
-				_kbr = kbr;
+				_key = key;
+				_privateKey = privateKey;
+				_numOfRoutes = numOfRoutes;
+				_numOfRelays = numOfRelays;
+				_factor = factor;
 			}
 
 			public void Start ()
 			{
-				CheckNumberOfEstablishedRoutes ();
-			}
-
-			public void CheckTimeout ()
-			{
-				DateTime border = DateTime.Now - MCR_Timeout;
-				lock (_listLock) {
-					for (int i = 0; i < _establishedList.Count; i ++) {
-						if (_establishedList[i].LastSendTime < border)
-							_establishedList[i].SendMessage (_kbr.MessagingSocket, Ping.Instance);
-					}
-				}
-
 				CheckNumberOfEstablishedRoutes ();
 			}
 
@@ -704,20 +757,34 @@ namespace p2pncs.Net.Overlay.Anonymous
 				if (!_active) return;
 				lock (_listLock) {
 					if (_establishedList.Count < _numOfRoutes) {
-						int expectedCount = (int)Math.Ceiling ((_numOfRoutes - _establishedList.Count) * FACTOR);
+						int expectedCount = (int)Math.Ceiling ((_numOfRoutes - _establishedList.Count) * _factor);
 						int count = expectedCount - _establishingList.Count;
 						while (count-- > 0) {
-							NodeHandle[] relays = _kbr.RoutingAlgorithm.GetRandomNodes (DefaultRealyNodes);
-							if (relays.Length < DefaultRealyNodes) {
+							NodeHandle[] relays = _router.KeyBasedRouter.RoutingAlgorithm.GetRandomNodes (_numOfRelays);
+							if (relays.Length < _numOfRelays) {
 								Logger.Log (LogLevel.Trace, this, "Relay node selection failed");
 								return;
 							}
-							StartPointInfo info = new StartPointInfo (this, relays);
+
+							SymmetricKey[] relayKeys = new SymmetricKey[relays.Length];
+							byte[] payload = MultipleCipherHelper.CreateEstablishPayload (relays, relayKeys, _key, _privateKey.DomainName);
+
+							RouteLabel label = GenerateRouteLabel ();
+							AnonymousEndPoint ep = new AnonymousEndPoint (relays[0].EndPoint, label);
+							StartPointInfo info;
+							using (IDisposable cookie = _router._routingMapLock.EnterWriteLock ()) {
+								while (_router._routingMap.ContainsKey (ep)) {
+									label = GenerateRouteLabel ();
+									ep = new AnonymousEndPoint (relays[0].EndPoint, label);
+								}
+								info = new StartPointInfo (this, relays, relayKeys, label);
+								RouteInfo routeInfo = new RouteInfo (info, ep);
+								_router._routingMap.Add (ep, routeInfo);
+							}
 							_establishingList.Add (info);
-							byte[] payload = info.CreateEstablishData (_recipientId, _ecdh.Parameters.DomainName);
 							EstablishRouteMessage msg = new EstablishRouteMessage (info.Label, payload);
-							_kbr.MessagingSocket.BeginInquire (msg, info.RelayNodes[0].EndPoint,
-								MCR_MaxRTT, MCR_EstablishMaxRetry, EstablishRoute_Callback, info);
+							_router.KeyBasedRouter.MessagingSocket.BeginInquire (msg, info.RelayNodes[0].EndPoint,
+								Messaging_Timeout, Messaging_MaxRetry, EstablishRoute_Callback, info);
 						}
 					}
 				}
@@ -725,74 +792,51 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			void EstablishRoute_Callback (IAsyncResult ar)
 			{
-				AcknowledgeMessage ack = _kbr.MessagingSocket.EndInquire (ar) as AcknowledgeMessage;
-				StartPointInfo startInfo = (StartPointInfo)ar.AsyncState;
-				lock (_listLock) {
-					_establishingList.Remove (startInfo);
-				}
-
-				if (!_active) return;
-				long dupCheckId = 0;
-				EstablishedMessage msg = (ack == null ? null : MultipleCipherHelper.DecryptRoutedPayload (startInfo.RelayNodeKeys, ack.Payload, out dupCheckId) as EstablishedMessage);
-				if (msg != null && !_router._dupCheck.Check (dupCheckId))
-					return;
-
-				if (ack == null || msg == null) {
-					startInfo.Close ();
-					Logger.Log (LogLevel.Trace, this, "ESTABLISH FAILED");
-					CheckNumberOfEstablishedRoutes ();
-				} else {
-					Logger.Log (LogLevel.Debug, this, "ESTABLISHED Label=#{0:x}", msg.Label);
-					lock (_router._connections) { // 新しい終端ノードの情報をすべてのコネクションの相手先に送信する
-						foreach (ConnectionInfo conn in _router._connections) {
-							if (conn.RecipientID.GetHashCode () != _recipientId.GetHashCode ())
-								continue;
-							conn.Send (new byte[0], 0, 0);
-						}
-					}
-					RouteInfo routeInfo = new RouteInfo (startInfo, new AnonymousEndPoint (startInfo.RelayNodes[0].EndPoint, startInfo.Label), null);
-					startInfo.Established (msg, routeInfo);
+				object ret = _router.KeyBasedRouter.MessagingSocket.EndInquire (ar);
+				StartPointInfo info = (StartPointInfo)ar.AsyncState;
+				if (ret == null) {
+					info.RouteInfo.Timeout (null);
 					lock (_listLock) {
-						_establishedList.Add (startInfo);
+						_establishingList.Remove (info);
 						UpdateStatus ();
 					}
-					using (IDisposable cookie = _router._routingMapLock.EnterWriteLock ()) {
-						_router._routingMap.Add (routeInfo.Next, routeInfo);
-					}
+					_router.KeyBasedRouter.RoutingAlgorithm.Fail (info.RelayNodes[0]);
+					CheckNumberOfEstablishedRoutes ();
 				}
+			}
+
+			public void Established (StartPointInfo info)
+			{
+				lock (_listLock) {
+					_establishingList.Remove (info);
+					_establishedList.Add (info);
+					UpdateStatus ();
+				}
+				Logger.Log (LogLevel.Trace, this, "Established");
+			}
+
+			public void SendMessage (object msg)
+			{
+				StartPointInfo[] array;
+				lock (_listLock) {
+					array = new StartPointInfo[_establishedList.Count];
+					_establishedList.CopyTo (array);
+				}
+				array = array.RandomSelection (AC_DefaultUseSubscribeRoutes);
+				for (int i = 0; i < array.Length; i ++)
+					array[i].SendMessage (_router.KeyBasedRouter.MessagingSocket, msg);
 			}
 
 			public AnonymousEndPoint[] GetRouteEndPoints ()
 			{
-				lock (_establishedList) {
+				lock (_listLock) {
 					AnonymousEndPoint[] endPoints = new AnonymousEndPoint[_establishedList.Count];
-					for (int i = 0; i < _establishedList.Count; i ++)
-						endPoints[i] = _establishedList[i].TerminalEndPoint;
+					int i = 0;
+					foreach (StartPointInfo info in _establishedList) {
+						endPoints[i ++] = info.TerminalEndPoint;
+					}
 					return endPoints;
 				}
-			}
-
-			public void SendToAllRoutes (object msg)
-			{
-				lock (_establishedList) {
-					for (int i = 0; i < _establishedList.Count; i ++)
-						_establishedList[i].SendMessage (_router._sock, msg);
-				}
-			}
-
-			public void Close (StartPointInfo start)
-			{
-				lock (_listLock) {
-					start.Close ();
-					_establishedList.Remove (start);
-					UpdateStatus ();
-				}
-				CheckNumberOfEstablishedRoutes ();
-			}
-
-			public void Close ()
-			{
-				_active = false;
 			}
 
 			void UpdateStatus ()
@@ -809,90 +853,58 @@ namespace p2pncs.Net.Overlay.Anonymous
 					_status = SubscribeRouteStatus.Stable;
 			}
 
-			public Key RecipientID {
-				get { return _recipientId; }
+			public void Close (StartPointInfo info)
+			{
+				lock (_listLock) {
+					_establishingList.Remove (info);
+					_establishedList.Remove (info);
+					UpdateStatus ();
+				}
+				CheckNumberOfEstablishedRoutes ();
 			}
 
-			public ECDiffieHellman DiffieHellman {
-				get { return _ecdh; }
-			}
-
-			public IAnonymousRouter AnonymousRouter {
-				get { return _router; }
+			public void Close ()
+			{
+				_active = false;
 			}
 
 			#region ISubscribeInfo Members
 
 			public Key Key {
-				get { return _recipientId; }
+				get { return _key; }
 			}
 
 			public ECKeyPair PrivateKey {
-				get { return _ecdh.Parameters; }
+				get { return _privateKey; }
 			}
 
 			public SubscribeRouteStatus Status {
 				get { return _status; }
 			}
 
+			public IAnonymousRouter AnonymousRouter {
+				get { return _router; }
+			}
+
 			#endregion
 		}
-		#endregion
 
-		#region StartPointInfo
-		delegate void AckMessageHandler (object msg);
 		class StartPointInfo
 		{
 			NodeHandle[] _relayNodes;
-			SymmetricKey[] _relayKeys = null;
+			SymmetricKey[] _relayKeys;
 			RouteLabel _label;
 			AnonymousEndPoint _termEP = null;
-			DateTime _lastSendTime = DateTime.Now;
+			DateTime _nextPingTime = DateTime.MaxValue;
 			SubscribeInfo _subscribe;
 			RouteInfo _routeInfo = null;
 
-			public StartPointInfo (SubscribeInfo subscribe, NodeHandle[] relayNodes)
+			public StartPointInfo (SubscribeInfo subscribe, NodeHandle[] relayNodes, SymmetricKey[] relayKeys, RouteLabel label)
 			{
 				_subscribe = subscribe;
 				_relayNodes = relayNodes;
-				_label = GenerateRouteLabel ();
-			}
-
-			public NodeHandle[] RelayNodes {
-				get { return _relayNodes; }
-			}
-
-			public SymmetricKey[] RelayNodeKeys {
-				get { return _relayKeys; }
-			}
-
-			public RouteLabel Label {
-				get { return _label; }
-			}
-
-			public AnonymousEndPoint TerminalEndPoint {
-				get { return _termEP; }
-			}
-
-			public DateTime LastSendTime {
-				get { return _lastSendTime; }
-			}
-
-			public void SendMessage (IMessagingSocket sock, object msg)
-			{
-				byte[] payload = MultipleCipherHelper.CreateRoutedPayload (_relayKeys, msg);
-				_lastSendTime = DateTime.Now;
-				sock.BeginInquire (new RoutedMessage (_label, payload), _relayNodes[0].EndPoint,
-					MCR_RelayTimeout, MCR_RelayMaxRetry, SendMessage_Callback, sock);
-			}
-
-			void SendMessage_Callback (IAsyncResult ar)
-			{
-				IMessagingSocket sock = (IMessagingSocket)ar.AsyncState;
-				if (sock.EndInquire (ar) == null)
-					Timeout ();
-				else
-					_routeInfo.ReceiveMessageFromNextNode ();
+				_relayKeys = relayKeys;
+				_label = label;
 			}
 
 			public byte[] CreateEstablishData (Key recipientId, ECDomainNames domain)
@@ -903,82 +915,103 @@ namespace p2pncs.Net.Overlay.Anonymous
 				return MultipleCipherHelper.CreateEstablishPayload (_relayNodes, _relayKeys, recipientId, domain);
 			}
 
-			public void Established (EstablishedMessage msg, RouteInfo routeInfo)
+			public void Established (EstablishedRouteMessage msg)
 			{
 				_termEP = new AnonymousEndPoint (_relayNodes[_relayNodes.Length - 1].EndPoint, msg.Label);
-				_routeInfo = routeInfo;
-			}
-
-			public void Timeout ()
-			{
-				_subscribe.Close (this);
-			}
-
-			public void Close ()
-			{
-				if (_routeInfo != null) {
-					_routeInfo.Timeout ();
-				}
-			}
-		}
-		#endregion
-
-		#region BoundaryInfo
-		class BoundaryInfo
-		{
-			SymmetricKey _key;
-			AnonymousEndPoint _prevEP;
-			bool _closed = false;
-			DateTime _nextPutToDHTTime = DateTime.Now + DHTPutInterval;
-			AnonymousEndPoint _dummyEP;
-			Key _recipientKey;
-			RouteInfo _routeInfo = null;
-			AnonymousRouter _router;
-
-			public BoundaryInfo (AnonymousRouter router, SymmetricKey key, AnonymousEndPoint prev, Key recipientKey)
-			{
-				_router = router;
-				_key = key;
-				_prevEP = prev;
-				_recipientKey = recipientKey;
-				_dummyEP = new AnonymousEndPoint (DummyEndPoint, GenerateRouteLabel ());
+				_nextPingTime = DateTime.Now + MCR_AliveCheckScheduleInterval;
+				_subscribe.Established (this);
 			}
 
 			public void SendMessage (IMessagingSocket sock, object msg)
 			{
-				if (_closed) return;
-				byte[] payload = MultipleCipherHelper.CreateRoutedPayload (_key, msg);
-				sock.BeginInquire (new RoutedMessage (_prevEP.Label, payload), _prevEP.EndPoint,
-					MCR_RelayTimeout, MCR_RelayMaxRetry,
-					SendMessage_Callback, sock);
+				_nextPingTime = DateTime.Now + MCR_AliveCheckScheduleInterval;
+				byte[] payload = MultipleCipherHelper.CreateRoutedPayload (_relayKeys, msg);
+				sock.BeginInquire (new RoutedMessage (_routeInfo.Next.Label, payload), _routeInfo.Next.EndPoint,
+					Messaging_Timeout, Messaging_MaxRetry, SendMessage_Callback, sock);
 			}
 			void SendMessage_Callback (IAsyncResult ar)
 			{
 				IMessagingSocket sock = (IMessagingSocket)ar.AsyncState;
 				if (sock.EndInquire (ar) == null) {
-					Logger.Log (LogLevel.Debug, _router, "Call BoundaryInfo.Timeout because inquire failed");
-					Timeout ();
+					_routeInfo.Timeout (null);
+					_subscribe.AnonymousRouter.KeyBasedRouter.RoutingAlgorithm.Fail (new NodeHandle (null, _routeInfo.Next.EndPoint));
+				} else {
+					_routeInfo.ReceiveMessageFromNextNode ();
+				}
+			}
+
+			public NodeHandle[] RelayNodes {
+				get { return _relayNodes; }
+			}
+
+			public SymmetricKey[] RelayKeys {
+				get { return _relayKeys; }
+			}
+
+			public RouteLabel Label {
+				get { return _label; }
+			}
+
+			public RouteInfo RouteInfo {
+				get { return _routeInfo; }
+				set { _routeInfo = value;}
+			}
+
+			public SubscribeInfo SubscribeInfo {
+				get { return _subscribe; }
+			}
+
+			public DateTime NextPingTime {
+				get { return _nextPingTime; }
+			}
+
+			public AnonymousEndPoint TerminalEndPoint {
+				get { return _termEP; }
+			}
+		}
+
+		class TerminalPointInfo
+		{
+			bool _active = true;
+			AnonymousEndPoint _dummyEP;
+			Key _recipientKey;
+			RouteInfo _routeInfo = null;
+			AnonymousRouter _router;
+			DateTime _nextPutTime = DateTime.MaxValue;
+
+			public TerminalPointInfo (AnonymousRouter router, Key recipientKey, RouteLabel label)
+			{
+				_router = router;
+				_recipientKey = recipientKey;
+				_dummyEP = new AnonymousEndPoint (DummyEndPoint, label);
+			}
+
+			public void SendMessage (IMessagingSocket sock, object msg)
+			{
+				if (!_active) return;
+				byte[] payload = MultipleCipherHelper.CreateRoutedPayload (_routeInfo.Key, msg);
+				sock.BeginInquire (new RoutedMessage (_routeInfo.Previous.Label, payload), _routeInfo.Previous.EndPoint,
+					Messaging_Timeout, Messaging_MaxRetry, SendMessage_Callback, sock);
+			}
+			void SendMessage_Callback (IAsyncResult ar)
+			{
+				IMessagingSocket sock = (IMessagingSocket)ar.AsyncState;
+				if (sock.EndInquire (ar) == null) {
+					_routeInfo.Timeout (null);
+					_router.KeyBasedRouter.RoutingAlgorithm.Fail (new NodeHandle (null, _routeInfo.Previous.EndPoint));
 				} else {
 					_routeInfo.ReceiveMessageFromPreviousNode ();
 				}
 			}
 
-			public void PutToDHT (IDistributedHashTable dht)
+			public void PutToDHT ()
 			{
-				_nextPutToDHTTime = DateTime.Now + DHTPutInterval;
-				dht.BeginPut (_recipientKey, DHTPutValueLifeTime, new DHTEntry (_dummyEP.Label), null, null);
+				_router.DistributedHashTable.BeginPut (_recipientKey, DHT_Lifetime, new DHTEntry (_dummyEP.Label), null, null);
+				_nextPutTime = DateTime.Now + DHT_PutInterval;
 			}
 
-			public SymmetricKey SharedKey {
-				get { return _key; }
-			}
-
-			public AnonymousEndPoint Previous {
-				get { return _prevEP; }
-			}
-
-			public DateTime NextPutToDHTTime {
-				get { return _nextPutToDHTTime; }
+			public Key RecipientKey {
+				get { return _recipientKey; }
 			}
 
 			public AnonymousEndPoint LabelOnlyAnonymousEndPoint {
@@ -989,29 +1022,22 @@ namespace p2pncs.Net.Overlay.Anonymous
 				set { _routeInfo = value; }
 			}
 
-			public void Timeout ()
-			{
-				_closed = true;
-				if (_routeInfo != null)
-					_routeInfo.Timeout ();
-
-				/// TODO: DHTからキー情報を削除
+			public DateTime NextPutTime {
+				get { return _nextPutTime; }
 			}
 		}
-		#endregion
 
-		#region RouteInfo
 		class RouteInfo
 		{
 			AnonymousEndPoint _prevEP;
 			AnonymousEndPoint _nextEP;
-			DateTime _prevExpiry, _nextExpiry;
 			SymmetricKey _key;
 			StartPointInfo _startPoint;
-			BoundaryInfo _boundary;
+			TerminalPointInfo _termPoint;
+			DateTime _prevExpiry, _nextExpiry;
 
-			public RouteInfo (StartPointInfo startPoint, AnonymousEndPoint next, SymmetricKey key)
-				: this (null, next, key, startPoint, null)
+			public RouteInfo (StartPointInfo startPoint, AnonymousEndPoint next)
+				: this (null, next, null, startPoint, null)
 			{
 			}
 
@@ -1020,21 +1046,55 @@ namespace p2pncs.Net.Overlay.Anonymous
 			{
 			}
 
-			public RouteInfo (AnonymousEndPoint prev, BoundaryInfo boundary, SymmetricKey key)
-				: this (prev, null, key, null, boundary)
+			public RouteInfo (AnonymousEndPoint prev, TerminalPointInfo termPoint, SymmetricKey key)
+				: this (prev, null, key, null, termPoint)
 			{
 			}
 
-			RouteInfo (AnonymousEndPoint prev, AnonymousEndPoint next, SymmetricKey key, StartPointInfo startPoint, BoundaryInfo boundary)
+			RouteInfo (AnonymousEndPoint prev, AnonymousEndPoint next, SymmetricKey key, StartPointInfo startPoint, TerminalPointInfo termPoint)
 			{
 				_prevEP = prev;
 				_nextEP = next;
 				_key = key;
 				_startPoint = startPoint;
-				_boundary = boundary;
+				_termPoint = termPoint;
 
-				_prevExpiry = (prev == null ? DateTime.MaxValue : DateTime.Now + MCR_TimeoutWithMargin);
-				_nextExpiry = (next == null ? DateTime.MaxValue : DateTime.Now + MCR_TimeoutWithMargin);
+				if (termPoint != null)
+					termPoint.RouteInfo = this;
+				_prevExpiry = (prev == null ? DateTime.MaxValue : DateTime.Now + MCR_MaxMessageIntervalWithMargin);
+
+				if (startPoint != null) {
+					startPoint.RouteInfo = this;
+					_nextExpiry = DateTime.Now + MCR_EstablishingTimeout;
+				} else {
+					_nextExpiry = (next == null ? DateTime.MaxValue : DateTime.Now + MCR_MaxMessageIntervalWithMargin);
+				}
+			}
+
+			public void ReceiveMessageFromNextNode ()
+			{
+				if (_nextExpiry != DateTime.MinValue && _nextExpiry != DateTime.MaxValue)
+					_nextExpiry = DateTime.Now + MCR_MaxMessageIntervalWithMargin;
+			}
+
+			public void ReceiveMessageFromPreviousNode ()
+			{
+				if (_prevExpiry != DateTime.MinValue && _prevExpiry != DateTime.MaxValue)
+					_prevExpiry = DateTime.Now + MCR_MaxMessageIntervalWithMargin;
+			}
+
+			public bool IsExpiry ()
+			{
+				return _nextExpiry <= DateTime.Now || _prevExpiry <= DateTime.Now;
+			}
+
+			public void Timeout (IMessagingSocket sock)
+			{
+				_nextExpiry = DateTime.MinValue;
+				_prevExpiry = DateTime.MinValue;
+				if (sock != null && _prevEP != null)
+					sock.BeginInquire (new DisconnectMessage (_prevEP.Label), _prevEP.EndPoint,
+						DisconnectMessaging_Timeout, DisconnectMessaging_MaxRetry, null, null);
 			}
 
 			public AnonymousEndPoint Previous {
@@ -1053,31 +1113,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 				get { return _startPoint; }
 			}
 
-			public BoundaryInfo BoundaryInfo {
-				get { return _boundary; }
-			}
-
-			public void ReceiveMessageFromNextNode ()
-			{
-				_nextExpiry = DateTime.Now + MCR_TimeoutWithMargin;
-			}
-
-			public void ReceiveMessageFromPreviousNode ()
-			{
-				_prevExpiry = DateTime.Now + MCR_TimeoutWithMargin;
-			}
-
-			public bool IsExpiry (IMessagingSocket sock)
-			{
-				if (_nextExpiry < DateTime.Now && _prevEP != null)
-					sock.BeginInquire (new DisconnectMessage (_prevEP.Label), _prevEP.EndPoint, null, null);
-				return _nextExpiry < DateTime.Now || _prevExpiry < DateTime.Now;
-			}
-
-			public void Timeout ()
-			{
-				_prevExpiry = DateTime.MinValue;
-				_nextExpiry = DateTime.MinValue;
+			public TerminalPointInfo TerminalPointInfo {
+				get { return _termPoint; }
 			}
 		}
 		#endregion
@@ -1087,186 +1124,235 @@ namespace p2pncs.Net.Overlay.Anonymous
 		{
 			bool _initiator;
 			bool _connected = false;
+			ManualResetEvent _estalibhDone;
 			EstablishRouteAsyncResult _ar;
 			AnonymousRouter _router;
 			SubscribeInfo _subscribeInfo;
-			ConnectionEstablishInfo _establishInfo;
-			ConnectionEstablishMessage _establishMsg;
-			LookupRecipientProxyMessage _lookupMsg;
 			Key _destKey;
-			ECKeyPair _destPubKey;
-			int _connectionId;
-			SymmetricKey _key = null;
-			AnonymousEndPoint[] _destSideTermEPs;
-			ConnectionSocket _sock;
-			DateTime _sendExpiry = DateTime.Now + MCR_Timeout;
-			DateTime _recvExpiry;
+			ECKeyPair _connectionPrivate;
+			uint _connectionId;
+			byte[] _sharedInfo;
+			SymmetricKey _key;
+			AnonymousEndPoint[] _otherSideTermEPs;
+			ConnectionSocket _sock = null;
+			DateTime _nextPingTime = DateTime.MaxValue;
+			DateTime _expiry = DateTime.MaxValue;
+			object _dtLock = new object ();
 
-			public ConnectionInfo (AnonymousRouter router, SubscribeInfo subscribeInfo, Key destKey, DatagramReceiveEventHandler receivedHandler, AsyncCallback callback, object state)
+			public ConnectionInfo (AnonymousRouter router, SubscribeInfo subscribeInfo, Key destKey, ushort connectionId, AsyncCallback callback, object state)
 			{
 				_initiator = true;
 				_router = router;
 				_subscribeInfo = subscribeInfo;
 				_destKey = destKey;
-				_recvExpiry = DateTime.Now + Connection_EstablishTimeout;
-				_destPubKey = destKey.ToECPublicKey (_subscribeInfo.DiffieHellman.Parameters.DomainName);
-				_connectionId = BitConverter.ToInt32 (RNG.GetRNGBytes (4), 0);
+				_connectionId = (uint)connectionId << 16;
+				_estalibhDone = new ManualResetEvent (false);
 				_ar = new EstablishRouteAsyncResult (this, callback, state);
-				_sock = new ConnectionSocket (this, receivedHandler);
-
-				// Create connection establish message
-				_establishInfo = new ConnectionEstablishInfo (subscribeInfo.RecipientID, subscribeInfo.GetRouteEndPoints (),
-					RNG.GetRNGBytes (ConnectionEstablishSharedInfoBytes), _connectionId);
-				_establishMsg = new ConnectionEstablishMessage (_establishInfo, _destPubKey, destKey);
-				_lookupMsg = new LookupRecipientProxyMessage (destKey, _establishMsg);
-
-				_subscribeInfo.SendToAllRoutes (_lookupMsg);
+				_sharedInfo = RNG.GetRNGBytes (DefaultSharedInfoSize);
+				_sock = new ConnectionSocket (this);
 			}
 
-			public ConnectionInfo (AnonymousRouter router, SubscribeInfo subscribeInfo, Key destKey, int connectionId, SymmetricKey key, DatagramReceiveEventHandler receivedHandler)
+			public ConnectionInfo (AnonymousRouter router, SubscribeInfo subscribeInfo, uint connectionId, byte[] sharedInfo,
+				ECKeyPair publicKey, ConnectionEstablishPayload payload)
 			{
 				_initiator = false;
 				_connected = true;
 				_router = router;
 				_subscribeInfo = subscribeInfo;
-				_destKey = destKey;
+				_ar = null;
+				_destKey = payload.InitiatorId;
 				_connectionId = connectionId;
-				_key = key;
-				_sock = new ConnectionSocket (this, receivedHandler);
-				_recvExpiry = DateTime.Now + MCR_TimeoutWithMargin;
+				_key = ComputeSharedKey (subscribeInfo.PrivateKey, publicKey, payload.SharedInfo, sharedInfo);
+				_otherSideTermEPs = payload.InitiatorSideTerminalEndPoints;
+				_sock = new ConnectionSocket (this);
+				_nextPingTime = DateTime.Now + AC_AliveCheckScheduleInterval;
+				_expiry = DateTime.Now + AC_MaxMessageIntervalWithMargin;
 			}
 
-			public bool IsInitiator {
-				get { return _initiator; }
+			public SymmetricKey ComputeSharedKey (byte[] sharedInfo)
+			{
+				return ComputeSharedKey (_connectionPrivate, _destKey.ToECPublicKey (_subscribeInfo.PrivateKey.DomainName), _sharedInfo, sharedInfo);
 			}
 
-			public bool IsConnected {
-				get { return _connected; }
+			static SymmetricKey ComputeSharedKey (ECKeyPair privateKey, ECKeyPair publicKey, byte[] initiatorSharedInfo, byte[] otherSharedInfo)
+			{
+				byte[] sharedInfo = new byte[initiatorSharedInfo.Length + otherSharedInfo.Length];
+				Buffer.BlockCopy (initiatorSharedInfo, 0, sharedInfo, 0, initiatorSharedInfo.Length);
+				Buffer.BlockCopy (otherSharedInfo, 0, sharedInfo, initiatorSharedInfo.Length, otherSharedInfo.Length);
+				return MultipleCipherHelper.ComputeSharedKey (privateKey, publicKey, sharedInfo, DefaultPaddingMode, true);				
 			}
 
-			public int ConnectionID {
-				get { return _connectionId; }
-			}
-
-			public AnonymousEndPoint[] DestinationSideTerminalNodes {
-				get { return _destSideTermEPs; }
-				set { _destSideTermEPs = value;}
-			}
-
-			public Key RecipientID {
-				get { return _subscribeInfo.RecipientID; }
-			}
-
-			public Key DestinationID {
-				get { return _destKey; }
-			}
-
-			public IAnonymousSocket Socket {
-				get {
-					if (_connected)
-						return _sock;
-					return null;
+			public static byte[] ComputeMAC (SymmetricKey key, byte[] message)
+			{
+				using (HMACSHA1 hmac = new HMACSHA1 (key.Key)) {
+					return hmac.ComputeHash (message);
 				}
 			}
 
-			public void Send (object obj)
+			public static bool CheckMAC (SymmetricKey key, byte[] message, byte[] mac)
 			{
-				byte[] payload;
-				using (MemoryStream ms = new MemoryStream ()) {
-					DefaultFormatter.Serialize (ms, obj);
-					ms.Close ();
-					payload = ms.ToArray ();
-				}
-				Send (payload, 0, payload.Length);
-			}
-
-			public void Send (byte[] buffer, int offset, int size)
-			{
-				if (size == 0)
-					return;
-				Send_Internal (buffer, offset, size);
-			}
-
-			void Send_Internal (byte[] buffer, int offset, int size)
-			{
-				byte[] payload = _key.Encrypt (buffer, offset, size);
-				ConnectionMessageBeforeBoundary msg = new ConnectionMessageBeforeBoundary (_subscribeInfo.GetRouteEndPoints (),
-					_destSideTermEPs, _connectionId, payload);
-				_subscribeInfo.SendToAllRoutes (msg);
-				_sendExpiry = DateTime.Now + MCR_Timeout;
-			}
-
-			public void Receive (ConnectionMessage msg)
-			{
-				_recvExpiry = DateTime.Now + MCR_TimeoutWithMargin;
-				_destSideTermEPs = msg.EndPoints;
-				byte[] payload = _key.Decrypt (msg.Payload, 0, msg.Payload.Length);
-				if (payload.Length > 0)
-					_sock.InvokeReceivedEvent (new DatagramReceiveEventArgs (payload, payload.Length, null));
-			}
-
-			public void ReceiveFirstConnectionMessage (ConnectionMessage msg)
-			{
-				_connected = true;
-				_recvExpiry = DateTime.Now + MCR_TimeoutWithMargin;
-				byte[] sharedInfo = new byte[msg.Payload.Length + _establishInfo.SharedInfo.Length];
-				Buffer.BlockCopy (_establishInfo.SharedInfo, 0, sharedInfo, 0, _establishInfo.SharedInfo.Length);
-				Buffer.BlockCopy (msg.Payload, 0, sharedInfo, _establishInfo.SharedInfo.Length, msg.Payload.Length);
-				ECDiffieHellman ecdh = new ECDiffieHellman (_subscribeInfo.DiffieHellman.Parameters);
-				ecdh.SharedInfo = sharedInfo;
-				byte[] iv = new byte[DefaultSymmetricBlockBits / 8];
-				byte[] key = new byte[DefaultSymmetricKeyBits / 8];
-				byte[] shared = ecdh.PerformKeyAgreement (_destPubKey, iv.Length + key.Length);
-				Buffer.BlockCopy (shared, 0, iv, 0, iv.Length);
-				Buffer.BlockCopy (shared, iv.Length, key, 0, key.Length);
-				_key = new SymmetricKey (DefaultSymmetricAlgorithmType, iv, key);
-				_destSideTermEPs = msg.EndPoints;
-				_ar.Done ();
-			}
-
-			public void Close ()
-			{
-				if (_sock != null) {
-					_sock.Disconnected ();
-					_sock = null;
-				}
-				if (!_connected) {
-					_ar.Done ();
-				}
-				lock (_router._connections) {
-					_router._connections.Remove (this);
-				}
-			}
-
-			public bool CheckTimeout ()
-			{
-				if (_recvExpiry <= DateTime.Now) {
-					Logger.Log (LogLevel.Debug, _subscribeInfo, "Timeout because ConnectionInfo.CheckTimeout");
-					return false; // Timeout...
-				}
-
-				if (_connected && _sendExpiry <= DateTime.Now)
-					Send_Internal (new byte[0], 0, 0);
+				byte[] mac2 = ComputeMAC (key, message);
+				if (mac.Length != mac2.Length)
+					return false;
+				for (int i = 0; i < mac.Length; i ++)
+					if (mac[i] != mac2[i])
+						return false;
 				return true;
+			}
+
+			public void Established (SymmetricKey key, AnonymousEndPoint[] eps)
+			{
+				_key = key;
+				_otherSideTermEPs = eps;
+				_connected = true;
+				lock (_dtLock) {
+					_nextPingTime = DateTime.Now + AC_AliveCheckScheduleInterval;
+					_expiry = DateTime.Now + AC_MaxMessageIntervalWithMargin;
+				}
+				_ar.Done ();
+				_ar = null;
+			}
+
+			public void Start ()
+			{
+				_connectionPrivate = ECKeyPair.Create (_subscribeInfo.PrivateKey.DomainName);
+				byte[] publicKey = _connectionPrivate.ExportPublicKey (true);
+				ConnectionEstablishPayload payload = new ConnectionEstablishPayload (_subscribeInfo.Key,
+					(ushort)(_connectionId >> 16), _subscribeInfo.GetRouteEndPoints (), _sharedInfo);
+				ECKeyPair destPub = _destKey.ToECPublicKey (_connectionPrivate.DomainName);
+				byte[] encrypted_payload = payload.Encrypt (_connectionPrivate, destPub);
+				SymmetricKey tmpKey = MultipleCipherHelper.ComputeSharedKey (_subscribeInfo.PrivateKey, destPub, _sharedInfo, PaddingMode.None, false);
+				byte[] mac = ComputeMAC (tmpKey, encrypted_payload);
+				ConnectionEstablishMessage msg = new ConnectionEstablishMessage (_destKey, publicKey, GenerateDuplicationCheckValue (), mac, encrypted_payload);
+				_subscribeInfo.SendMessage (msg);
+				lock (_dtLock) {
+					_expiry = DateTime.Now + AC_EstablishTimeout;
+				}
+			}
+
+			public void Start (byte[] sharedInfo)
+			{
+				ConnectionEstablishedMessage msg = new ConnectionEstablishedMessage (sharedInfo, ComputeMAC (_key, sharedInfo));
+				Send (msg);
+			}
+
+			public void Send (object payload)
+			{
+				byte[] plain = DefaultSerializer.Serialize (payload);
+				bool encrypt = true;
+				if (payload is ConnectionEstablishedMessage)
+					encrypt = false;
+				Send (plain, 0, plain.Length, encrypt);
+			}
+
+			public void Send (byte[] data, int offset, int length)
+			{
+				Send (data, offset, length, true);
+			}
+
+			void Send (byte[] data, int offset, int length, bool encrypt)
+			{
+				lock (_dtLock) {
+					if (_expiry == DateTime.MinValue)
+						return;
+					_nextPingTime = DateTime.Now + AC_AliveCheckScheduleInterval;
+				}
+				byte[] payload, mac;
+				if (encrypt) {
+					payload = _key.Encrypt (data, offset, length);
+					mac = ComputeMAC (_key, payload);
+				} else {
+					payload = data;
+					mac = null;
+				}
+				ConnectionSenderSideMessage msg = new ConnectionSenderSideMessage (_destKey,
+					_subscribeInfo.GetRouteEndPoints ().RandomSelection (AC_DefaultUseSubscribeRoutes),
+					_otherSideTermEPs, _connectionId, GenerateDuplicationCheckValue (), payload, mac);
+				_subscribeInfo.SendMessage (msg);
+			}
+
+			public void SendPing ()
+			{
+				Send (new byte[0], 0, 0, false);
+			}
+
+			public void Received (ConnectionReciverSideMessage msg)
+			{
+				if (_estalibhDone != null) _estalibhDone.WaitOne ();
+
+				if (msg.Payload.Length > 0 && msg.PayloadMAC != null && !CheckMAC (_key, msg.Payload, msg.PayloadMAC)) {
+					Logger.Log (LogLevel.Error, this, "MAC Error");
+					return;
+				}
+
+				lock (_dtLock) {
+					if (_expiry == DateTime.MinValue)
+						return;
+					_expiry = DateTime.Now + AC_MaxMessageIntervalWithMargin;
+				}
+				_otherSideTermEPs = msg.SenderSideTerminalEndPoints;
+				if (msg.Payload.Length > 0) {
+					byte[] plain = _key.Decrypt (msg.Payload, 0, msg.Payload.Length);
+					_sock.InvokeReceivedEvent (new DatagramReceiveEventArgs (plain, plain.Length, DummyEndPoint));
+				}
 			}
 
 			public IAsyncResult AsyncResult {
 				get { return _ar; }
 			}
 
-			class EstablishRouteAsyncResult : IAsyncResult, IConnectionAsyncResult
+			public bool IsConnected {
+				get { return _connected; }
+			}
+
+			public bool IsInitiator {
+				get { return _initiator; }
+			}
+
+			public uint ConnectionId {
+				get { return _connectionId; }
+				set { _connectionId = value;}
+			}
+
+			public IAnonymousSocket Socket {
+				get { return _sock; }
+			}
+
+			public DateTime NextPingTime {
+				get { return _nextPingTime; }
+			}
+
+			public bool IsExpiry {
+				get { return _expiry <= DateTime.Now; }
+			}
+
+			public void Close ()
+			{
+				lock (_dtLock) {
+					_expiry = DateTime.MinValue;
+				}
+				if (_connected) {
+					_connected = false;
+					_sock.Dispose_Internal ();
+				} else if (_ar != null && !_ar.IsCompleted) {
+					_ar.Done ();
+				}
+			}
+
+			public class EstablishRouteAsyncResult : IAsyncResult
 			{
 				ConnectionInfo _owner;
 				object _state;
 				AsyncCallback _callback;
 				bool _completed = false;
-				ManualResetEvent _done = new ManualResetEvent (false);
+				ManualResetEvent _done;
 
 				public EstablishRouteAsyncResult (ConnectionInfo owner, AsyncCallback callback, object state)
 				{
 					_owner = owner;
 					_state = state;
 					_callback = callback;
+					_done = owner._estalibhDone;
 				}
 
 				public object AsyncState {
@@ -1304,45 +1390,110 @@ namespace p2pncs.Net.Overlay.Anonymous
 			class ConnectionSocket : IAnonymousSocket
 			{
 				ConnectionInfo _info;
-				DatagramReceiveEventHandler _handler;
+				long _recvBytes = 0, _recvDgrams = 0, _sendBytes = 0, _sendDgrams = 0;
+				Queue<DatagramReceiveEventArgs> _queue = new Queue<DatagramReceiveEventArgs> ();
 
-				public ConnectionSocket (ConnectionInfo info, DatagramReceiveEventHandler received_handler)
+				public ConnectionSocket (ConnectionInfo info)
 				{
 					_info = info;
-					_handler = received_handler;
 				}
 
 				public void InvokeReceivedEvent (DatagramReceiveEventArgs args)
 				{
-					if (_handler != null) {
+					bool enqueueMode = false;
+					lock (this) {
+						if (_queue != null)
+							enqueueMode = true;
+					}
+					if (enqueueMode) {
+						lock (_queue) {
+							_queue.Enqueue (args);
+						}
+					} else if (Received != null) {
 						try {
-							_handler (this, args);
+							Received (this, args);
 						} catch {}
 					}
 				}
 
-				public void Disconnected ()
+				public void Dispose_Internal ()
 				{
 					_info = null;
 				}
 
 				#region IAnonymousSocket Members
 
-				public void Send (byte[] buffer)
-				{
-					Send (buffer, 0, buffer.Length);
+				public AnonymousConnectionType ConnectionType {
+					get { return AnonymousConnectionType.LowLatency; }
 				}
 
-				public void Send (byte[] buffer, int offset, int size)
+				public Key LocalEndPoint {
+					get { return _info._subscribeInfo.Key; }
+				}
+
+				public Key RemoteEndPoint {
+					get { return _info._destKey; }
+				}
+
+				public void InitializedEventHandlers ()
 				{
-					if (_info == null)
-						throw new System.Net.Sockets.SocketException ();
-					_info.Send (buffer, offset, size);
+					Queue<DatagramReceiveEventArgs> queue;
+					lock (this) {
+						queue = _queue;
+						_queue = null;
+					}
+					if (queue == null || Received == null)
+						return;
+					while (queue.Count > 0) {
+						try {
+							Received (this, queue.Dequeue ());
+						} catch {}
+					}
+				}
+
+				#endregion
+
+				#region IDatagramEventSocket Members
+
+				public void Bind (EndPoint bindEP)
+				{
 				}
 
 				public void Close ()
 				{
 					Dispose ();
+				}
+
+				public void SendTo (byte[] buffer, EndPoint remoteEP)
+				{
+					SendTo (buffer, 0, buffer.Length, remoteEP);
+				}
+
+				public void SendTo (byte[] buffer, int offset, int size, EndPoint remoteEP)
+				{
+					if (_info == null)
+						throw new ObjectDisposedException (this.GetType ().Name);
+					Interlocked.Increment (ref _sendDgrams);
+					Interlocked.Add (ref _sendBytes, size);
+					_info.Send (buffer, offset, size);
+				}
+
+				public event DatagramReceiveEventHandler Received;
+
+				public long ReceivedBytes {
+					get { return Interlocked.Read (ref _recvBytes); }
+				}
+
+				public long SentBytes {
+					get { return Interlocked.Read (ref _sendBytes); }
+				}
+
+				public long ReceivedDatagrams {
+					get { return Interlocked.Read (ref _recvDgrams); }
+				}
+
+				public long SentDatagrams {
+					get { return Interlocked.Read (ref _sendDgrams); }
 				}
 
 				#endregion
@@ -1353,47 +1504,64 @@ namespace p2pncs.Net.Overlay.Anonymous
 				{
 					if (_info != null) {
 						_info.Close ();
-						_info = null;
+						Dispose_Internal ();
 					}
 				}
 
 				#endregion
 			}
 		}
-		interface IConnectionAsyncResult
-		{
-			ConnectionInfo ConnectionInfo { get; }
-		}
 		#endregion
 
 		#region MultipleCipherHelper
 		static class MultipleCipherHelper
 		{
-			const int RoutedPayloadHeaderSize = 10;
+			static byte[] Copy (byte[] src, int offset, int size)
+			{
+				byte[] tmp = new byte[size];
+				Buffer.BlockCopy (src, offset, tmp, 0, size);
+				return tmp;
+			}
+
+			public static SymmetricKey ComputeSharedKey (ECKeyPair privateKey, ECKeyPair pubKey, byte[] sharedInfo, PaddingMode padding, bool enableIVShuffle)
+			{
+				byte[] iv = new byte[DefaultSymmetricBlockBytes];
+				byte[] key = new byte[DefaultSymmetricKeyBytes];
+				ECDiffieHellman ecdh = new ECDiffieHellman (privateKey);
+				if (sharedInfo != null && sharedInfo.Length > 0)
+					ecdh.SharedInfo = sharedInfo;
+				byte[] sharedKey = ecdh.PerformKeyAgreement (pubKey, iv.Length + key.Length);
+				Buffer.BlockCopy (sharedKey, 0, iv, 0, iv.Length);
+				Buffer.BlockCopy (sharedKey, iv.Length, key, 0, key.Length);
+				return new SymmetricKey (DefaultSymmetricAlgorithmType, iv, key, DefaultCipherMode, padding, enableIVShuffle);
+			}
 
 			public static byte[] CreateEstablishPayload (NodeHandle[] relayNodes, SymmetricKey[] relayKeys, Key recipientId, ECDomainNames domain)
 			{
-				byte[] iv = new byte[DefaultSymmetricBlockBits / 8];
-				byte[] key = new byte[DefaultSymmetricKeyBits / 8];
-
-				int payload_size = recipientId.KeyBytes + 8;
 				byte[] payload = new byte[PayloadFixedSize];
+				byte[] iv = new byte[DefaultSymmetricBlockBytes];
+				byte[] key = new byte[DefaultSymmetricKeyBytes];
+				int payload_size = 0;
 
 				RNG.Instance.GetBytes (payload);
+
+				// 終端ノードに配送するデータを設定
 				payload[0] = 0;
-				recipientId.CopyTo (payload, 9);
+				payload[1] = (byte)(recipientId.KeyBytes >> 8);
+				payload[2] = (byte)(recipientId.KeyBytes & 0xFF);
+				recipientId.CopyTo (payload, 3);
+				payload_size = 3 + recipientId.KeyBytes;
 
 				for (int i = relayKeys.Length - 1; i >= 0; i--) {
+					// PaddingMode==Noneなのでペイロードサイズをivバイトの整数倍に合わせる
 					if (payload_size % iv.Length != 0)
 						payload_size += iv.Length - (payload_size % iv.Length);
 
-					ECDiffieHellman ecdh = new ECDiffieHellman (domain);
-					byte[] shared = ecdh.PerformKeyAgreement (relayNodes[i].NodeID.ToECPublicKey (domain), iv.Length + key.Length);
-					Buffer.BlockCopy (shared, 0, iv, 0, iv.Length);
-					Buffer.BlockCopy (shared, iv.Length, key, 0, key.Length);
-					relayKeys[i] = new SymmetricKey (DefaultSymmetricAlgorithm, (byte[])iv.Clone (), (byte[])key.Clone (), false);
+					// Ephemeralキーと中継ノードの公開鍵とで鍵共有
+					ECKeyPair privateKey = ECKeyPair.Create (domain);
+					byte[] pubKey = privateKey.ExportPublicKey (true);
+					relayKeys[i] = ComputeSharedKey (privateKey, relayNodes[i].NodeID.ToECPublicKey (domain), null, PaddingMode.None, false);
 					byte[] cipher = relayKeys[i].Encrypt (payload, 0, payload_size);
-					byte[] pubKey = ecdh.Parameters.ExportPublicKey (true);
 					if (i == 0) {
 						Buffer.BlockCopy (pubKey, 0, payload, 0, pubKey.Length);
 						Buffer.BlockCopy (cipher, 0, payload, pubKey.Length, cipher.Length);
@@ -1406,99 +1574,70 @@ namespace p2pncs.Net.Overlay.Anonymous
 						payload_size = 1 + nextHop.Length + pubKey.Length + cipher.Length;
 					}
 				}
-
 				return payload;
 			}
 
-			public static EstablishRoutePayload DecryptEstablishPayload (byte[] payload, ECDiffieHellman dh, int pubKeyLen)
+			public static EstablishRoutePayload DecryptEstablishPayload (byte[] payload, ECKeyPair privateNodeKey, int pubKeyLen)
 			{
-				byte[] iv = new byte[DefaultSymmetricBlockBits / 8];
-				byte[] key = new byte[DefaultSymmetricKeyBits / 8];
-
-				byte[] pubKey = new byte[pubKeyLen];
-				Buffer.BlockCopy (payload, 0, pubKey, 0, pubKeyLen);
+				ECKeyPair ephemeralKey = ECKeyPair.CreatePublic (privateNodeKey.DomainName, Copy (payload, 0, pubKeyLen));
+				SymmetricKey sk = ComputeSharedKey (privateNodeKey, ephemeralKey, null, PaddingMode.None, false);
 				
-				byte[] shared = dh.PerformKeyAgreement (pubKey, iv.Length + key.Length);
-				Buffer.BlockCopy (shared, 0, iv, 0, iv.Length);
-				Buffer.BlockCopy (shared, iv.Length, key, 0, key.Length);
-				SymmetricKey sharedKey = new SymmetricKey (DefaultSymmetricAlgorithm, iv, key, false);
-
 				int len = payload.Length - pubKeyLen;
-				if (len % iv.Length != 0) len -= len % iv.Length;
-				byte[] decrypted = sharedKey.Decrypt (payload, pubKeyLen, len);
+				if (len % sk.IV.Length != 0) len -= len % sk.IV.Length;
+				byte[] decrypted = sk.Decrypt (payload, pubKeyLen, len);
 
 				switch (decrypted[0]) {
 					case 0:
-						byte[] rawKey = new byte[pubKeyLen];
-						Buffer.BlockCopy (decrypted, 9, rawKey, 0, rawKey.Length);
-						return new EstablishRoutePayload (null, rawKey, sharedKey, BitConverter.ToInt64 (decrypted, 1));
+						int payload_size = (decrypted[1] << 8) | decrypted[2];
+						if (payload_size > decrypted.Length - 2)
+							throw new FormatException ();
+						payload = new byte[payload_size];
+						Buffer.BlockCopy (decrypted, 3, payload, 0, payload.Length);
+						return new EstablishRoutePayload (sk, payload);
 					case 1:
-						byte[] new_payload = new byte[PayloadFixedSize];
+						payload = new byte[PayloadFixedSize];
 						EndPoint nextHop;
-						RNG.Instance.GetBytes (new_payload);
+						RNG.Instance.GetBytes (payload);
 						using (MemoryStream ms = new MemoryStream (decrypted, 1, decrypted.Length - 1)) {
 							nextHop = (EndPoint)Serializer.Instance.Deserialize (ms);
-							Buffer.BlockCopy (decrypted, 1 + (int)ms.Position, new_payload, 0, decrypted.Length - 1 - (int)ms.Position);
+							Buffer.BlockCopy (decrypted, 1 + (int)ms.Position, payload, 0, decrypted.Length - 1 - (int)ms.Position);
 						}
-						return new EstablishRoutePayload (nextHop, new_payload, sharedKey, 0);
+						return new EstablishRoutePayload (sk, nextHop, payload);
 					default:
 						throw new FormatException ();
 				}
 			}
 
-			public static byte[] CreateRoutedPayload (SymmetricKey[] relayKeys, object msg)
+			public static byte[] CreateRoutedPayload (SymmetricKey key, object msg)
 			{
-				using (MemoryStream ms = new MemoryStream ()) {
-					DefaultFormatter.Serialize (ms, msg);
-					ms.Close ();
-					return CreateRoutedPayload (relayKeys, ms.ToArray ());
-				}
+				return CreateRoutedPayload (key, DefaultSerializer.Serialize (msg));
 			}
 
-			static byte[] CreateRoutedPayload (SymmetricKey[] relayKeys, byte[] msg)
+			public static byte[] CreateRoutedPayload (SymmetricKey[] keys, object msg)
 			{
-				int iv_size = DefaultSymmetricBlockBits / 8;
-				int payload_size = msg.Length + RoutedPayloadHeaderSize;
-				byte[] payload = new byte[PayloadFixedSize];
+				return CreateRoutedPayload (keys, DefaultSerializer.Serialize (msg));
+			}
 
-				RNG.Instance.GetBytes (payload);
-				payload[0] = (byte)((msg.Length >> 8) & 0xff);
-				payload[1] = (byte)(msg.Length & 0xff);
-				Buffer.BlockCopy (msg, 0, payload, RoutedPayloadHeaderSize, msg.Length);
-				if (payload_size % iv_size != 0)
-					payload_size += iv_size - (payload_size % iv_size);
-
-				for (int i = relayKeys.Length - 1; i >= 0; i--) {
-					byte[] encrypted = relayKeys[i].Encrypt (payload, 0, payload_size);
-					if (payload_size != encrypted.Length)
-						throw new ApplicationException ();
-					Buffer.BlockCopy (encrypted, 0, payload, 0, encrypted.Length);
-				}
-
+			static byte[] CreateRoutedPayload (SymmetricKey[] keys, byte[] data)
+			{
+				byte[] payload = CreateRoutedPayload (keys[keys.Length - 1], data);
+				for (int i = keys.Length - 2; i >= 0; i --)
+					payload = keys[i].Encrypt (payload, 0, payload.Length);
 				return payload;
 			}
 
-			public static byte[] CreateRoutedPayload (SymmetricKey key, object msg)
+			static byte[] CreateRoutedPayload (SymmetricKey key, byte[] data)
 			{
-				using (MemoryStream ms = new MemoryStream ()) {
-					DefaultFormatter.Serialize (ms, msg);
-					ms.Close ();
-					return CreateRoutedPayload (key, ms.ToArray ());
-				}
-			}
-
-			static byte[] CreateRoutedPayload (SymmetricKey key, byte[] msg)
-			{
-				int iv_size = DefaultSymmetricBlockBits / 8;
-				int payload_size = msg.Length + RoutedPayloadHeaderSize;
+				int header_size = key.IV.Length; // 簡易IVシャッフル
+				int payload_size = data.Length + header_size;
 				byte[] payload = new byte[PayloadFixedSize];
 
 				RNG.Instance.GetBytes (payload);
-				payload[0] = (byte)((msg.Length >> 8) & 0xff);
-				payload[1] = (byte)(msg.Length & 0xff);
-				Buffer.BlockCopy (msg, 0, payload, RoutedPayloadHeaderSize, msg.Length);
-				if (payload_size % iv_size != 0)
-					payload_size += iv_size - (payload_size % iv_size);
+				payload[0] = (byte)((data.Length >> 8) & 0xff);
+				payload[1] = (byte)(data.Length & 0xff);
+				Buffer.BlockCopy (data, 0, payload, header_size, data.Length);
+				if (payload_size % key.IV.Length != 0)
+					payload_size += key.IV.Length - (payload_size % key.IV.Length);
 
 				byte[] encrypted = key.Encrypt (payload, 0, payload_size);
 				if (payload_size != encrypted.Length)
@@ -1513,22 +1652,14 @@ namespace p2pncs.Net.Overlay.Anonymous
 				return key.Decrypt (payload, 0, payload.Length);
 			}
 
-			public static object DecryptRoutedPayloadAtEnd (SymmetricKey key, byte[] payload, out long dupCheckId)
+			public static object DecryptRoutedPayloadAtTerminal (SymmetricKey key, byte[] payload)
 			{
-				int offset, size;
-				payload = DecryptRoutedPayloadAtEnd (key, payload, out dupCheckId, out offset, out size);
+				payload = key.Decrypt (payload, 0, payload.Length);
+				int offset = key.IV.Length;
+				int size = (payload[0] << 8) | payload[1];
 				using (MemoryStream ms = new MemoryStream (payload, offset, size)) {
-					return DefaultFormatter.Deserialize (ms);
+					return DefaultSerializer.Deserialize (ms);
 				}
-			}
-
-			static byte[] DecryptRoutedPayloadAtEnd (SymmetricKey key, byte[] payload, out long dupCheckId, out int offset, out int size)
-			{
-				byte[] ret = key.Decrypt (payload, 0, payload.Length);
-				offset = RoutedPayloadHeaderSize;
-				size = (ret[0] << 8) | ret[1];
-				dupCheckId = BitConverter.ToInt64 (ret, 2);
-				return ret;
 			}
 
 			public static byte[] EncryptRoutedPayload (SymmetricKey key, byte[] payload)
@@ -1536,32 +1667,418 @@ namespace p2pncs.Net.Overlay.Anonymous
 				return key.Encrypt (payload, 0, payload.Length);
 			}
 
-			public static object DecryptRoutedPayload (SymmetricKey[] relayKeys, byte[] payload, out long dupCheckId)
+			public static object DecryptRoutedPayload (SymmetricKey[] keys, byte[] payload)
 			{
-				int offset, size;
-				payload = DecryptRoutedPayload (relayKeys, payload, out dupCheckId, out offset, out size);
-				using (MemoryStream ms = new MemoryStream (payload, offset, size)) {
-					return DefaultFormatter.Deserialize (ms);
-				}
-			}
-
-			static byte[] DecryptRoutedPayload (SymmetricKey[] relayKeys, byte[] payload, out long dupCheckId, out int offset, out int size)
-			{
-				for (int i = 0; i < relayKeys.Length; i ++) {
-					byte[] decrypted = relayKeys[i].Decrypt (payload, 0, payload.Length);
+				for (int i = 0; i < keys.Length - 1; i++) {
+					byte[] decrypted = keys[i].Decrypt (payload, 0, payload.Length);
 					if (payload.Length != decrypted.Length)
 						throw new ApplicationException ();
 					payload = decrypted;
 				}
-				offset = RoutedPayloadHeaderSize;
-				size = (payload[0] << 8) | payload[1];
-				dupCheckId = BitConverter.ToInt64 (payload, 2);
-				return payload;
+				return DecryptRoutedPayloadAtTerminal (keys[keys.Length - 1], payload);
 			}
 		}
 		#endregion
 
-		#region AnonymousEndPoint
+		#region Messages
+		[SerializableTypeId (0x210)]
+		class EstablishRouteMessage
+		{
+			[SerializableFieldId (0)]
+			RouteLabel _label;
+
+			[SerializableFieldId (1)]
+			byte[] _payload;
+
+			public EstablishRouteMessage (RouteLabel label, byte[] payload)
+			{
+				_label = label;
+				_payload = payload;
+			}
+
+			public RouteLabel Label {
+				get { return _label; }
+			}
+
+			public byte[] Payload {
+				get { return _payload; }
+			}
+		}
+
+		[SerializableTypeId (0x211)]
+		class EstablishedRouteMessage
+		{
+			[SerializableFieldId (0)]
+			RouteLabel _label;
+
+			public EstablishedRouteMessage (RouteLabel label)
+			{
+				_label = label;
+			}
+
+			public RouteLabel Label {
+				get { return _label; }
+			}
+		}
+
+		[SerializableTypeId (0x212)]
+		class RoutedMessage
+		{
+			[SerializableFieldId (0)]
+			RouteLabel _label;
+
+			[SerializableFieldId (1)]
+			byte[] _payload;
+
+			public RoutedMessage (RouteLabel label, byte[] payload)
+			{
+				_label = label;
+				_payload = payload;
+			}
+
+			public RouteLabel Label {
+				get { return _label; }
+			}
+
+			public byte[] Payload {
+				get { return _payload; }
+			}
+		}
+
+		[SerializableTypeId (0x213)]
+		class ConnectionEstablishMessage : ICheckDuplication
+		{
+			[SerializableFieldId (0)]
+			Key _destId;
+
+			[SerializableFieldId (1)]
+			byte[] _ephemeralPublicKey;
+
+			[SerializableFieldId (2)]
+			DupCheckLabel _dupCheckValue;
+
+			[SerializableFieldId (3)]
+			byte[] _mac;
+
+			[SerializableFieldId (4)]
+			byte[] _encrypted;
+
+			public ConnectionEstablishMessage (Key destId, byte[] pubKey, DupCheckLabel dupCheckValue, byte[] mac, byte[] encrypted)
+			{
+				_destId = destId;
+				_ephemeralPublicKey = pubKey;
+				_dupCheckValue = dupCheckValue;
+				_mac = mac;
+				_encrypted = encrypted;
+			}
+
+			public Key DestinationId {
+				get { return _destId; }
+			}
+
+			public byte[] EphemeralPublicKey {
+				get { return _ephemeralPublicKey; }
+			}
+
+			public DupCheckLabel DuplicationCheckValue {
+				get { return _dupCheckValue; }
+			}
+
+			public byte[] MAC {
+				get { return _mac; }
+			}
+
+			public byte[] Encrypted {
+				get { return _encrypted; }
+			}
+		}
+
+		[SerializableTypeId (0x21a)]
+		class ConnectionEstablishedMessage
+		{
+			[SerializableFieldId (0)]
+			byte[] _sharedInfo;
+
+			[SerializableFieldId (1)]
+			byte[] _mac;
+
+			public ConnectionEstablishedMessage (byte[] sharedInfo, byte[] mac)
+			{
+				_sharedInfo = sharedInfo;
+				_mac = mac;
+			}
+
+			public byte[] SharedInfo {
+				get { return _sharedInfo; }
+			}
+
+			public byte[] MAC {
+				get { return _mac; }
+			}
+		}
+
+		[SerializableTypeId (0x214)]
+		class ConnectionSenderSideMessage
+		{
+			[SerializableFieldId (0)]
+			Key _dest;
+
+			[SerializableFieldId (1)]
+			AnonymousEndPoint[] _senderSideTermEPs;
+
+			[SerializableFieldId (2)]
+			AnonymousEndPoint[] _receiverSideTermEPs;
+
+			[SerializableFieldId (3)]
+			ConnectionLabel _connectionId;
+
+			[SerializableFieldId (4)]
+			DupCheckLabel _dupCheckValue;
+
+			[SerializableFieldId (5)]
+			byte[] _payload_mac;
+
+			[SerializableFieldId (6)]
+			byte[] _payload;
+
+			public ConnectionSenderSideMessage (Key dest, AnonymousEndPoint[] senderSide, AnonymousEndPoint[] reciverSide, ConnectionLabel connectionId, DupCheckLabel dupCheckValue, byte[] payload, byte[] mac)
+			{
+				_dest = dest;
+				_senderSideTermEPs = senderSide;
+				_receiverSideTermEPs = reciverSide;
+				_connectionId = connectionId;
+				_dupCheckValue = dupCheckValue;
+				_payload = payload;
+				_payload_mac = mac;
+			}
+
+			public Key Destination {
+				get { return _dest; }
+			}
+
+			public AnonymousEndPoint[] SenderSideTerminalEndPoints {
+				get { return _senderSideTermEPs; }
+			}
+
+			public AnonymousEndPoint[] ReciverSideTerminalEndPoints {
+				get { return _receiverSideTermEPs; }
+			}
+
+			public ConnectionLabel ConnectionId {
+				get { return _connectionId; }
+			}
+
+			public DupCheckLabel DuplicationCheckValue {
+				get { return _dupCheckValue; }
+			}
+
+			public byte[] Payload {
+				get { return _payload; }
+			}
+
+			public byte[] PayloadMAC {
+				get { return _payload_mac; }
+			}
+		}
+
+		[SerializableTypeId (0x215)]
+		class ConnectionReciverSideMessage : ICheckDuplication
+		{
+			[SerializableFieldId (0)]
+			AnonymousEndPoint[] _senderSideTermEPs;
+
+			[SerializableFieldId (1)]
+			ConnectionLabel _connectionId;
+
+			[SerializableFieldId (2)]
+			DupCheckLabel _dupCheckValue;
+
+			[SerializableFieldId (3)]
+			byte[] _payload_mac;
+
+			[SerializableFieldId (4)]
+			byte[] _payload;
+
+			public ConnectionReciverSideMessage (AnonymousEndPoint[] senderSide, ConnectionLabel connectionId, DupCheckLabel dupCheckValue, byte[] payload, byte[] mac)
+			{
+				_senderSideTermEPs = senderSide;
+				_connectionId = connectionId;
+				_dupCheckValue = dupCheckValue;
+				_payload = payload;
+				_payload_mac = mac;
+			}
+
+			public AnonymousEndPoint[] SenderSideTerminalEndPoints {
+				get { return _senderSideTermEPs; }
+			}
+
+			public ConnectionLabel ConnectionId {
+				get { return _connectionId; }
+			}
+
+			public DupCheckLabel DuplicationCheckValue {
+				get { return _dupCheckValue; }
+			}
+
+			public byte[] Payload {
+				get { return _payload; }
+			}
+
+			public byte[] PayloadMAC {
+				get { return _payload_mac; }
+			}
+		}
+
+		[SerializableTypeId (0x216)]
+		class DisconnectMessage
+		{
+			RouteLabel _label;
+
+			public DisconnectMessage (RouteLabel label)
+			{
+				_label = label;
+			}
+
+			public RouteLabel Label {
+				get { return _label; }
+			}
+		}
+
+		[SerializableTypeId (0x217)]
+		class Ping
+		{
+			static Ping _instance = new Ping ();
+			Ping () {}
+			public static Ping Instance {
+				get { return _instance; }
+			}
+		}
+
+		[SerializableTypeId (0x219)]
+		class InterterminalMessage
+		{
+			[SerializableFieldId (0)]
+			RouteLabel _label;
+
+			[SerializableFieldId (1)]
+			object _msg;
+
+			public InterterminalMessage (RouteLabel label, object msg)
+			{
+				_label = label;
+				_msg = msg;
+			}
+
+			public RouteLabel Label {
+				get { return _label; }
+			}
+
+			public object Message {
+				get { return _msg; }
+			}
+		}
+
+		interface ICheckDuplication
+		{
+			DupCheckLabel DuplicationCheckValue { get; }
+		}
+		#endregion
+
+		#region Structures
+		class EstablishRoutePayload
+		{
+			SymmetricKey _key;
+			EndPoint _nextHopNode;
+			byte[] _payload;
+			bool _isLast;
+
+			public EstablishRoutePayload (SymmetricKey key, EndPoint nextHop, byte[] payload)
+			{
+				_key = key;
+				_nextHopNode = nextHop;
+				_payload = payload;
+				_isLast = false;
+			}
+
+			public EstablishRoutePayload (SymmetricKey key, byte[] payload)
+			{
+				_key = key;
+				_nextHopNode = null;
+				_payload = payload;
+				_isLast = true;
+			}
+
+			public SymmetricKey Key {
+				get { return _key; }
+			}
+
+			public EndPoint NextHopNode {
+				get { return _nextHopNode; }
+			}
+
+			public byte[] Payload {
+				get { return _payload; }
+			}
+
+			public bool IsLast {
+				get { return _isLast; }
+			}
+		}
+
+		[SerializableTypeId (0x218)]
+		class ConnectionEstablishPayload
+		{
+			[SerializableFieldId (0)]
+			byte[] _sharedInfo;
+
+			[SerializableFieldId (1)]
+			Key _initiatorId;
+
+			[SerializableFieldId (2)]
+			ConnectionHalfLabel _connectionId;
+
+			[SerializableFieldId (3)]
+			AnonymousEndPoint[] _initiatorSideTermEPs;
+
+			public ConnectionEstablishPayload (Key initiator, ConnectionHalfLabel connectionId, AnonymousEndPoint[] eps, byte[] sharedInfo)
+			{
+				_initiatorId = initiator;
+				_connectionId = connectionId;
+				_initiatorSideTermEPs = eps;
+				_sharedInfo = sharedInfo;
+			}
+
+			public static ConnectionEstablishPayload Decrypt (ECKeyPair privateKey, ECKeyPair publicKey, byte[] encrypted_payload)
+			{
+				SymmetricKey sk = MultipleCipherHelper.ComputeSharedKey (privateKey, publicKey, null, DefaultPaddingMode, false);
+				byte[] plain = sk.Decrypt (encrypted_payload, 0, encrypted_payload.Length);
+				return (ConnectionEstablishPayload)DefaultSerializer.Deserialize (plain);
+			}
+
+			public byte[] Encrypt (ECKeyPair privateKey, ECKeyPair publicKey)
+			{
+				SymmetricKey sk = MultipleCipherHelper.ComputeSharedKey (privateKey, publicKey, null, DefaultPaddingMode, false);
+				byte[] plain = DefaultSerializer.Serialize (this);
+				return sk.Encrypt (plain, 0, plain.Length);
+			}
+
+			public byte[] SharedInfo {
+				get { return _sharedInfo; }
+			}
+
+			public Key InitiatorId {
+				get { return _initiatorId; }
+			}
+
+			public ConnectionHalfLabel ConnectionId {
+				get { return _connectionId; }
+			}
+
+			public AnonymousEndPoint[] InitiatorSideTerminalEndPoints {
+				get { return _initiatorSideTermEPs; }
+			}
+		}
+
 		[Serializable]
 		[SerializableTypeId (0x20a)]
 		public class AnonymousEndPoint : IEquatable<AnonymousEndPoint>
@@ -1586,10 +2103,6 @@ namespace p2pncs.Net.Overlay.Anonymous
 				get { return _label; }
 			}
 
-			/*public override System.Net.Sockets.AddressFamily AddressFamily {
-				get { return _ep.AddressFamily; }
-			}*/
-
 			public override bool Equals (object obj)
 			{
 				AnonymousEndPoint other = obj as AnonymousEndPoint;
@@ -1613,9 +2126,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				return this._ep.Equals (other._ep) && (this._label == other._label);
 			}
 		}
-		#endregion
 
-		#region DHT Entry
 		[Serializable]
 		[SerializableTypeId (0x20b)]
 		public class DHTEntry : IPutterEndPointStore, IEquatable<DHTEntry>
@@ -1672,403 +2183,6 @@ namespace p2pncs.Net.Overlay.Anonymous
 				if (_ep == null)
 					return other._ep == null;
 				return _ep.Equals (other._ep);
-			}
-		}
-		#endregion
-
-		#region Messages
-		[Serializable]
-		[SerializableTypeId (0x200)]
-		class EstablishRouteMessage
-		{
-			[SerializableFieldId (0)]
-			RouteLabel _label;
-
-			[SerializableFieldId (1)]
-			byte[] _payload;
-
-			public EstablishRouteMessage (RouteLabel label, byte[] payload)
-			{
-				_label = label;
-				_payload = payload;
-			}
-
-			public RouteLabel Label {
-				get { return _label; }
-			}
-
-			public byte[] Payload {
-				get { return _payload; }
-			}
-		}
-
-		class EstablishRoutePayload
-		{
-			SymmetricKey _key;
-			EndPoint _nextHop;
-			byte[] _nextHopPayload;
-			long _dupCheckId;
-
-			public EstablishRoutePayload (EndPoint nextHop, byte[] nextHopPayload, SymmetricKey key, long dupCheckId)
-			{
-				_nextHop = nextHop;
-				_nextHopPayload = nextHopPayload;
-				_key = key;
-				_dupCheckId = dupCheckId;
-			}
-
-			public EndPoint NextHopEndPoint {
-				get { return _nextHop; }
-			}
-
-			public byte[] NextHopPayload {
-				get { return _nextHopPayload; }
-			}
-
-			public SymmetricKey SharedKey {
-				get { return _key; }
-			}
-
-			public long DuplicationCheckId {
-				get { return _dupCheckId; }
-			}
-		}
-
-		[Serializable]
-		[SerializableTypeId (0x201)]
-		class EstablishedMessage
-		{
-			[SerializableFieldId (0)]
-			RouteLabel _label;
-
-			public EstablishedMessage (RouteLabel label)
-			{
-				_label = label;
-			}
-
-			public RouteLabel Label {
-				get { return _label; }
-			}
-		}
-
-		[Serializable]
-		[SerializableTypeId (0x202)]
-		class Ping
-		{
-			static Ping _instance = new Ping ();
-			private Ping () {}
-			public static Ping Instance {
-				get { return _instance; }
-			}
-		}
-
-		[Serializable]
-		[SerializableTypeId (0x203)]
-		class RoutedMessage
-		{
-			[SerializableFieldId (0)]
-			RouteLabel _label;
-
-			[SerializableFieldId (1)]
-			byte[] _payload;
-
-			public RoutedMessage (RouteLabel label, byte[] payload)
-			{
-				_label = label;
-				_payload = payload;
-			}
-
-			public RouteLabel Label {
-				get { return _label; }
-			}
-
-			public byte[] Payload {
-				get { return _payload; }
-			}
-		}
-
-		[Serializable]
-		[SerializableTypeId (0x204)]
-		class AcknowledgeMessage
-		{
-			[SerializableFieldId (0)]
-			byte[] _payload;
-
-			public AcknowledgeMessage (byte[] payload)
-			{
-				_payload = payload;
-			}
-
-			public byte[] Payload {
-				get { return _payload; }
-			}
-		}
-
-		[Serializable]
-		[SerializableTypeId (0x205)]
-		class LookupRecipientProxyMessage
-		{
-			[SerializableFieldId (0)]
-			Key _recipientKey;
-
-			[SerializableFieldId (1)]
-			ConnectionEstablishMessage _msg;
-
-			public LookupRecipientProxyMessage (Key recipientKey, ConnectionEstablishMessage msg)
-			{
-				_recipientKey = recipientKey;
-				_msg = msg;
-			}
-
-			public Key RecipientKey {
-				get { return _recipientKey; }
-			}
-
-			public ConnectionEstablishMessage Message {
-				get { return _msg; }
-			}
-		}
-
-		[Serializable]
-		[SerializableTypeId (0x206)]
-		class ConnectionEstablishMessage
-		{
-			[SerializableFieldId (0)]
-			byte[] _tempPubKey;
-
-			[SerializableFieldId (1)]
-			byte[] _encryptedInfo;
-
-			[SerializableFieldId (2)]
-			Key _recipientId;
-
-			[SerializableFieldId (3)]
-			RouteLabel _label = 0;
-
-			[SerializableFieldId (4)]
-			long _dupCheckId;
-
-			ConnectionEstablishMessage (byte[] tempPubKey, byte[] encryptedInfo, RouteLabel label, Key recipientID, long dupCheckId)
-			{
-				_tempPubKey = tempPubKey;
-				_encryptedInfo = encryptedInfo;
-				_label = label;
-				_recipientId = recipientID;
-				_dupCheckId = dupCheckId;
-			}
-
-			public ConnectionEstablishMessage (ConnectionEstablishInfo info, ECKeyPair pubKey, Key recipientID)
-			{
-				ECDiffieHellman dh = new ECDiffieHellman (pubKey.DomainName);
-				byte[] key_bytes = new byte[DefaultSymmetricKeyBits / 8];
-				byte[] iv_bytes = new byte[DefaultSymmetricBlockBits / 8];
-				byte[] shared = dh.PerformKeyAgreement (pubKey, key_bytes.Length + iv_bytes.Length);
-				Buffer.BlockCopy (shared, 0, iv_bytes, 0, iv_bytes.Length);
-				Buffer.BlockCopy (shared, iv_bytes.Length, key_bytes, 0, key_bytes.Length);
-				SymmetricKey key = new SymmetricKey (DefaultSymmetricAlgorithmType, iv_bytes, key_bytes);
-				using (MemoryStream ms = new MemoryStream ()) {
-					DefaultFormatter.Serialize (ms, info);
-					ms.Close ();
-					byte[] raw = ms.ToArray ();
-					_encryptedInfo = key.Encrypt (raw, 0, raw.Length);
-				}
-				_tempPubKey = dh.Parameters.ExportPublicKey (true);
-				_recipientId = recipientID;
-				_dupCheckId = BitConverter.ToInt64 (RNG.GetRNGBytes (8), 0);
-			}
-
-			public ConnectionEstablishInfo Decrypt (ECDiffieHellman dh)
-			{
-				ECKeyPair pair = ECKeyPair.CreatePublic (dh.Parameters.DomainName, _tempPubKey);
-				byte[] key_bytes = new byte[DefaultSymmetricKeyBits / 8];
-				byte[] iv_bytes = new byte[DefaultSymmetricBlockBits / 8];
-				byte[] shared = dh.PerformKeyAgreement (pair, key_bytes.Length + iv_bytes.Length);
-				Buffer.BlockCopy (shared, 0, iv_bytes, 0, iv_bytes.Length);
-				Buffer.BlockCopy (shared, iv_bytes.Length, key_bytes, 0, key_bytes.Length);
-				SymmetricKey key = new SymmetricKey (DefaultSymmetricAlgorithmType, iv_bytes, key_bytes);
-				byte[] raw = key.Decrypt (_encryptedInfo, 0, _encryptedInfo.Length);
-				using (MemoryStream ms = new MemoryStream (raw)) {
-					return (ConnectionEstablishInfo)DefaultFormatter.Deserialize (ms);
-				}
-			}
-
-			public ConnectionEstablishMessage Copy (RouteLabel label)
-			{
-				return new ConnectionEstablishMessage (_tempPubKey, _encryptedInfo, label, _recipientId, _dupCheckId);
-			}
-
-			public RouteLabel Label {
-				get { return _label; }
-			}
-
-			public Key RecipientID {
-				get { return _recipientId; }
-			}
-
-			public long DuplicationCheckId {
-				get { return _dupCheckId; }
-			}
-		}
-
-		[Serializable]
-		[SerializableTypeId (0x207)]
-		class ConnectionEstablishInfo
-		{
-			[SerializableFieldId (0)]
-			byte[] _sharedInfo;
-
-			[SerializableFieldId (1)]
-			Key _initiator;
-
-			[SerializableFieldId (2)]
-			int _connectionId;
-
-			[SerializableFieldId (3)]
-			AnonymousEndPoint[] _endPoints;
-
-			public ConnectionEstablishInfo (Key initiator, AnonymousEndPoint[] eps, byte[] sharedInfo, int connectionId)
-			{
-				_initiator = initiator;
-				_endPoints = eps;
-				_sharedInfo = sharedInfo;
-				_connectionId = connectionId;
-			}
-
-			public byte[] SharedInfo {
-				get { return _sharedInfo; }
-			}
-
-			public Key Initiator {
-				get { return _initiator; }
-			}
-
-			public AnonymousEndPoint[] EndPoints {
-				get { return _endPoints; }
-			}
-
-			public int ConnectionId {
-				get { return _connectionId; }
-			}
-		}
-
-		[Serializable]
-		[SerializableTypeId (0x208)]
-		class ConnectionMessageBeforeBoundary
-		{
-			[SerializableFieldId (0)]
-			AnonymousEndPoint[] _mySideTermEPs;
-
-			[SerializableFieldId (1)]
-			AnonymousEndPoint[] _otherSideTermEPs;
-
-			[SerializableFieldId (2)]
-			byte[] _payload;
-
-			[SerializableFieldId (3)]
-			int _connectionId;
-
-			[SerializableFieldId (4)]
-			long _dupCheckId;
-
-			public ConnectionMessageBeforeBoundary (AnonymousEndPoint[] mySideTermEPs, AnonymousEndPoint[] otherSideTermEPs, int connectionId, byte[] payload)
-			{
-				_mySideTermEPs = mySideTermEPs;
-				_otherSideTermEPs = otherSideTermEPs;
-				_connectionId = connectionId;
-				_payload = payload;
-				_dupCheckId = BitConverter.ToInt64 (RNG.GetRNGBytes (8), 0);
-			}
-
-			public AnonymousEndPoint[] MySideTerminalEndPoints {
-				get { return _mySideTermEPs; }
-			}
-
-			public AnonymousEndPoint[] OtherSideTerminalEndPoints {
-				get { return _otherSideTermEPs; }
-			}
-
-			public int ConnectionId {
-				get { return _connectionId; }
-			}
-
-			public byte[] Payload {
-				get { return _payload; }
-			}
-
-			public long DuplicationCheckId {
-				get { return _dupCheckId; }
-			}
-		}
-
-		[Serializable]
-		[SerializableTypeId (0x209)]
-		class ConnectionMessage
-		{
-			[SerializableFieldId (0)]
-			RouteLabel _label;
-
-			[SerializableFieldId (1)]
-			int _connectionId;
-
-			[SerializableFieldId (2)]
-			AnonymousEndPoint[] _termEPs;
-
-			[SerializableFieldId (3)]
-			byte[] _payload;
-
-			[SerializableFieldId (4)]
-			long _dupCheckId;
-
-			public ConnectionMessage (AnonymousEndPoint[] termEPs, RouteLabel label, int connectionId, long dupCheckId, byte[] payload)
-			{
-				_termEPs = termEPs;
-				_label = label;
-				_connectionId = connectionId;
-				_payload = payload;
-				_dupCheckId = dupCheckId;
-			}
-
-			public RouteLabel Label {
-				get { return _label; }
-			}
-
-			public int ConnectionId {
-				get { return _connectionId; }
-			}
-
-			public AnonymousEndPoint[] EndPoints {
-				get { return _termEPs; }
-			}
-
-			public byte[] Payload {
-				get { return _payload; }
-			}
-
-			public long DuplicationCheckId {
-				get { return _dupCheckId; }
-			}
-		}
-
-		[Serializable]
-		[SerializableTypeId (0x20c)]
-		class ACK
-		{
-		}
-
-		[Serializable]
-		[SerializableTypeId (0x20d)]
-		class DisconnectMessage
-		{
-			[SerializableFieldId (0)]
-			RouteLabel _label;
-
-			public DisconnectMessage (RouteLabel label)
-			{
-				_label = label;
-			}
-
-			public RouteLabel Label {
-				get { return _label; }
 			}
 		}
 		#endregion
