@@ -40,6 +40,7 @@ namespace p2pncs.Evaluation
 			Dictionary<EvaluationTypes, IEvaluator> evalutions = new Dictionary<EvaluationTypes,IEvaluator> () {
 				{EvaluationTypes.AR, new AnonymousRouterEvaluation ()},
 				{EvaluationTypes.AR_SimCom, new AnonymousRouterSimultaneouslyCommunicationEvaluator ()},
+				{EvaluationTypes.AR_Throughput, new AnonymousHighThroughputEvaluator ()},
 			};
 			evalutions[options.EvalutionType].Evaluate (options);
 		}

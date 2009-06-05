@@ -20,6 +20,7 @@ namespace p2pncs.Evaluation
 	enum EvaluationTypes
 	{
 		AR,
-		AR_SimCom
+		AR_SimCom,
+		AR_Throughput
 	}
 }

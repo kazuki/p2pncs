@@ -37,6 +37,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AnonymousHighThroughputEvaluator.cs" />
     <Compile Include="AnonymousRouterEvaluation.cs" />
     <Compile Include="AnonymousRouterSimultaneouslyCommunicationEvaluator.cs" />
     <Compile Include="AnonymousSocketInfo.cs" />
