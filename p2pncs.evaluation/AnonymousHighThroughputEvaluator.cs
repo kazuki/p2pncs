@@ -16,14 +16,13 @@
  */
 
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using openCrypto.EllipticCurve;
 using p2pncs.Net;
 using p2pncs.Net.Overlay;
 using p2pncs.Net.Overlay.Anonymous;
-using p2pncs.Simulation;
+using p2pncs.Threading;
 
 namespace p2pncs.Evaluation
 {
@@ -55,12 +54,11 @@ namespace p2pncs.Evaluation
 
 				bool routeEstablished = false;
 				IAnonymousSocket sock1 = null, sock2 = null;
+				StreamSocket strm1 = null, strm2 = null;
 				do {
-					IMessagingSocket msock1 = null, msock2 = null;
-					int windowSize = 1024, sequence = 0, packets = 10000;
-					HashSet<int> ackWaiting = new HashSet<int> ();
-					ManualResetEvent done = new ManualResetEvent (true);
-					StandardDeviation sd = new StandardDeviation (false);
+					int packets = 10000;
+					IntervalInterrupter timeoutChecker = new IntervalInterrupter (TimeSpan.FromMilliseconds (100), "StreamSocket TimeoutChecker");
+					timeoutChecker.Start ();
 					try {
 						IAsyncResult ar = env.Nodes[0].AnonymousRouter.BeginConnect (recipientKey1, recipientKey2, AnonymousConnectionType.HighThroughput, null, null, null);
 						sock1 = env.Nodes[0].AnonymousRouter.EndConnect (ar);
@@ -68,59 +66,25 @@ namespace p2pncs.Evaluation
 							throw new System.Net.Sockets.SocketException ();
 						routeEstablished = true;
 						sock2 = env.Nodes[1].AnonymousSocketInfoList[0].BaseSocket;
-						msock1 = env.CreateMessagingSocket (sock1, TimeSpan.FromSeconds (1), 16, windowSize * 2, 0);
-						msock2 = env.CreateMessagingSocket (sock2, TimeSpan.FromSeconds (1), 16, windowSize * 2, 0);
-						msock2.InquiredUnknownMessage += delegate (object sender, InquiredEventArgs e) {
-							msock2.StartResponse (e, e.InquireMessage);
-						};
+						strm1 = new StreamSocket (sock1, AnonymousRouter.DummyEndPoint, 500, timeoutChecker);
+						strm2 = new StreamSocket (sock2, AnonymousRouter.DummyEndPoint, 500, timeoutChecker);
 						sock1.InitializedEventHandlers ();
 						sock2.InitializedEventHandlers ();
 						Stopwatch sw = Stopwatch.StartNew ();
+						byte[] data = System.Text.Encoding.UTF8.GetBytes ("HELLO WORLD");
 						for (int i = 0; i < packets; i ++) {
-							done.WaitOne ();
-							int current = sequence ++;
-							lock (ackWaiting) {
-								ackWaiting.Add (current);
-								if (ackWaiting.Count >= windowSize)
-									done.Reset ();
-							}
-							msock1.BeginInquire (current, AnonymousRouter.DummyEndPoint, delegate (IAsyncResult ar2) {
-								Stopwatch sw2 = ar2.AsyncState as Stopwatch;
-								object ret = msock1.EndInquire (ar2);
-								sw2.Stop ();
-								if (ret == null) {
-									Console.WriteLine ("Timeout...");
-									throw new System.Net.Sockets.SocketException ();
-								}
-								int value = (int)ret;
-								lock (ackWaiting) {
-									sd.AddSample ((float)sw2.Elapsed.TotalMilliseconds);
-									ackWaiting.Remove (value);
-									if (ackWaiting.Count < windowSize)
-										done.Set ();
-								}
-							}, Stopwatch.StartNew ());
+							strm1.Send (data, 0, data.Length);
 						}
-						while (true) {
-							done.WaitOne ();
-							lock (ackWaiting) {
-								if (ackWaiting.Count == 0)
-									break;
-								done.Reset ();
-							}
-						}
-						sw.Stop ();
-						int minJitter, maxJitter;
-						double avgJitter, sdJitter, avgRtt, sdRtt;
-						env.Network.GetAndResetJitterHistory (out minJitter, out avgJitter, out sdJitter, out maxJitter);
-						avgRtt = sd.Average;
-						sdRtt = sd.ComputeStandardDeviation ();
+						strm1.Shutdown ();
+						strm2.Shutdown ();
 						Logger.Log (LogLevel.Info, this, "{0:f1}sec, {1:f2}Mbps", sw.Elapsed.TotalSeconds, 800 * packets * 8 / sw.Elapsed.TotalSeconds / 1000.0 / 1000.0);
-						Logger.Log (LogLevel.Info, this, "Jitter={0}/{1:f1}({2:f1})/{3}, RTT={4:f1}({5:f1})", minJitter, avgJitter, sdJitter, maxJitter, avgRtt, sdRtt);
 					} catch {
 					} finally {
+						timeoutChecker.Dispose ();
 						if (sock1 != null) sock1.Dispose ();
 						if (sock2 != null) sock2.Dispose ();
+						if (strm1 != null) strm1.Dispose ();
+						if (strm2 != null) strm2.Dispose ();
 					}
 				} while (!routeEstablished);
 			}
