@@ -744,6 +744,13 @@ namespace p2pncs.Net.Overlay.Anonymous
 				for (int i = 0; i < dhtPutList.Count; i ++)
 					dhtPutList[i].PutToDHT ();
 			}
+
+			if (!_active) return;
+			using (IDisposable cookie = _subscribeMapLock.EnterReadLock ()) {
+				foreach (SubscribeInfo info in _subscribeMap.Values) {
+					info.CheckNumberOfEstablishedRoutes ();
+				}
+			}
 		}
 		#endregion
 
@@ -790,7 +797,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				CheckNumberOfEstablishedRoutes ();
 			}
 
-			void CheckNumberOfEstablishedRoutes ()
+			public void CheckNumberOfEstablishedRoutes ()
 			{
 				if (!_active) return;
 				lock (_listLock) {
