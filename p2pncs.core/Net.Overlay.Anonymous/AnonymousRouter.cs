@@ -479,10 +479,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 						cinfo = new ConnectionInfo (this, info.SubscribeInfo, id, sharedInfo, payload.ConnectionType, pubKey, payload);
 						_connectionMap.Add (id, cinfo);
 					}
-					cinfo.Start (sharedInfo);
+					cinfo.Start (sharedInfo, args.Response);
 
 					try {
-						Accepted (this, new AcceptedEventArgs (cinfo.Socket, payload.ConnectionType, payload.Payload, args.State));
+						Accepted (this, new AcceptedEventArgs (cinfo.Socket, args));
 					} catch {}
 					return;
 				}
@@ -502,7 +502,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					if (!cinfo.IsConnected && (msg.PayloadMAC == null || msg.PayloadMAC.Length == 0)) {
 						ConnectionEstablishedMessage msg2 = (ConnectionEstablishedMessage)DefaultSerializer.Deserialize (msg.Payload);
 						SymmetricKey key = cinfo.ComputeSharedKey (msg2.SharedInfo);
-						if (!ConnectionInfo.CheckMAC (key, msg2.SharedInfo, msg2.MAC)) {
+						if (!ConnectionInfo.CheckMAC (key, msg2.SharedInfo.Join (msg2.Encrypted), msg2.MAC)) {
 							Logger.Log (LogLevel.Error, this, "MAC Error");
 							return;
 						}
@@ -513,7 +513,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 								cinfo.ConnectionId = msg.ConnectionId;
 							}
 						}
-						cinfo.Established (key, msg.SenderSideTerminalEndPoints);
+						object response = null;
+						if (msg2.Encrypted.Length > 0)
+							response = DefaultSerializer.Deserialize (key.Decrypt (msg2.Encrypted, 0, msg2.Encrypted.Length));
+						cinfo.Established (key, msg.SenderSideTerminalEndPoints, response);
 						Logger.Log (LogLevel.Trace, cinfo, "Connection Established");
 					} else {
 						cinfo.Received (msg);
@@ -1191,7 +1194,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			DateTime _nextPingTime = DateTime.MaxValue;
 			DateTime _expiry = DateTime.MaxValue;
 			AnonymousConnectionType _type;
-			object _dtLock = new object (), _payload;
+			object _dtLock = new object (), _payload, _msgAtEstablishing;
 
 			public ConnectionInfo (AnonymousRouter router, SubscribeInfo subscribeInfo, Key destKey, ushort connectionId, AnonymousConnectionType type, object payload, AsyncCallback callback, object state)
 			{
@@ -1219,6 +1222,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_destKey = payload.InitiatorId;
 				_connectionId = connectionId;
 				_type = type;
+				_msgAtEstablishing = payload.Payload;
 				_key = ComputeSharedKey (subscribeInfo.PrivateKey, publicKey, payload.SharedInfo, sharedInfo);
 				_otherSideTermEPs = payload.InitiatorSideTerminalEndPoints;
 				_sock = new ConnectionSocket (this);
@@ -1257,11 +1261,12 @@ namespace p2pncs.Net.Overlay.Anonymous
 				return true;
 			}
 
-			public void Established (SymmetricKey key, AnonymousEndPoint[] eps)
+			public void Established (SymmetricKey key, AnonymousEndPoint[] eps, object response)
 			{
 				_key = key;
 				_otherSideTermEPs = eps;
 				_connected = true;
+				_msgAtEstablishing = response;
 				lock (_dtLock) {
 					_nextPingTime = DateTime.Now + AC_AliveCheckScheduleInterval;
 					_expiry = DateTime.Now + AC_MaxMessageIntervalWithMargin;
@@ -1287,9 +1292,17 @@ namespace p2pncs.Net.Overlay.Anonymous
 				}
 			}
 
-			public void Start (byte[] sharedInfo)
+			public void Start (byte[] sharedInfo, object response)
 			{
-				ConnectionEstablishedMessage msg = new ConnectionEstablishedMessage (sharedInfo, ComputeMAC (_key, sharedInfo));
+				byte[] encrypted;
+				if (response == null) {
+					encrypted = new byte[0];
+				} else {
+					byte[] temp = DefaultSerializer.Serialize (response);
+					encrypted = _key.Encrypt (temp, 0, temp.Length);
+				}
+				byte[] mac = ComputeMAC (_key, sharedInfo.Join (encrypted));
+				ConnectionEstablishedMessage msg = new ConnectionEstablishedMessage (sharedInfo, encrypted, mac);
 				Send (msg);
 			}
 
@@ -1490,6 +1503,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 				public Key RemoteEndPoint {
 					get { return _info._destKey; }
+				}
+
+				public object PayloadAtEstablishing {
+					get { return _info._msgAtEstablishing; }
 				}
 
 				public void InitializedEventHandlers ()
@@ -1857,16 +1874,24 @@ namespace p2pncs.Net.Overlay.Anonymous
 			byte[] _sharedInfo;
 
 			[SerializableFieldId (1)]
+			byte[] _encrypted;
+
+			[SerializableFieldId (2)]
 			byte[] _mac;
 
-			public ConnectionEstablishedMessage (byte[] sharedInfo, byte[] mac)
+			public ConnectionEstablishedMessage (byte[] sharedInfo, byte[] encrypted, byte[] mac)
 			{
 				_sharedInfo = sharedInfo;
+				_encrypted = encrypted;
 				_mac = mac;
 			}
 
 			public byte[] SharedInfo {
 				get { return _sharedInfo; }
+			}
+
+			public byte[] Encrypted {
+				get { return _encrypted; }
 			}
 
 			public byte[] MAC {

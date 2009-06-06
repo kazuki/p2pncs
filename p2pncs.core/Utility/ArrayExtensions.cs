@@ -50,5 +50,24 @@ namespace p2pncs.Utility
 			}
 			return list.ToArray ();
 		}
+
+		public static byte[] Join (this byte[] array1, byte[] array2)
+		{
+			byte[] joinArray = new byte[array1.Length + array2.Length];
+			Buffer.BlockCopy (array1, 0, joinArray, 0, array1.Length);
+			Buffer.BlockCopy (array2, 0, joinArray, array1.Length, array2.Length);
+			return joinArray;
+		}
+
+		public static T[] Join<T> (this T[] array1, T[] array2)
+		{
+			T[] joinArray = new T[array1.Length + array2.Length];
+			int j = 0;
+			for (int i = 0; i < array1.Length; i ++)
+				joinArray[j++] = array1[i];
+			for (int i = 0; i < array2.Length; i++)
+				joinArray[j++] = array2[i];
+			return joinArray;
+		}
 	}
 }

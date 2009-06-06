@@ -69,7 +69,7 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 					string msg = args.Payload as string;
 					Assert.IsNotNull (msg);
 					Assert.AreEqual ("HELLO", msg);
-					args.Accept (null);
+					args.Accept ("HELLO2", null);
 				};
 				env.AnonymousRouters[1].Accepted += delegate (object sender, AcceptedEventArgs args) {
 					lock (received2_lock) {
@@ -83,8 +83,10 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 				IAsyncResult ar = env.AnonymousRouters[0].BeginConnect (id1, id2, AnonymousConnectionType.LowLatency, "HELLO", null, null);
 				IAnonymousSocket sock1 = env.AnonymousRouters[0].EndConnect (ar);
 				Assert.IsNotNull (sock1, "1.sock");
+				Assert.AreEqual ("HELLO2", sock1.PayloadAtEstablishing as string);
 				Assert.IsTrue (accepted_done.WaitOne (1000), "2.waiting");
 				Assert.IsNotNull (sock2, "2.sock");
+				Assert.AreEqual ("HELLO", sock2.PayloadAtEstablishing as string);
 				sock1.Received += delegate (object sender, DatagramReceiveEventArgs args) {
 					lock (received1_lock) {
 						Assert.IsNull (received1, "1.received.#1");
@@ -203,7 +205,7 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 				AutoResetEvent accepted_done = new AutoResetEvent (false);
 				IAnonymousSocket sock2 = null;
 				env.AnonymousRouters[1].Accepting += delegate (object sender, AcceptingEventArgs args) {
-					args.Accept (null);
+					args.Accept (null, null);
 				};
 				env.AnonymousRouters[1].Accepted += delegate (object sender, AcceptedEventArgs args) {
 					accepted_done.Set ();

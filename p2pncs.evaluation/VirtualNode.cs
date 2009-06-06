@@ -84,7 +84,7 @@ namespace p2pncs.Evaluation
 
 		void AnonymousRouter_Accepting (object sender, AcceptingEventArgs args)
 		{
-			args.Accept (null);
+			args.Accept (null, null);
 		}
 
 		void AnonymousRouter_Accepted (object sender, AcceptedEventArgs args)

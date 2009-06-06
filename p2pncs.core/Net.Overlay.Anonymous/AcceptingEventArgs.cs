@@ -22,7 +22,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 	public class AcceptingEventArgs : EventArgs
 	{
 		protected Key _recipiendId, _destId;
-		protected object _payload, _state = null;
+		protected object _payload, _state = null, _response = null;
 		protected bool _accepted = false;
 		protected AnonymousConnectionType _type;
 
@@ -58,9 +58,14 @@ namespace p2pncs.Net.Overlay.Anonymous
 			get { return _payload; }
 		}
 
-		public void Accept (object state)
+		public object Response {
+			get { return _response; }
+		}
+
+		public void Accept (object response, object state)
 		{
 			_accepted = true;
+			_response = response;
 			_state = state;
 		}
 

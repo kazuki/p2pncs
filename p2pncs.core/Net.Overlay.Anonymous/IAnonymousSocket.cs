@@ -22,6 +22,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 		AnonymousConnectionType ConnectionType { get; }
 		Key LocalEndPoint { get; }
 		Key RemoteEndPoint { get; }
+		object PayloadAtEstablishing { get; }
 		void InitializedEventHandlers ();
 	}
 }

@@ -23,14 +23,17 @@ namespace p2pncs.Net.Overlay.Anonymous
 	{
 		IAnonymousSocket _sock;
 		AnonymousConnectionType _type;
+		Key _recipiendId, _destId;
 		object _state, _payload;
 
-		public AcceptedEventArgs (IAnonymousSocket sock, AnonymousConnectionType type, object payload, object state)
+		public AcceptedEventArgs (IAnonymousSocket sock, AcceptingEventArgs acceptingArgs)
 		{
 			_sock = sock;
-			_type = type;
-			_payload = payload;
-			_state = state;
+			_type = acceptingArgs.ConnectionType;
+			_recipiendId = acceptingArgs.RecipientId;
+			_destId = acceptingArgs.DestinationId;
+			_state = acceptingArgs.State;
+			_payload = acceptingArgs.Payload;
 		}
 
 		public IAnonymousSocket Socket {
@@ -39,6 +42,14 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 		public AnonymousConnectionType ConnectionType {
 			get { return _type; }
+		}
+
+		public Key RecipientId {
+			get { return _recipiendId; }
+		}
+
+		public Key DestinationId {
+			get { return _destId; }
 		}
 
 		public object Payload {
