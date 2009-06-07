@@ -76,6 +76,10 @@ namespace p2pncs.Simulation
 			return Math.Sqrt (tmp / _count);
 		}
 
+		public IList<float> Samples {
+			get { return _values.AsReadOnly (); }
+		}
+
 		public void Clear ()
 		{
 			if (_values != null)

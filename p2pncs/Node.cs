@@ -28,7 +28,7 @@ namespace p2pncs
 {
 	class Node : IDisposable
 	{
-		public static readonly TimeSpan DefaultMessagingTimeout = TimeSpan.FromSeconds (1);
+		public static readonly TimeSpan DefaultMessagingTimeout = TimeSpan.FromMilliseconds (200);
 		public const int DefaultMessagingRetry = 2;
 		public const int DefaultMessagingRetryBufferSize = 8192;
 		public const int DefaultMessagingDuplicationCheckBufferSize = 1024;
@@ -51,6 +51,7 @@ namespace p2pncs
 			_dgramSock = bindedDgramSock;
 			_messagingSock = new MessagingSocket (_dgramSock, true, SymmetricKey.NoneKey, p2pncs.Serializer.Instance,
 				null, _msgInt, DefaultMessagingTimeout, DefaultMessagingRetry, DefaultMessagingRetryBufferSize, DefaultMessagingDuplicationCheckBufferSize);
+			TestLogger.SetupUdpMessagingSocket (_messagingSock);
 			_kbrPrivateKey = ECKeyPair.Create (DefaultECDomainName);
 			_kbr = new SimpleIterativeRouter2 (Key.Create (_kbrPrivateKey), _messagingSock, new SimpleRoutingAlgorithm (), p2pncs.Serializer.Instance, true);
 			_dht = new SimpleDHT (_kbr, _messagingSock, new OnMemoryLocalHashTable (_dhtInt));

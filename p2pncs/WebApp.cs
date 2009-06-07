@@ -264,7 +264,7 @@ namespace p2pncs
 					lock (_rooms) {
 						if (_joinRooms.ContainsKey (roomKey))
 							break;
-						_joinRooms.Add (roomKey, 0);
+						_joinRooms.Add (roomKey, Interlocked.Increment (ref _roomId));
 					}
 					_node.AnonymousRouter.BeginConnect (_imPubKey, roomKey, AnonymousConnectionType.LowLatency, _name, JoinRoom_Callback, roomKey);
 					IncrementRevisionAndUpdate ();
@@ -466,6 +466,7 @@ namespace p2pncs
 					sock.AddInquiredHandler (typeof (ChatMessage), Messaging_Inquired);
 					sock.AddInquiredHandler (typeof (LeaveMessage), LeaveMessage_Inquired);
 					sock.AddInquiryDuplicationCheckType (typeof (ChatMessage));
+					TestLogger.SetupAcMessagingSocket (sock);
 				}
 			}
 
@@ -601,6 +602,7 @@ namespace p2pncs
 				msock.AddInquiredHandler (typeof (ChatMessage), Messaging_Inquired);
 				msock.AddInquiredHandler (typeof (LeaveMessage), LeaveMessage_Inquired);
 				msock.AddInquiryDuplicationCheckType (typeof (ChatMessage));
+				TestLogger.SetupAcMessagingSocket (msock);
 				sock.InitializedEventHandlers ();
 				string msg = ((string)payload) + "さんが入室しました";
 				Broadcast (SYSTEM, msg, null);

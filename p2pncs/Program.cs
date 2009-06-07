@@ -107,9 +107,11 @@ namespace p2pncs
 				_nodes[i].KeyBasedRouter.Join (new IPEndPoint[] {new IPEndPoint (IPAddress.Loopback, _config.GetValue<int> ("net/bind/port"))});
 			}
 #endif
+			p2pncs.Simulation.OSTimerPrecision.SetCurrentThreadToHighPrecision ();
 			using (WebApp app = new WebApp (_node, _imPublicKey, _imPrivateKey, _name)) {
 				_server = HttpServer.CreateEmbedHttpServer (app, null, true, true, false, _config.GetValue<int> ("gw/bind/port"), 16);
 				app.ExitWaitHandle.WaitOne ();
+				TestLogger.Dump ();
 			}
 		}
 
