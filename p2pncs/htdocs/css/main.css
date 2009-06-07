@@ -1,0 +1,40 @@
+body {
+  font-size: 10pt;
+}
+
+div#content{margin-left:200px;padding-left: 20px;}
+div#sidearea{float:left; width:200px}
+
+a.ui-button {
+  padding: 0.4em 1em 0.4em 1em;
+  position: relative;
+  text-decoration: none;
+}
+
+ul.no-indent {
+  margin: 0px;
+  padding: 0px;
+}
+
+ul.no-indent li {
+  list-style: none;
+}
+
+div.chat-content {
+  overflow: auto;
+  width: 100%;
+}
+
+div.chat-post {
+  width: 100%;
+  margin-top: 1ex;
+}
+
+div.chat-statusbar {
+  font-size: 80%;
+  margin-top: 5px;
+}
+
+span.chat-roomid {
+  margin-left: 1em;
+}
