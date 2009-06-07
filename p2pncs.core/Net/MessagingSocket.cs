@@ -84,7 +84,7 @@ namespace p2pncs.Net
 					if (ar == null)
 						return;
 					ar.Complete (obj, this);
-					InvokeInquirySuccess (this, new InquiredEventArgs (ar.Request, obj, e.RemoteEndPoint));
+					InvokeInquirySuccess (this, new InquiredEventArgs (ar.Request, obj, e.RemoteEndPoint, DateTime.Now - ar.TransmitTime));
 					break;
 				case MessageType.OneWay:
 					InvokeReceived (this, new ReceivedEventArgs (obj, e.RemoteEndPoint));

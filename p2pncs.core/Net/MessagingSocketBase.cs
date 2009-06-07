@@ -96,8 +96,7 @@ namespace p2pncs.Net
 			if (overflow != null) {
 				Logger.Log (LogLevel.Error, this, "Overflow Retry Buffer");
 				overflow.Fail ();
-				if (InquiryFailure != null)
-					InquiryFailure (this, new InquiredEventArgs (overflow.Request, overflow.Response, overflow.RemoteEndPoint));
+				InvokeInquiryFailure (this, new InquiredEventArgs (overflow.Request, overflow.RemoteEndPoint));
 			}
 			return ar;
 		}
@@ -242,8 +241,7 @@ namespace p2pncs.Net
 				InquiredAsyncResultBase iar = timeoutList[i];
 				if (iar.RetryCount >= iar.MaxRetry) {
 					iar.Fail ();
-					if (InquiryFailure != null)
-						InquiryFailure (this, new InquiredEventArgs (iar.Request, iar.Response, iar.RemoteEndPoint));
+					InvokeInquiryFailure (this, new InquiredEventArgs (iar.Request, iar.RemoteEndPoint));
 				} else {
 					iar.Retry (_sock);
 				}
@@ -361,7 +359,7 @@ namespace p2pncs.Net
 			protected object _req;
 			object _response = null;
 			bool _isCompleted = false;
-			DateTime _dt, _expiry;
+			DateTime _dt = DateTime.MinValue, _expiry;
 			TimeSpan _timeout;
 			protected MsgLabel _id;
 			int _retries = 0, _maxRetry;
@@ -379,8 +377,9 @@ namespace p2pncs.Net
 
 			public void Transmit (IDatagramEventSocket sock)
 			{
-				_dt = DateTime.Now;
-				_expiry = _dt + _timeout;
+				if (_dt == DateTime.MinValue)
+					_dt = DateTime.Now;
+				_expiry = DateTime.Now + _timeout;
 				Transmit_Internal (sock);
 			}
 
