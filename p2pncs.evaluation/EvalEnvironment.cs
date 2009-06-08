@@ -122,6 +122,7 @@ namespace p2pncs.Evaluation
 			if (_churnInt == null || _churnInt.Active)
 				return;
 			_churnInt.AddInterruption (handler);
+			_churnInt.Start ();
 		}
 
 		public VirtualNode CreateNewVirtualNode ()
