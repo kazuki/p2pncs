@@ -20,6 +20,7 @@ using System.Net;
 using System.Threading;
 using NUnit.Framework;
 using p2pncs.Net;
+using p2pncs.Security.Cryptography;
 using p2pncs.Threading;
 
 namespace p2pncs.tests.Net
@@ -33,7 +34,7 @@ namespace p2pncs.tests.Net
 
 		public virtual void Init ()
 		{
-			_formatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter ();
+			_formatter = Serializer.Instance;
 			_interrupter = new IntervalInterrupter (TimeSpan.FromMilliseconds (10.0), "Test IntervalInterrupter");
 			_interrupter.Start ();
 		}
@@ -45,16 +46,29 @@ namespace p2pncs.tests.Net
 
 		protected void DisposeAll (IMessagingSocket[] sockets)
 		{
-			for (int i = 0; i < sockets.Length; i++)
+			if (sockets == null)
+				return;
+			for (int i = 0; i < sockets.Length; i++) {
+				if (sockets[i] == null)
+					continue;
 				sockets[i].Dispose ();
+			}
 		}
 
-		protected abstract void CreateMessagingSockets (int count, out IMessagingSocket[] sockets, out EndPoint[] endPoints, out EndPoint noRouteEP);
+		protected abstract void CreateMessagingSocket (int idx, SymmetricKey key, out IMessagingSocket socket, out EndPoint endPoint);
+		protected abstract EndPoint GetNoRouteEndPoint ();
 
-		void CreateMessagingSockets_Internal (int count, out IMessagingSocket[] sockets, out EndPoint[] endPoints, out EndPoint noRouteEP)
+		protected void CreateMessagingSockets (int count, SymmetricKey key, out IMessagingSocket[] sockets, out EndPoint[] endPoints, out EndPoint noRouteEP)
 		{
-			CreateMessagingSockets (count, out sockets, out endPoints, out noRouteEP);
+			sockets = new IMessagingSocket[count];
+			endPoints = new EndPoint[count];
+			noRouteEP = GetNoRouteEndPoint ();
 			for (int i = 0; i < sockets.Length; i++) {
+				IMessagingSocket sock;
+				EndPoint ep;
+				CreateMessagingSocket (i, key, out sock, out ep);
+				sockets[i] = sock;
+				endPoints[i] = ep;
 				sockets[i].InquiredUnknownMessage += DefaultInquiredEventHandler;
 			}
 		}
@@ -70,7 +84,7 @@ namespace p2pncs.tests.Net
 				IMessagingSocket[] msockets;
 				EndPoint[] endPoints;
 				EndPoint noRouteEP;
-				CreateMessagingSockets_Internal (2, out msockets, out endPoints, out noRouteEP);
+				CreateMessagingSockets (2, null, out msockets, out endPoints, out noRouteEP);
 
 				try {
 					int count = 0;
@@ -122,7 +136,7 @@ namespace p2pncs.tests.Net
 				IMessagingSocket[] msockets;
 				EndPoint[] endPoints;
 				EndPoint noRouteEP;
-				CreateMessagingSockets_Internal (2, out msockets, out endPoints, out noRouteEP);
+				CreateMessagingSockets (2, null, out msockets, out endPoints, out noRouteEP);
 
 				try {
 					int count = 0;
@@ -171,7 +185,7 @@ namespace p2pncs.tests.Net
 				IMessagingSocket[] msockets;
 				EndPoint[] endPoints;
 				EndPoint noRouteEP;
-				CreateMessagingSockets_Internal (2, out msockets, out endPoints, out noRouteEP);
+				CreateMessagingSockets (2, null, out msockets, out endPoints, out noRouteEP);
 
 				try {
 					msockets[0].ReceivedUnknownMessage += new ReceivedEventHandler(delegate (object sender, ReceivedEventArgs e) {
@@ -214,7 +228,7 @@ namespace p2pncs.tests.Net
 				IMessagingSocket[] msockets;
 				EndPoint[] endPoints;
 				EndPoint noRouteEP;
-				CreateMessagingSockets_Internal (2, out msockets, out endPoints, out noRouteEP);
+				CreateMessagingSockets (2, null, out msockets, out endPoints, out noRouteEP);
 
 				try {
 					msockets[0].ReceivedUnknownMessage += new ReceivedEventHandler (delegate (object sender, ReceivedEventArgs e) {

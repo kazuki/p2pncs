@@ -16,9 +16,12 @@
  */
 
 using System;
+using System.IO;
 using System.Net;
 using NUnit.Framework;
+using openCrypto;
 using p2pncs.Net;
+using p2pncs.Security.Cryptography;
 
 namespace p2pncs.tests.Net
 {
@@ -37,18 +40,17 @@ namespace p2pncs.tests.Net
 			base.Dispose ();
 		}
 
-		protected override void CreateMessagingSockets (int count, out IMessagingSocket[] sockets, out EndPoint[] endPoints, out EndPoint noRouteEP)
+		protected override EndPoint GetNoRouteEndPoint ()
 		{
-			UdpSocket[] udpSockets = new UdpSocket[count];
-			sockets = new MessagingSocket[count];
-			endPoints = new IPEndPoint[count];
-			noRouteEP = new IPEndPoint (IPAddress.Loopback, ushort.MaxValue);
-			for (int i = 0; i < sockets.Length; i++) {
-				udpSockets[i] = UdpSocket.CreateIPv4 ();
-				endPoints[i] = new IPEndPoint (IPAddress.Loopback, 10000 + i);
-				udpSockets[i].Bind (endPoints[i]);
-				sockets[i] = new MessagingSocket (udpSockets[i], true, null, _formatter, null, _interrupter, DefaultTimeout, DefaultRetryCount, 1024, 1024);
-			}
+			return new IPEndPoint (IPAddress.Loopback, ushort.MaxValue);
+		}
+
+		protected override void CreateMessagingSocket (int idx, SymmetricKey key, out IMessagingSocket socket, out EndPoint endPoint)
+		{
+			UdpSocket udpSocket = UdpSocket.CreateIPv4 ();
+			endPoint = new IPEndPoint (IPAddress.Loopback, 10000 + idx);
+			udpSocket.Bind (endPoint);
+			socket = new MessagingSocket (udpSocket, true, key, _formatter, null, _interrupter, DefaultTimeout, DefaultRetryCount, 1024, 1024);
 		}
 
 		[Test]
@@ -73,6 +75,39 @@ namespace p2pncs.tests.Net
 		public override void NullMsgTest ()
 		{
 			base.NullMsgTest ();
+		}
+
+		[Test]
+		public void EncryptionTest ()
+		{
+			SymmetricKey key = new SymmetricKey (SymmetricAlgorithmType.Camellia, RNG.GetRNGBytes (16), RNG.GetRNGBytes (16));
+			IMessagingSocket[] msockets;
+			EndPoint[] endPoints;
+			EndPoint noRouteEP;
+			CreateMessagingSockets (2, key, out msockets, out endPoints, out noRouteEP);
+			msockets[1].AddInquiredHandler (typeof (byte[]), delegate (object sender, InquiredEventArgs e) {
+				msockets[1].StartResponse (e, e.InquireMessage);
+			});
+
+			try {
+				byte[] data = new byte[msockets[0].MaxMessageSize];
+				while (true) {
+					byte[] serialized;
+					using (MemoryStream ms = new MemoryStream ()) {
+						_formatter.Serialize (ms, data);
+						ms.Close ();
+						serialized = ms.ToArray ();
+					}
+					if (serialized.Length == msockets[0].MaxMessageSize)
+						break;
+					data = new byte[data.Length - 1];
+				}
+				IAsyncResult ar = msockets[0].BeginInquire (data, endPoints[1], null, null);
+				byte[] ret = msockets[0].EndInquire (ar) as byte[];
+				Assert.AreEqual (ret, data);
+			} finally {
+				DisposeAll (msockets);
+			}
 		}
 	}
 }

@@ -18,6 +18,8 @@
 using System.Net;
 using NUnit.Framework;
 using p2pncs.Net;
+using p2pncs.Security.Cryptography;
+using p2pncs.Simulation;
 using p2pncs.Simulation.VirtualNet;
 
 namespace p2pncs.tests.Simulation.VirtualNet
@@ -26,6 +28,7 @@ namespace p2pncs.tests.Simulation.VirtualNet
 	public class VirtualMessagingSocketTest : p2pncs.tests.Net.IMessagingSocketTest
 	{
 		VirtualNetwork _net;
+		static RandomIPAddressGenerator _adrsGen = new RandomIPAddressGenerator ();
 
 		[TestFixtureSetUp]
 		public override void Init ()
@@ -65,17 +68,17 @@ namespace p2pncs.tests.Simulation.VirtualNet
 			base.NullMsgTest ();
 		}
 
-		protected override void CreateMessagingSockets (int count, out IMessagingSocket[] sockets, out EndPoint[] endPoints, out EndPoint noRouteEP)
+		protected override EndPoint GetNoRouteEndPoint ()
 		{
-			sockets = new IMessagingSocket[count];
-			endPoints = new IPEndPoint[count];
-			noRouteEP = new IPEndPoint (IPAddress.Parse ("192.168.255.254"), 10000);
-			for (int i = 0; i < count; i++) {
-				endPoints[i] = new IPEndPoint (IPAddress.Parse ("10.0.0." + (i + 1).ToString ()), 10000);
-				VirtualDatagramEventSocket sock = new VirtualDatagramEventSocket (_net, ((IPEndPoint)endPoints[i]).Address);
-				sock.Bind (endPoints[i]);
-				sockets[i] = new VirtualMessagingSocket (sock, true, _interrupter, DefaultTimeout, DefaultRetryCount, 1024, 1024);
-			}
+			return new IPEndPoint (IPAddress.Parse ("192.168.255.254"), 10000);
+		}
+
+		protected override void CreateMessagingSocket (int idx, SymmetricKey key, out IMessagingSocket socket, out EndPoint endPoint)
+		{
+			endPoint = new IPEndPoint (_adrsGen.Next (), 10000);
+			VirtualDatagramEventSocket sock = new VirtualDatagramEventSocket (_net, ((IPEndPoint)endPoint).Address);
+			sock.Bind (endPoint);
+			socket = new VirtualMessagingSocket (sock, true, _interrupter, DefaultTimeout, DefaultRetryCount, 1024, 1024);
 		}
 	}
 }
