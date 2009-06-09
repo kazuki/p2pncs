@@ -191,6 +191,8 @@ namespace p2pncs.Net
 			get { return _sock; }
 		}
 
+		public abstract int MaxMessageSize { get; }
+
 		public void Close ()
 		{
 			if (!_active)

@@ -123,6 +123,14 @@ namespace p2pncs.Security.Cryptography
 		public byte[] IV {
 			get { return _iv; }
 		}
+
+		public bool EnableIVShuffle {
+			get { return _ivShuffle; }
+		}
+
+		public PaddingMode Padding {
+			get { return _algo == null ? PaddingMode.None : _algo.Padding; }
+		}
 		#endregion
 
 		#region Methods

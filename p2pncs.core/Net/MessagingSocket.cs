@@ -30,6 +30,9 @@ namespace p2pncs.Net
 		IFormatter _formatter;
 		object _nullObject;
 
+		const int MAX_HEADER_SIZE = 5;
+		int _maxMsgSize;
+
 		public MessagingSocket (IDatagramEventSocket sock, bool ownSocket, SymmetricKey key,
 			IFormatter formatter, object nullObject, IntervalInterrupter interrupter,
 			TimeSpan timeout, int maxRetry, int retryBufferSize, int inquiryDupCheckSize)
@@ -39,6 +42,15 @@ namespace p2pncs.Net
 			_formatter = formatter;
 			_nullObject = nullObject != null ? nullObject : NullObject.Instance;
 			sock.Received += Socket_Received;
+			_maxMsgSize = sock.MaxDatagramSize;
+			if (key.AlgorithmType != SymmetricAlgorithmType.None && key.IV != null) {
+				_maxMsgSize -= _maxMsgSize % key.IV.Length;
+				if (key.Padding != System.Security.Cryptography.PaddingMode.None)
+					_maxMsgSize --;
+				if (key.EnableIVShuffle)
+					_maxMsgSize -= key.IV.Length;
+			}
+			_maxMsgSize -= MAX_HEADER_SIZE;
 		}
 
 		void Socket_Received (object sender, DatagramReceiveEventArgs e)
@@ -125,6 +137,10 @@ MessageError:
 				obj = _nullObject;
 			byte[] msg = SerializeTransmitData (MessageType.Request, id, obj);
 			return new InquiredAsyncResult (obj, msg, remoteEP, id, timeout, maxRetry, callback, state);
+		}
+
+		public override int MaxMessageSize {
+			get { return _maxMsgSize; }
 		}
 
 		#endregion

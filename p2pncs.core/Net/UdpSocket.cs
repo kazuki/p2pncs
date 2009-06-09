@@ -160,6 +160,10 @@ namespace p2pncs.Net
 
 		public event DatagramReceiveEventHandler Received;
 
+		public int MaxDatagramSize {
+			get { return MAX_DATAGRAM_SIZE; }
+		}
+
 		public long ReceivedBytes {
 			get { return _recvBytes; }
 		}

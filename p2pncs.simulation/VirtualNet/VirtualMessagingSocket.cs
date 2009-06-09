@@ -80,6 +80,10 @@ namespace p2pncs.Simulation.VirtualNet
 			return new InquiredAsyncResult (obj, remoteEP, id, timeout, maxRetry, callback, state);
 		}
 
+		public override int MaxMessageSize {
+			get { return _sock.MaxDatagramSize; }
+		}
+
 		#endregion
 
 		#region Internal Class

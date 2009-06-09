@@ -82,6 +82,8 @@ namespace p2pncs.Simulation.VirtualNet
 		{
 			if (_vnet == null)
 				return;
+			if (size > MaxDatagramSize)
+				throw new System.Net.Sockets.SocketException ();
 			_vnet.AddSendQueue (_bindPubEP, remoteEP, buffer, offset, size);
 			Interlocked.Add (ref _sentBytes, size);
 			Interlocked.Increment (ref _sentDgrams);
@@ -98,6 +100,10 @@ namespace p2pncs.Simulation.VirtualNet
 					Received (sender, e);
 				} catch {}
 			}
+		}
+
+		public int MaxDatagramSize {
+			get { return 1000; }
 		}
 
 		public long ReceivedBytes {

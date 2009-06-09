@@ -1554,6 +1554,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 				public event DatagramReceiveEventHandler Received;
 
+				public int MaxDatagramSize {
+					get { throw new NotImplementedException (); }
+				}
+
 				public long ReceivedBytes {
 					get { return Interlocked.Read (ref _recvBytes); }
 				}
