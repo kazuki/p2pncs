@@ -127,7 +127,7 @@ namespace p2pncs.Net
 
 		public void AddReceivedHandler (Type msgType, ReceivedEventHandler handler)
 		{
-			using (IDisposable cookie = _receivedHandlersLock.EnterWriteLock ()) {
+			using (_receivedHandlersLock.EnterWriteLock ()) {
 				ReceivedEventHandler value;
 				if (_receivedHandlers.TryGetValue (msgType, out value)) {
 					value += handler;
@@ -139,7 +139,7 @@ namespace p2pncs.Net
 
 		public void RemoveReceivedHandler (Type msgType, ReceivedEventHandler handler)
 		{
-			using (IDisposable cookie = _receivedHandlersLock.EnterWriteLock ()) {
+			using (_receivedHandlersLock.EnterWriteLock ()) {
 				ReceivedEventHandler value;
 				if (_receivedHandlers.TryGetValue (msgType, out value)) {
 					value -= handler;
@@ -151,7 +151,7 @@ namespace p2pncs.Net
 
 		public void AddInquiredHandler (Type inquiryMessageType, InquiredEventHandler handler)
 		{
-			using (IDisposable cookie = _inquiredHandlersLock.EnterWriteLock ()) {
+			using (_inquiredHandlersLock.EnterWriteLock ()) {
 				InquiredEventHandler value;
 				if (_inquiredHandlers.TryGetValue (inquiryMessageType, out value)) {
 					value += handler;
@@ -163,7 +163,7 @@ namespace p2pncs.Net
 
 		public void RemoveInquiredHandler (Type inquiryMessageType, InquiredEventHandler handler)
 		{
-			using (IDisposable cookie = _inquiredHandlersLock.EnterWriteLock ()) {
+			using (_inquiredHandlersLock.EnterWriteLock ()) {
 				InquiredEventHandler value;
 				if (_inquiredHandlers.TryGetValue (inquiryMessageType, out value)) {
 					value -= handler;
@@ -175,14 +175,14 @@ namespace p2pncs.Net
 
 		public void AddInquiryDuplicationCheckType (Type type)
 		{
-			using (IDisposable cookie = _inquiryDupCheckTypeSetLock.EnterWriteLock ()) {
+			using (_inquiryDupCheckTypeSetLock.EnterWriteLock ()) {
 				_inquiryDupCheckTypeSet.Add (type);
 			}
 		}
 
 		public void RemoveInquiryDuplicationCheckType (Type type)
 		{
-			using (IDisposable cookie = _inquiryDupCheckTypeSetLock.EnterWriteLock ()) {
+			using (_inquiryDupCheckTypeSetLock.EnterWriteLock ()) {
 				_inquiryDupCheckTypeSet.Remove (type);
 			}
 		}
@@ -207,7 +207,7 @@ namespace p2pncs.Net
 					_retryList[i].Fail ();
 				_retryList.Clear ();
 			}
-			using (IDisposable cookie = _inquiredHandlersLock.EnterWriteLock ()) {
+			using (_inquiredHandlersLock.EnterWriteLock ()) {
 				_inquiredHandlers.Clear ();
 			}
 			_inquiredHandlersLock.Dispose ();
@@ -283,7 +283,7 @@ namespace p2pncs.Net
 		{
 			if (msg == null)
 				return false;
-			using (IDisposable cookie = _inquiryDupCheckTypeSetLock.EnterReadLock ()) {
+			using (_inquiryDupCheckTypeSetLock.EnterReadLock ()) {
 				return _inquiryDupCheckTypeSet.Contains (msg.GetType ());
 			}
 		}
@@ -298,7 +298,7 @@ namespace p2pncs.Net
 			}
 
 			InquiredEventHandler handler;
-			using (IDisposable cookie = _inquiredHandlersLock.EnterReadLock ()) {
+			using (_inquiredHandlersLock.EnterReadLock ()) {
 				if (e.InquireMessage == null || !_inquiredHandlers.TryGetValue (e.InquireMessage.GetType (), out handler))
 					handler = InquiredUnknownMessage;
 			}
@@ -330,7 +330,7 @@ namespace p2pncs.Net
 		protected void InvokeReceived (object sender, ReceivedEventArgs e)
 		{
 			ReceivedEventHandler handler;
-			using (IDisposable cookie = _receivedHandlersLock.EnterReadLock ()) {
+			using (_receivedHandlersLock.EnterReadLock ()) {
 				if (e.Message == null || !_receivedHandlers.TryGetValue (e.Message.GetType (), out handler))
 					handler = ReceivedUnknownMessage;
 			}

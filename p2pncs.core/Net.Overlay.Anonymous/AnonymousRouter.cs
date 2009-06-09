@@ -141,7 +141,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 		public void SubscribeRecipient (Key recipientId, ECKeyPair privateKey)
 		{
 			SubscribeInfo info = new SubscribeInfo (this, recipientId, privateKey, DefaultSubscribeRoutes, DefaultRelayNodes, DefaultSubscribeRouteFactor);
-			using (IDisposable cookie = _subscribeMapLock.EnterWriteLock ()) {
+			using (_subscribeMapLock.EnterWriteLock ()) {
 				if (_subscribeMap.ContainsKey (recipientId))
 					return;
 				_subscribeMap.Add (recipientId, info);
@@ -152,7 +152,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 		public void UnsubscribeRecipient (Key recipientId)
 		{
 			SubscribeInfo info;
-			using (IDisposable cookie = _subscribeMapLock.EnterWriteLock ()) {
+			using (_subscribeMapLock.EnterWriteLock ()) {
 				if (!_subscribeMap.TryGetValue (recipientId, out info))
 					return;
 				_subscribeMap.Remove (recipientId);
@@ -163,7 +163,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 		public IAsyncResult BeginConnect (Key recipientId, Key destinationId, AnonymousConnectionType type, object payload, AsyncCallback callback, object state)
 		{
 			SubscribeInfo subscribeInfo;
-			using (IDisposable cookie = _subscribeMapLock.EnterReadLock ()) {
+			using (_subscribeMapLock.EnterReadLock ()) {
 				if (!_subscribeMap.TryGetValue (recipientId, out subscribeInfo))
 					throw new KeyNotFoundException ();
 				if (_subscribeMap.ContainsKey (destinationId))
@@ -171,7 +171,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			}
 
 			ConnectionInfo info;
-			using (IDisposable cookie = _connectionMapLock.EnterWriteLock ()) {
+			using (_connectionMapLock.EnterWriteLock ()) {
 				byte[] raw_id = new byte[2];
 				ushort id;
 				do {
@@ -198,7 +198,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 		public ISubscribeInfo GetSubscribeInfo (Key recipientId)
 		{
-			using (IDisposable cookie = _subscribeMapLock.EnterReadLock ()) {
+			using (_subscribeMapLock.EnterReadLock ()) {
 				return _subscribeMap[recipientId];
 			}
 		}
@@ -224,7 +224,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			_sock.RemoveReceivedHandler (typeof (RoutedMessage), Messaging_Received_RoutedMessage);
 			_sock.RemoveReceivedHandler (typeof (InterterminalMessage), Messaging_Received_InterterminalMessage);
 
-			using (IDisposable cookie = _subscribeMapLock.EnterWriteLock ()) {
+			using (_subscribeMapLock.EnterWriteLock ()) {
 				foreach (SubscribeInfo info in _subscribeMap.Values)
 					info.Close ();
 				_subscribeMap.Clear ();
@@ -249,7 +249,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			RouteInfo routeInfo;
 
 			if (!payload.IsLast) {
-				using (IDisposable cookie = _routingMapLock.EnterWriteLock ()) {
+				using (_routingMapLock.EnterWriteLock ()) {
 					if (_routingMap.ContainsKey (prev))
 						return;
 					next = new AnonymousEndPoint (payload.NextHopNode, label);
@@ -270,7 +270,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				}, null);
 			} else {
 				TerminalPointInfo termInfo;
-				using (IDisposable cookie = _routingMapLock.EnterWriteLock ()) {
+				using (_routingMapLock.EnterWriteLock ()) {
 					if (_routingMap.ContainsKey (prev))
 						return;
 					next = new AnonymousEndPoint (DummyEndPoint, label);
@@ -302,7 +302,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 		{
 			RouteInfo routeInfo;
 			AnonymousEndPoint senderEP = new AnonymousEndPoint (endPoint, msg.Label);
-			using (IDisposable cookie = _routingMapLock.EnterReadLock ()) {
+			using (_routingMapLock.EnterReadLock ()) {
 				if (!_routingMap.TryGetValue (senderEP, out routeInfo))
 					routeInfo = null;
 			}
@@ -400,7 +400,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				return;
 			}
 
-			using (IDisposable cookie = _routingMapLock.EnterReadLock ()) {
+			using (_routingMapLock.EnterReadLock ()) {
 				if (!_routingMap.TryGetValue (new AnonymousEndPoint (DummyEndPoint, msg.Label), out routeInfo))
 					routeInfo = null;
 			}
@@ -425,7 +425,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			DisconnectMessage msg = (DisconnectMessage)e.InquireMessage;
 			RouteInfo routeInfo;
 			AnonymousEndPoint senderEP = new AnonymousEndPoint (e.EndPoint, msg.Label);
-			using (IDisposable cookie = _routingMapLock.EnterReadLock ()) {
+			using (_routingMapLock.EnterReadLock ()) {
 				if (!_routingMap.TryGetValue (senderEP, out routeInfo))
 					return;
 			}
@@ -473,7 +473,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					ConnectionInfo cinfo;
 					uint id = (uint)payload.ConnectionId << 16;
 					byte[] sharedInfo = RNG.GetRNGBytes (DefaultSharedInfoSize);
-					using (IDisposable cookie = _connectionMapLock.EnterWriteLock ()) {
+					using (_connectionMapLock.EnterWriteLock ()) {
 						while (_connectionMap.ContainsKey (id))
 							id ++;
 						cinfo = new ConnectionInfo (this, info.SubscribeInfo, id, sharedInfo, payload.ConnectionType, pubKey, payload);
@@ -491,7 +491,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				ConnectionReciverSideMessage msg = msg_obj as ConnectionReciverSideMessage;
 				if (msg != null) {
 					ConnectionInfo cinfo;
-					using (IDisposable cookie = _connectionMapLock.EnterReadLock ()) {
+					using (_connectionMapLock.EnterReadLock ()) {
 						if (!_connectionMap.TryGetValue (msg.ConnectionId, out cinfo)) {
 							if (!_connectionMap.TryGetValue (msg.ConnectionId & 0xFFFF0000, out cinfo) || (!cinfo.IsInitiator && !cinfo.IsConnected)) {
 								Logger.Log (LogLevel.Warn, this, "Unknown Connection");
@@ -507,7 +507,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 							return;
 						}
 						if (msg.ConnectionId != cinfo.ConnectionId) {
-							using (IDisposable cookie = _connectionMapLock.EnterWriteLock ()) {
+							using (_connectionMapLock.EnterWriteLock ()) {
 								_connectionMap.Remove (msg.ConnectionId);
 								_connectionMap.Add (msg.ConnectionId, cinfo);
 								cinfo.ConnectionId = msg.ConnectionId;
@@ -677,7 +677,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 		void RouteTimeoutCheck ()
 		{
 			if (!_active) return;
-			using (IDisposable cookie = _connectionMapLock.EnterUpgradeableReadLock ()) {
+			using (_connectionMapLock.EnterUpgradeableReadLock ()) {
 				List<ConnectionInfo> timeoutConnections = null;
 				foreach (ConnectionInfo cinfo in _connectionMap.Values) {
 					if (cinfo.IsExpiry) {
@@ -690,7 +690,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				}
 
 				if (timeoutConnections != null) {
-					using (IDisposable cookie2 = _connectionMapLock.EnterWriteLock ()) {
+					using (_connectionMapLock.EnterWriteLock ()) {
 						foreach (ConnectionInfo cinfo in timeoutConnections) {
 							if (cinfo.IsInitiator)
 								_usedConnectionIDs.Remove ((ushort)(cinfo.ConnectionId >> 16));
@@ -706,7 +706,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			List<KeyValuePair<AnonymousEndPoint, RouteInfo>> timeouts = null;
 			List<StartPointInfo> aliveCheckList = null;
 			List<TerminalPointInfo> dhtPutList = null;
-			using (IDisposable cookie = _routingMapLock.EnterUpgradeableReadLock ()) {
+			using (_routingMapLock.EnterUpgradeableReadLock ()) {
 				foreach (KeyValuePair<AnonymousEndPoint, RouteInfo> pair in _routingMap) {
 					if (pair.Value.IsExpiry ()) {
 						if (timeouts == null)
@@ -723,7 +723,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					}
 				}
 				if (timeouts != null && timeouts.Count > 0) {
-					using (IDisposable cookie2 = _routingMapLock.EnterWriteLock ()) {
+					using (_routingMapLock.EnterWriteLock ()) {
 						for (int i = 0; i < timeouts.Count; i ++)
 							_routingMap.Remove (timeouts[i].Key);
 					}
@@ -749,7 +749,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			}
 
 			if (!_active) return;
-			using (IDisposable cookie = _subscribeMapLock.EnterReadLock ()) {
+			using (_subscribeMapLock.EnterReadLock ()) {
 				foreach (SubscribeInfo info in _subscribeMap.Values) {
 					info.CheckNumberOfEstablishedRoutes ();
 				}
@@ -820,7 +820,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 							RouteLabel label = GenerateRouteLabel ();
 							AnonymousEndPoint ep = new AnonymousEndPoint (relays[0].EndPoint, label);
 							StartPointInfo info;
-							using (IDisposable cookie = _router._routingMapLock.EnterWriteLock ()) {
+							using (_router._routingMapLock.EnterWriteLock ()) {
 								while (_router._routingMap.ContainsKey (ep)) {
 									label = GenerateRouteLabel ();
 									ep = new AnonymousEndPoint (relays[0].EndPoint, label);

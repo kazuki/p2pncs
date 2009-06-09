@@ -36,7 +36,7 @@ namespace p2pncs.Net.Overlay.DHT
 		void CheckExpiry ()
 		{
 			List<PKey> removeKeys = null;
-			using (IDisposable cookie = _lock.EnterReadLock ()) {
+			using (_lock.EnterReadLock ()) {
 				foreach (KeyValuePair<PKey, List<Entry>> pair in _dic) {
 					List<Entry> list = pair.Value;
 					lock (list) {
@@ -55,7 +55,7 @@ namespace p2pncs.Net.Overlay.DHT
 				}
 			}
 			if (removeKeys != null) {
-				using (IDisposable cookie = _lock.EnterWriteLock ()) {
+				using (_lock.EnterWriteLock ()) {
 					foreach (PKey key in removeKeys) {
 						List<Entry> list;
 						if (!_dic.TryGetValue (key, out list))
@@ -75,7 +75,7 @@ namespace p2pncs.Net.Overlay.DHT
 			PKey pk = new PKey (key, typeId);
 			Entry entry = new Entry (expires, value);
 			while (true) {
-				using (IDisposable cookie = _lock.EnterReadLock ()) {
+				using (_lock.EnterReadLock ()) {
 					if (_dic.TryGetValue (pk, out list)) {
 						lock (list) {
 							for (int i = 0; i < list.Count; i ++) {
@@ -89,7 +89,7 @@ namespace p2pncs.Net.Overlay.DHT
 						return;
 					}
 				}
-				using (IDisposable cookie = _lock.EnterWriteLock ()) {
+				using (_lock.EnterWriteLock ()) {
 					if (!_dic.TryGetValue (pk, out list)) {
 						list = new List<Entry> ();
 						list.Add (entry);
@@ -104,7 +104,7 @@ namespace p2pncs.Net.Overlay.DHT
 		{
 			List<Entry> list;
 			PKey pk = new PKey (key, typeId);
-			using (IDisposable cookie = _lock.EnterReadLock ()) {
+			using (_lock.EnterReadLock ()) {
 				if (!_dic.TryGetValue (pk, out list))
 					return null;
 			}
@@ -144,7 +144,7 @@ namespace p2pncs.Net.Overlay.DHT
 			bool removeKey = false;
 			
 			if (value != null) {
-				using (IDisposable cookie = _lock.EnterReadLock ()) {
+				using (_lock.EnterReadLock ()) {
 					if (!_dic.TryGetValue (pk, out list))
 						return;
 				}
@@ -160,7 +160,7 @@ namespace p2pncs.Net.Overlay.DHT
 			}
 
 			if (value == null || removeKey) {
-				using (IDisposable cookie = _lock.EnterWriteLock ()) {
+				using (_lock.EnterWriteLock ()) {
 					if (value != null) {
 						if (!_dic.TryGetValue (pk, out list))
 							return;
@@ -174,7 +174,7 @@ namespace p2pncs.Net.Overlay.DHT
 
 		public void Clear ()
 		{
-			using (IDisposable cookie = _lock.EnterWriteLock ()) {
+			using (_lock.EnterWriteLock ()) {
 				_dic.Clear ();
 			}
 		}
