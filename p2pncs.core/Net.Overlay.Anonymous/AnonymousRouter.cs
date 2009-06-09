@@ -1555,7 +1555,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 				public event DatagramReceiveEventHandler Received;
 
 				public int MaxDatagramSize {
-					get { throw new NotImplementedException (); }
+					/// TODO: 正しい値を返すようにする
+					get { return PayloadFixedSize; }
 				}
 
 				public long ReceivedBytes {
