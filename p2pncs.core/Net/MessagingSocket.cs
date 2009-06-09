@@ -43,7 +43,7 @@ namespace p2pncs.Net
 			_nullObject = nullObject != null ? nullObject : NullObject.Instance;
 			sock.Received += Socket_Received;
 			_maxMsgSize = sock.MaxDatagramSize;
-			if (key.AlgorithmType != SymmetricAlgorithmType.None && key.IV != null) {
+			if (_key.AlgorithmType != SymmetricAlgorithmType.None && key.IV != null) {
 				_maxMsgSize -= _maxMsgSize % key.IV.Length;
 				if (key.Padding != System.Security.Cryptography.PaddingMode.None)
 					_maxMsgSize --;
