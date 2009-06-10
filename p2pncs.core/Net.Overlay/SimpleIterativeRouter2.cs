@@ -466,6 +466,8 @@ namespace p2pncs.Net.Overlay
 
 			void Done (RoutingResult result)
 			{
+				if (_rr != null)
+					return;
 				_rr = result;
 				_completed = true;
 				_done.Set ();
