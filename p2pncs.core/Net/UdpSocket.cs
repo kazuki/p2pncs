@@ -20,15 +20,19 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using p2pncs.Utility;
 
 namespace p2pncs.Net
 {
 	public class UdpSocket : IDatagramEventSocket
 	{
 		const int MAX_DATAGRAM_SIZE = 1000;
+		int _max_datagram_size, _header_size;
 		Socket _sock;
-		IPAddress _receiveAdrs;
+		IPAddress _receiveAdrs, _loopbackAdrs;
 		long _recvBytes = 0, _sentBytes = 0, _recvDgrams = 0, _sentDgrams = 0;
+		IPublicIPAddressVotingBox _pubIpVotingBox;
+		byte[] _sendBuffer = new byte[MAX_DATAGRAM_SIZE];
 
 		static Thread _receiveThread = null;
 		static Dictionary<Socket, UdpSocket> _socketMap = new Dictionary<Socket, UdpSocket> ();
@@ -38,7 +42,11 @@ namespace p2pncs.Net
 		UdpSocket (AddressFamily addressFamily)
 		{
 			_receiveAdrs = (addressFamily == AddressFamily.InterNetwork ? IPAddress.Any : IPAddress.IPv6Any);
+			_pubIpVotingBox = new SimplePublicIPAddressVotingBox (addressFamily);
+			_loopbackAdrs = _pubIpVotingBox.CurrentPublicIPAddress; // SimplePublicIPAddressVotingBoxの初期値はループバック
 			_sock = new Socket (addressFamily, SocketType.Dgram, ProtocolType.Udp);
+			_header_size = (addressFamily == AddressFamily.InterNetwork ? 4 : 16);
+			_max_datagram_size = MAX_DATAGRAM_SIZE - _header_size;
 
 			lock (_sockets) {
 				_sockets.Add (_sock);
@@ -87,11 +95,22 @@ namespace p2pncs.Net
 						try {
 							EndPoint remoteEP = new IPEndPoint (usock._receiveAdrs, 0);
 							int receiveSize = usock._sock.ReceiveFrom (recvBuffer, 0, recvBuffer.Length, SocketFlags.None, ref remoteEP);
+#if !DEBUG
+							// リリースビルド時には、プライベートアドレスからのパケットはパブリックIPに変換する
+							if (IPAddressUtility.IsPrivate (((IPEndPoint)remoteEP).Address)) {
+								IPAddress new_adrs = usock._pubIpVotingBox.CurrentPublicIPAddress;
+								if (usock._loopbackAdrs.Equals (new_adrs))
+									continue; // パブリックIPが決定していないときはそのパケットを破棄
+								remoteEP = new IPEndPoint (new_adrs, ((IPEndPoint)remoteEP).Port);
+							}
+#endif
 							usock._recvBytes += receiveSize;
 							usock._recvDgrams ++;
-							byte[] recvData = new byte[receiveSize];
-							Buffer.BlockCopy (recvBuffer, 0, recvData, 0, recvData.Length);
-							DatagramReceiveEventArgs e = new DatagramReceiveEventArgs (recvData, receiveSize, remoteEP);
+							byte[] recvData = new byte[receiveSize - usock._header_size];
+							Buffer.BlockCopy (recvBuffer, usock._header_size, recvData, 0, recvData.Length);
+							IPAddress adrs = new IPAddress (recvBuffer.CopyRange (0, usock._header_size));
+							usock._pubIpVotingBox.Vote ((IPEndPoint)remoteEP, adrs);
+							DatagramReceiveEventArgs e = new DatagramReceiveEventArgs (recvData, recvData.Length, remoteEP);
 							ThreadPool.QueueUserWorkItem (new InvokeHelper (usock, e).Invoke, null);
 						} catch {}
 					}
@@ -143,13 +162,24 @@ namespace p2pncs.Net
 
 		public void SendTo (byte[] buffer, int offset, int size, EndPoint remoteEP)
 		{
-			if (size > MAX_DATAGRAM_SIZE) {
+			if (size > _max_datagram_size) {
 				Logger.Log (LogLevel.Fatal, this, "Send data-size is too big. ({0} bytes)", size);
 				throw new SocketException ();
 			}
+#if !DEBUG
+			// リリースビルド時には、自分のパブリックIP宛のパケットをループバック宛へと変換する
+			if (((IPEndPoint)remoteEP).Address.Equals (_pubIpVotingBox.CurrentPublicIPAddress))
+				remoteEP = new IPEndPoint (_loopbackAdrs, ((IPEndPoint)remoteEP).Port);
+#endif
 			if (!_sock.Poll (-1, SelectMode.SelectWrite))
 				throw new Exception ("Polling failed");
-			int ret = _sock.SendTo (buffer, offset, size, SocketFlags.None, remoteEP);
+			int ret;
+			byte[] adrs_bytes = ((IPEndPoint)remoteEP).Address.GetAddressBytes ();
+			lock (_sendBuffer) {
+				Buffer.BlockCopy (adrs_bytes, 0, _sendBuffer, 0, adrs_bytes.Length);
+				Buffer.BlockCopy (buffer, offset, _sendBuffer, adrs_bytes.Length, size);
+				ret = _sock.SendTo (_sendBuffer, 0, adrs_bytes.Length + size, SocketFlags.None, remoteEP) - _header_size;
+			}
 			if (ret != size) {
 				Logger.Log (LogLevel.Fatal, this, "Sent size is unexpected. except={0}, actual={1}", size, ret);
 				throw new Exception ("Sent size is unexpected");
@@ -161,7 +191,7 @@ namespace p2pncs.Net
 		public event DatagramReceiveEventHandler Received;
 
 		public int MaxDatagramSize {
-			get { return MAX_DATAGRAM_SIZE; }
+			get { return _max_datagram_size; }
 		}
 
 		public long ReceivedBytes {

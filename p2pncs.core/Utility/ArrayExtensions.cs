@@ -69,5 +69,12 @@ namespace p2pncs.Utility
 				joinArray[j++] = array2[i];
 			return joinArray;
 		}
+
+		public static byte[] CopyRange (this byte[] array, int offset, int size)
+		{
+			byte[] ret = new byte[size];
+			Buffer.BlockCopy (array, offset, ret, 0, size);
+			return ret;
+		}
 	}
 }

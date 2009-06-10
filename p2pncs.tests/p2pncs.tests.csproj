@@ -66,6 +66,7 @@
     <Compile Include="Net\IDatagramEventSocketTest.cs" />
     <Compile Include="Net\IMessagingSocketTest.cs" />
     <Compile Include="Net\MessagingSocketTest.cs" />
+    <Compile Include="Net\SimplePublicIPAddressVotingBoxTest.cs" />
     <Compile Include="Net\UdpSocketTest.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Security.Cryptography\SymmetricKeyTest.cs" />

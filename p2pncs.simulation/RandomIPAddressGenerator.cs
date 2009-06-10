@@ -18,6 +18,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using p2pncs.Net;
 
 namespace p2pncs.Simulation
 {
@@ -37,16 +38,10 @@ namespace p2pncs.Simulation
 					IPAddress adrs = new IPAddress (x);
 
 					// Check: Private Address
-					if (x[0] == 10)
-						continue;
-					else if (x[0] == 127)
-						continue;
-					else if (x[0] == 172 && (x[1] >= 16 && x[1] <= 31))
-						continue;
-					else if (x[0] == 192 && x[1] == 168)
+					if (IPAddressUtility.IsPrivate (adrs))
 						continue;
 
-					// Check: Broadcast Address
+					// Check: Class-full Broadcast Address
 					if (x[0] < 128 && ((x[1] == 0 && x[2] == 0 && x[3] == 0) || (x[1] == 255 && x[2] == 255 && x[3] == 255)))
 						continue;
 					if (x[0] < 192 && ((x[2] == 0 && x[3] == 0) || (x[2] == 255 && x[3] == 255)))
