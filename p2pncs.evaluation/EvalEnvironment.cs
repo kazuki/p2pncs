@@ -130,12 +130,6 @@ namespace p2pncs.Evaluation
 			return new VirtualNode (this, _network, _opt, _msgInt1, _kbrInt, _anonInt, _dhtInt);
 		}
 
-		public IMessagingSocket CreateMessagingSocket (IDatagramEventSocket sock)
-		{
-			return CreateMessagingSocket (sock, VirtualNode.DefaultMessagingTimeout,
-				VirtualNode.DefaultMessagingRetries, VirtualNode.DefaultMessagingRetryBufferSize, VirtualNode.DefaultMessagingDupCheckSize);
-		}
-
 		public IMessagingSocket CreateMessagingSocket (IDatagramEventSocket sock, TimeSpan timeout, int retries, int retryBufferSize, int dupCheckSize)
 		{
 			VirtualDatagramEventSocket vsock = sock as VirtualDatagramEventSocket;

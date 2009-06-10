@@ -45,10 +45,14 @@ namespace p2pncs.Evaluation
 
 		public static ECDomainNames DefaultECDomain = ECDomainNames.secp112r2;
 		static Random _rnd = new Random ();
-		public static TimeSpan DefaultMessagingTimeout = TimeSpan.FromSeconds (3);
+		public static TimeSpan DefaultMessagingTimeout = TimeSpan.FromMilliseconds (200);
 		public static int DefaultMessagingRetries = 2;
 		public static int DefaultMessagingRetryBufferSize = 1024;
 		public static int DefaultMessagingDupCheckSize = 512;
+		public static TimeSpan DefaultACMessagingTimeout = TimeSpan.FromSeconds (3);
+		public static int DefaultACMessagingRetries = 2;
+		public static int DefaultACMessagingRetryBufferSize = 1024;
+		public static int DefaultACMessagingDupCheckSize = 512;
 		static RandomIPAddressGenerator _ipGenerator = new RandomIPAddressGenerator ();
 
 		public VirtualNode (EvalEnvironment env, VirtualNetwork network, EvalOptionSet opt,
@@ -103,7 +107,8 @@ namespace p2pncs.Evaluation
 		{
 			IMessagingSocket msock = null;
 			if (sock.ConnectionType == AnonymousConnectionType.LowLatency) {
-				msock = _env.CreateMessagingSocket (sock);
+				msock = _env.CreateMessagingSocket (sock, DefaultACMessagingTimeout, DefaultACMessagingRetries,
+					DefaultACMessagingRetryBufferSize, DefaultACMessagingDupCheckSize);
 				msock.AddInquiredHandler (typeof (string), InquiredStringMessage);
 			}
 			AnonymousSocketInfo info = new AnonymousSocketInfo (sock, msock);
