@@ -203,6 +203,31 @@ namespace p2pncs.Net.Overlay.Anonymous
 			}
 		}
 
+		public IList<ISubscribeInfo> GetAllSubscribes ()
+		{
+			List<ISubscribeInfo> list;
+			using (_subscribeMapLock.EnterReadLock ()) {
+				list = new List<ISubscribeInfo> (_subscribeMap.Count);
+				foreach (SubscribeInfo info in _subscribeMap.Values)
+					list.Add (info);
+			}
+			return list.AsReadOnly ();
+		}
+
+		public IList<IAnonymousSocket> GetAllConnections ()
+		{
+			List<IAnonymousSocket> list;
+			using (_connectionMapLock.EnterReadLock ()) {
+				list = new List<IAnonymousSocket> (_connectionMap.Count);
+				foreach (ConnectionInfo info in _connectionMap.Values) {
+					if (!info.IsConnected)
+						continue;
+					list.Add (info.Socket);
+				}
+			}
+			return list.AsReadOnly ();
+		}
+
 		public IKeyBasedRouter KeyBasedRouter {
 			get { return _kbr; }
 		}
