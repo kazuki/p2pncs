@@ -28,7 +28,6 @@ using p2pncs.Net;
 using p2pncs.Net.Overlay;
 using p2pncs.Net.Overlay.Anonymous;
 using p2pncs.Security.Cryptography;
-using p2pncs.Threading;
 
 namespace p2pncs
 {
@@ -38,8 +37,8 @@ namespace p2pncs
 		const string DefaultStaticFilePath = "htdocs";
 
 		static byte[] EmptyData = new byte[0];
-		const int MaxRetries = 3;
-		static TimeSpan Timeout = TimeSpan.FromSeconds (3);
+		const int MaxRetries = 2;
+		static TimeSpan Timeout = TimeSpan.FromSeconds (2);
 		const int RetryBufferSize = 512;
 		const int DuplicationCheckBufferSize = 512;
 		const int MaxStreamSocketSegmentSize = 500;
@@ -53,29 +52,22 @@ namespace p2pncs
 		long _rev = 1;
 		XmlDocument _cometLogDoc = new XmlDocument ();
 		List<ManualResetEvent> _cometWaits = new List<ManualResetEvent> ();
-		IntervalInterrupter _updateCheckInt;
-		IntervalInterrupter _messagingInt;
-		IntervalInterrupter _streamTimeoutInt;
 		string _name;
 		Key _imPubKey;
 		ISubscribeInfo _imSubscribe;
 		SubscribeRouteStatus _imLastStatus = SubscribeRouteStatus.Establishing;
 		List<KeyValuePair<IStreamSocket, DateTime>> _throughputTestSockets = new List<KeyValuePair<IStreamSocket,DateTime>> ();
+		Interrupters _ints;
 
-		public WebApp (Node node, Key imPubKey, ECKeyPair imPrivateKey, string name)
+		public WebApp (Node node, Key imPubKey, ECKeyPair imPrivateKey, string name, Interrupters ints)
 		{
 			_node = node;
 			_imPubKey = imPubKey;
 			_name = name;
+			_ints = ints;
 			node.AnonymousRouter.SubscribeRecipient (imPubKey, imPrivateKey);
 			_imSubscribe = node.AnonymousRouter.GetSubscribeInfo (imPubKey);
-			_updateCheckInt = new IntervalInterrupter (TimeSpan.FromMilliseconds (500), "WebApp UpdateChecker");
-			_updateCheckInt.AddInterruption (CheckUpdate);
-			_updateCheckInt.Start ();
-			_messagingInt = new IntervalInterrupter (TimeSpan.FromMilliseconds (100), "AnonymousMessagingSocket RetryTimer");
-			_messagingInt.Start ();
-			_streamTimeoutInt = new IntervalInterrupter (TimeSpan.FromMilliseconds (100), "StreamSocket TimeoutTimer");
-			_streamTimeoutInt.Start ();
+			ints.WebAppInt.AddInterruption (CheckUpdate);
 			node.AnonymousRouter.Accepting += delegate (object sender, AcceptingEventArgs e) {
 				ChatRoomInfo selected = null;
 				lock (_rooms) {
@@ -102,7 +94,7 @@ namespace p2pncs
 					selected.AcceptedClient (e.Socket, e.DestinationId, e.Payload);
 					return;
 				}
-				StreamSocket sock = new StreamSocket (e.Socket, AnonymousRouter.DummyEndPoint, MaxStreamSocketSegmentSize, _streamTimeoutInt);
+				StreamSocket sock = new StreamSocket (e.Socket, AnonymousRouter.DummyEndPoint, MaxStreamSocketSegmentSize, _ints.StreamSocketTimeoutInt);
 				e.Socket.InitializedEventHandlers ();
 				lock (_throughputTestSockets) {
 					_throughputTestSockets.Add (new KeyValuePair<IStreamSocket, DateTime> (sock, DateTime.Now + TimeSpan.FromMinutes (5)));
@@ -113,9 +105,6 @@ namespace p2pncs
 
 		public void Dispose ()
 		{
-			_updateCheckInt.Dispose ();
-			_messagingInt.Dispose ();
-			_streamTimeoutInt.Dispose ();
 		}
 
 		void CheckUpdate ()
@@ -325,7 +314,7 @@ namespace p2pncs
 				return;
 			}
 
-			StreamSocket ssock = new StreamSocket (sock, AnonymousRouter.DummyEndPoint, MaxStreamSocketSegmentSize, _streamTimeoutInt);
+			StreamSocket ssock = new StreamSocket (sock, AnonymousRouter.DummyEndPoint, MaxStreamSocketSegmentSize, _ints.StreamSocketTimeoutInt);
 			sock.InitializedEventHandlers ();
 			try {
 				byte[] buffer = new byte[1000 * 1000];
@@ -386,7 +375,7 @@ namespace p2pncs
 			}
 
 			IMessagingSocket msock = new MessagingSocket (sock, true, SymmetricKey.NoneKey, Serializer.Instance,
-				null, _messagingInt, WebApp.Timeout, WebApp.MaxRetries, WebApp.RetryBufferSize, WebApp.DuplicationCheckBufferSize);
+				null, _ints.AnonymousMessagingInt, WebApp.Timeout, WebApp.MaxRetries, WebApp.RetryBufferSize, WebApp.DuplicationCheckBufferSize);
 			lock (_rooms) {
 				int roomId = _joinRooms[roomKey];
 				ChatRoomInfo room = new ChatRoomInfo (this, roomId, (string)sock.PayloadAtEstablishing,
@@ -597,7 +586,7 @@ namespace p2pncs
 			public void AcceptedClient (IAnonymousSocket sock, Key destId, object payload)
 			{
 				IMessagingSocket msock = new MessagingSocket (sock, true,
-					SymmetricKey.NoneKey, Serializer.Instance, null, _app._messagingInt, WebApp.Timeout,
+					SymmetricKey.NoneKey, Serializer.Instance, null, _app._ints.AnonymousMessagingInt, WebApp.Timeout,
 					WebApp.MaxRetries, WebApp.RetryBufferSize, WebApp.DuplicationCheckBufferSize);
 				msock.AddInquiredHandler (typeof (ChatMessage), Messaging_Inquired);
 				msock.AddInquiredHandler (typeof (LeaveMessage), LeaveMessage_Inquired);

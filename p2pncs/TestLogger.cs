@@ -18,6 +18,7 @@ namespace p2pncs
 
 		public static void SetupUdpMessagingSocket (IMessagingSocket sock)
 		{
+#if !DEBUG
 			sock.InquirySuccess += delegate (object sender, InquiredEventArgs e) {
 				AddUdpRTT (e.EndPoint, (float)e.RTT.TotalMilliseconds);
 			};
@@ -34,19 +35,22 @@ namespace p2pncs
 					Interlocked.Increment (ref info.Fail);
 				}
 			};
+#endif
 		}
 
 		public static void SetupAcMessagingSocket (IMessagingSocket sock)
 		{
+#if !DEBUG
 			sock.InquirySuccess += delegate (object sender, InquiredEventArgs e) {
 				AddAcRTT ((float)e.RTT.TotalMilliseconds);
 			};
 			sock.InquiryFailure += delegate (object sender, InquiredEventArgs e) {
 				Interlocked.Increment (ref _acFail);
 			};
+#endif
 		}
 
-		public static void AddUdpRTT (EndPoint ep, float rtt_ms)
+		static void AddUdpRTT (EndPoint ep, float rtt_ms)
 		{
 			IPEndPoint ipep = ep as IPEndPoint;
 			if (ipep == null)
@@ -63,7 +67,7 @@ namespace p2pncs
 			}
 		}
 
-		public static void AddAcRTT (float rtt_ms)
+		static void AddAcRTT (float rtt_ms)
 		{
 			lock (_acRTT) {
 				_acRTT.AddSample (rtt_ms);

@@ -39,7 +39,9 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="DebugProgram.cs" />
     <Compile Include="Helpers.cs" />
+    <Compile Include="Interrupters.cs" />
     <Compile Include="Node.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="AssemblyInfo.cs" />

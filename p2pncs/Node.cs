@@ -22,7 +22,6 @@ using p2pncs.Net.Overlay;
 using p2pncs.Net.Overlay.Anonymous;
 using p2pncs.Net.Overlay.DHT;
 using p2pncs.Security.Cryptography;
-using p2pncs.Threading;
 
 namespace p2pncs
 {
@@ -39,35 +38,24 @@ namespace p2pncs
 		IKeyBasedRouter _kbr;
 		IDistributedHashTable _dht;
 		IAnonymousRouter _anonymous;
-		IntervalInterrupter _msgInt = new IntervalInterrupter (TimeSpan.FromMilliseconds (100), "MessagingSocket Interval Interrupter");
-		IntervalInterrupter _dhtInt = new IntervalInterrupter (TimeSpan.FromSeconds (1), "DHT Timeout Check Interrupter");
-		IntervalInterrupter _kbrInt = new IntervalInterrupter (TimeSpan.FromSeconds (10), "KBR Stabilize Interval Interrupter");
-		IntervalInterrupter _anonInt = new IntervalInterrupter (TimeSpan.FromMilliseconds (100), "AnonymousRouter Timeout Check Interrupter");
+		Interrupters _ints;
 
 		ECKeyPair _kbrPrivateKey;
 
-		public Node (IDatagramEventSocket bindedDgramSock)
+		public Node (Interrupters ints, IDatagramEventSocket bindedDgramSock)
 		{
+			_ints = ints;
 			_dgramSock = bindedDgramSock;
 			_messagingSock = new MessagingSocket (_dgramSock, true, SymmetricKey.NoneKey, p2pncs.Serializer.Instance,
-				null, _msgInt, DefaultMessagingTimeout, DefaultMessagingRetry, DefaultMessagingRetryBufferSize, DefaultMessagingDuplicationCheckBufferSize);
+				null, ints.MessagingInt, DefaultMessagingTimeout, DefaultMessagingRetry, DefaultMessagingRetryBufferSize, DefaultMessagingDuplicationCheckBufferSize);
 			TestLogger.SetupUdpMessagingSocket (_messagingSock);
 			_kbrPrivateKey = ECKeyPair.Create (DefaultECDomainName);
 			_kbr = new SimpleIterativeRouter2 (Key.Create (_kbrPrivateKey), _messagingSock, new SimpleRoutingAlgorithm (), p2pncs.Serializer.Instance, true);
-			_dht = new SimpleDHT (_kbr, _messagingSock, new OnMemoryLocalHashTable (_dhtInt));
-			_anonymous = new AnonymousRouter (_dht, _kbrPrivateKey, _anonInt);
-			_kbrInt.AddInterruption (delegate () {
+			_dht = new SimpleDHT (_kbr, _messagingSock, new OnMemoryLocalHashTable (ints.DHTInt));
+			_anonymous = new AnonymousRouter (_dht, _kbrPrivateKey, ints.AnonymousInt);
+			ints.KBRStabilizeInt.AddInterruption (delegate () {
 				_kbr.RoutingAlgorithm.Stabilize ();
 			});
-
-			_msgInt.Start ();
-			_kbrInt.Start ();
-			_dhtInt.Start ();
-			_anonInt.Start ();
-		}
-
-		public IntervalInterrupter MessagingSocketInterrupter {
-			get { return _msgInt; }
 		}
 
 		public IDatagramEventSocket DatagramEventSocket {
@@ -92,11 +80,6 @@ namespace p2pncs
 
 		public void Dispose ()
 		{
-			_msgInt.Dispose ();
-			_kbrInt.Dispose ();
-			_dhtInt.Dispose ();
-			_anonInt.Dispose ();
-
 			_anonymous.Close ();
 			_dht.Dispose ();
 			_kbr.Close ();
