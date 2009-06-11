@@ -560,7 +560,7 @@ namespace p2pncs
 				if (list.Count >= 0) {
 					XmlDocument doc = root.OwnerDocument;
 					XmlElement tmp, tmp2, room_root = doc.CreateElement ("room");
-					room_root.SetAttribute ("id", ID.ToString ("x"));
+					room_root.SetAttribute ("id", ID.ToString ());
 					room_root.SetAttribute ("owner", IsOwner.ToString().ToLower());
 					room_root.SetAttribute ("status", SubscribeInfo.Status.ToString ());
 					root.AppendChild (room_root);
