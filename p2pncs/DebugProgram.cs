@@ -18,12 +18,14 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Threading;
 using Kazuki.Net.HttpServer;
 using openCrypto.EllipticCurve;
 using p2pncs.Net;
 using p2pncs.Net.Overlay;
 using p2pncs.Simulation;
 using p2pncs.Simulation.VirtualNet;
+using p2pncs.Threading;
 using XmlConfigLibrary;
 
 namespace p2pncs
@@ -34,8 +36,13 @@ namespace p2pncs
 		RandomIPAddressGenerator _ipgen = new RandomIPAddressGenerator ();
 		VirtualNetwork _network;
 		Interrupters _ints;
+		IntervalInterrupter _churnInt;
 		XmlConfig _config = new XmlConfig ();
 		List<DebugNode> _list = new List<DebugNode> ();
+		List<IPEndPoint> _eps = new List<IPEndPoint> ();
+		IPEndPoint[] _init_nodes;
+		int _nodeIdx = -1;
+		Random _rnd = new Random ();
 
 		public DebugProgram ()
 		{
@@ -46,48 +53,70 @@ namespace p2pncs
 				string tmpName;
 				Program.LoadConfig (_config, out tmpKey, out tmpPubKey, out tmpName);
 			}
+			_churnInt = new IntervalInterrupter (TimeSpan.FromSeconds (500.0 / NODES), "Churn Timer");
 		}
 
 		public void Run ()
 		{
 			int base_port = _config.GetValue<int> ("gw/bind/port");
 
-			_network = new VirtualNetwork (LatencyTypes.Constant (40), 5, PacketLossType.Constant (0.05), 2);
-			IPEndPoint[] eps = null;
-			List<IPEndPoint> ep_list = new List<IPEndPoint> (4);
+			_network = new VirtualNetwork (LatencyTypes.Constant (20), 5, PacketLossType.Lossless (), Environment.ProcessorCount);
 			for (int i = 0; i < NODES; i++) {
-				IPAddress adrs = _ipgen.Next ();
-				VirtualDatagramEventSocket sock = new VirtualDatagramEventSocket (_network, adrs);
-				IPEndPoint pubEP = new IPEndPoint (adrs, 10000);
-				sock.Bind (new IPEndPoint (IPAddress.Any, pubEP.Port));
-				DebugNode node = new DebugNode (i);
+				AddNode (base_port);
 				if (i == 10) base_port = -1;
-				ep_list.Add (pubEP);
-				node.Prepare (_ints, sock, base_port, pubEP);
-				lock (_list) {
-					_list.Add (node);
-				}
-				if (eps == null) {
-					node.Node.KeyBasedRouter.Join (ep_list.ToArray ());
-					ep_list.Add (pubEP);
-					if (ep_list.Count == ep_list.Capacity)
-						eps = ep_list.ToArray ();
-				} else {
-					node.Node.KeyBasedRouter.Join (eps);
-				}
 			}
+
+			_churnInt.AddInterruption (delegate () {
+				lock (_list) {
+					int idx = _rnd.Next (10, _list.Count);
+					DebugNode removed = _list[idx];
+					try {
+						removed.Dispose ();
+					} catch {}
+					_list.RemoveAt (idx);
+					_eps.RemoveAt (idx);
+					AddNode (-1);
+				}
+			});
+			_churnInt.Start ();
 
 			_list[0].WaitOne ();
 		}
 
+		DebugNode AddNode (int base_port)
+		{
+			IPAddress adrs = _ipgen.Next ();
+			VirtualDatagramEventSocket sock = new VirtualDatagramEventSocket (_network, adrs);
+			IPEndPoint pubEP = new IPEndPoint (adrs, 10000);
+			sock.Bind (new IPEndPoint (IPAddress.Any, pubEP.Port));
+			DebugNode node = new DebugNode (Interlocked.Increment (ref _nodeIdx));
+			node.Prepare (_ints, sock, base_port, pubEP);
+			lock (_list) {
+				_list.Add (node);
+				_eps.Add (pubEP);
+			}
+			if (_init_nodes == null) {
+				node.Node.KeyBasedRouter.Join (_eps.ToArray ());
+				_eps.Add (pubEP);
+				if (_eps.Count == 4)
+					_init_nodes = _eps.ToArray ();
+			} else {
+				node.Node.KeyBasedRouter.Join (_init_nodes);
+			}
+			return node;
+		}
+
 		public void Dispose ()
 		{
+			_churnInt.Dispose ();
 			_ints.Dispose ();
 			_network.Close ();
-			for (int i = 0; i < _list.Count; i++) {
-				try {
-					_list[i].Dispose ();
-				} catch {}
+			lock (_list) {
+				for (int i = 0; i < _list.Count; i++) {
+					try {
+						_list[i].Dispose ();
+					} catch {}
+				}
 			}
 		}
 
