@@ -256,7 +256,11 @@ namespace p2pncs.Net.Overlay.DHT
 
 			void Done ()
 			{
-				_completed = true;
+				lock (_done) {
+					if (_completed)
+						return;
+					_completed = true;
+				}
 				_done.Set ();
 				if (_callback != null) {
 					try {
