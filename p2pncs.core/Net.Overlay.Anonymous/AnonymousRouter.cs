@@ -888,14 +888,14 @@ namespace p2pncs.Net.Overlay.Anonymous
 				Logger.Log (LogLevel.Trace, this, "Established");
 			}
 
-			public void SendMessage (object msg, bool useInquiry)
+			public void SendMessage (object msg, int routes, bool useInquiry)
 			{
 				StartPointInfo[] array;
 				lock (_listLock) {
 					array = new StartPointInfo[_establishedList.Count];
 					_establishedList.CopyTo (array);
 				}
-				array = array.RandomSelection (AC_DefaultUseSubscribeRoutes);
+				array = array.RandomSelection (routes);
 				for (int i = 0; i < array.Length; i ++)
 					array[i].SendMessage (_router.KeyBasedRouter.MessagingSocket, msg, useInquiry);
 			}
@@ -1220,6 +1220,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 			DateTime _expiry = DateTime.MaxValue;
 			AnonymousConnectionType _type;
 			object _dtLock = new object (), _payload, _msgAtEstablishing;
+			int _useRoutesWhenEstablishing = AC_DefaultUseSubscribeRoutes;
+			int _useRoutes = AC_DefaultUseSubscribeRoutes;
 
 			public ConnectionInfo (AnonymousRouter router, SubscribeInfo subscribeInfo, Key destKey, ushort connectionId, AnonymousConnectionType type, object payload, AsyncCallback callback, object state)
 			{
@@ -1234,6 +1236,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_ar = new EstablishRouteAsyncResult (this, callback, state);
 				_sharedInfo = RNG.GetRNGBytes (DefaultSharedInfoSize);
 				_sock = new ConnectionSocket (this);
+				Setup ();
 			}
 
 			public ConnectionInfo (AnonymousRouter router, SubscribeInfo subscribeInfo, uint connectionId, byte[] sharedInfo, AnonymousConnectionType type,
@@ -1253,6 +1256,13 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_sock = new ConnectionSocket (this);
 				_nextPingTime = DateTime.Now + AC_AliveCheckScheduleInterval;
 				_expiry = DateTime.Now + AC_MaxMessageIntervalWithMargin;
+				Setup ();
+			}
+
+			void Setup ()
+			{
+				if (_type == AnonymousConnectionType.HighThroughput)
+					_useRoutes = 1;
 			}
 
 			public SymmetricKey ComputeSharedKey (byte[] sharedInfo)
@@ -1311,7 +1321,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				SymmetricKey tmpKey = MultipleCipherHelper.ComputeSharedKey (_subscribeInfo.PrivateKey, destPub, _sharedInfo, PaddingMode.None, false);
 				byte[] mac = ComputeMAC (tmpKey, encrypted_payload);
 				ConnectionEstablishMessage msg = new ConnectionEstablishMessage (_destKey, publicKey, GenerateDuplicationCheckValue (), mac, encrypted_payload);
-				_subscribeInfo.SendMessage (msg, true);
+				_subscribeInfo.SendMessage (msg, _useRoutesWhenEstablishing, true);
 				lock (_dtLock) {
 					_expiry = DateTime.Now + AC_EstablishTimeout;
 				}
@@ -1363,7 +1373,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				ConnectionSenderSideMessage msg = new ConnectionSenderSideMessage (_destKey,
 					_subscribeInfo.GetRouteEndPoints ().RandomSelection (AC_DefaultUseSubscribeRoutes),
 					_otherSideTermEPs, _connectionId, GenerateDuplicationCheckValue (), payload, mac);
-				_subscribeInfo.SendMessage (msg, !encrypt || _type == AnonymousConnectionType.LowLatency);
+				_subscribeInfo.SendMessage (msg, _useRoutes, !encrypt || _type == AnonymousConnectionType.LowLatency);
 			}
 
 			public void SendPing ()

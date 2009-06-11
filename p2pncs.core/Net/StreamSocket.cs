@@ -26,23 +26,28 @@ namespace p2pncs.Net
 	public class StreamSocket : IStreamSocket
 	{
 		const int HeaderSize = 1/*type*/ + 4/*seq*/ + 2/*size*/;
-		const int MinSegments = 8;
-		const int MaxSegments = 512;
+		const int MaxSegments = 16;
 		const int MaxRetries = 8;
+		static readonly TimeSpan MaxRTO = TimeSpan.FromSeconds (16);
 		bool _active = true, _shutdown = false;
 		IDatagramEventSocket _sock;
-		int _mss, _currentSegments = MinSegments;
+		int _mss;
 		EndPoint _remoteEP;
 		Packet[] _sendBuffer = new Packet[MaxSegments];
 		int _sendBufferFilled = 0;
 		uint _sendSequence = 0x01020304;
 		AutoResetEvent _sendWaitHandle = new AutoResetEvent (true);
 		ManualResetEvent _shutdownWaitHandle = new ManualResetEvent (false);
-		TimeSpan _rto = TimeSpan.FromSeconds (2);
 		IntervalInterrupter _timeoutCheckInt;
 		object _lock = new object ();
+		int _srtt, _rttvar, _rto;
 
 		public StreamSocket (IDatagramEventSocket sock, EndPoint remoteEP, int max_datagram_size, IntervalInterrupter timeoutCheckInt)
+			: this (sock, remoteEP, max_datagram_size, TimeSpan.FromSeconds (3), timeoutCheckInt)
+		{
+		}
+
+		public StreamSocket (IDatagramEventSocket sock, EndPoint remoteEP, int max_datagram_size, TimeSpan init_RTT, IntervalInterrupter timeoutCheckInt)
 		{
 			_sock = sock;
 			_mss = max_datagram_size - HeaderSize;
@@ -52,6 +57,20 @@ namespace p2pncs.Net
 			_sock.Received += new DatagramReceiveEventHandler (Socket_Received);
 			_timeoutCheckInt = timeoutCheckInt;
 			_timeoutCheckInt.AddInterruption (CheckTimeout);
+
+			_srtt = (int)init_RTT.TotalMilliseconds;
+			_rttvar = _srtt / 2;
+			_rto = _srtt + 4 * _rttvar;
+		}
+
+		void Update_RTO (float r)
+		{
+			// RFC 2988 (実験的に導入)
+			const float alpha = 1.0f / 8.0f;
+			const float beta = 1.0f / 4.0f;
+			_rttvar = (int)((1 - beta) * _rttvar + beta * Math.Abs (_srtt - r));
+			_srtt = (int)((1 - alpha) * _srtt + alpha * r);
+			_rto = (int)(_srtt + 4 * _rttvar);
 		}
 
 		void CheckTimeout ()
@@ -60,7 +79,6 @@ namespace p2pncs.Net
 				return;
 
 			lock (_lock) {
-				bool hasTimeoutPacket = false;
 				for (int i = 0; i < _sendBuffer.Length; i++) {
 					if (_sendBuffer[i].State == PacketState.AckWaiting && _sendBuffer[i].RTO <= DateTime.Now) {
 						if (_sendBuffer[i].Retries >= MaxRetries) {
@@ -68,16 +86,12 @@ namespace p2pncs.Net
 							return;
 						}
 						_sendBuffer[i].RTO_Interval += _sendBuffer[i].RTO_Interval;
+						if (_sendBuffer[i].RTO_Interval > MaxRTO)
+							_sendBuffer[i].RTO_Interval = MaxRTO;
 						_sendBuffer[i].RTO = DateTime.Now + _sendBuffer[i].RTO_Interval;
-						_sendBuffer[i].Retries++;
+						_sendBuffer[i].Retries ++;
 						_sock.SendTo (_sendBuffer[i].Data, 0, _sendBuffer[i].Filled, _remoteEP);
-						hasTimeoutPacket = true;
 					}
-				}
-				if (hasTimeoutPacket) {
-					_currentSegments /= 2;
-					if (_currentSegments < MinSegments)
-						_currentSegments = MinSegments;
 				}
 				if (_shutdown && _sendBufferFilled == 0)
 					_shutdownWaitHandle.Set ();
@@ -93,7 +107,7 @@ namespace p2pncs.Net
 				case 0: /* Packet */
 					byte[] buf = new byte[5];
 					buf[0] = 1;
-					Buffer.BlockCopy (e.Buffer, 1, buf, 1, 4); // Copy sequence
+					Buffer.BlockCopy (e.Buffer, 1, buf, 1, buf.Length - 1); // Copy sequence
 					_sock.SendTo (buf, _remoteEP);
 					break;
 				case 1: /* ACK */
@@ -101,7 +115,8 @@ namespace p2pncs.Net
 					lock (_lock) {
 						for (int i = 0; i < _sendBuffer.Length; i ++) {
 							if (_sendBuffer[i].State == PacketState.AckWaiting && _sendBuffer[i].Sequence == seq) {
-								_currentSegments += 8;
+								if (_sendBuffer[i].Retries == 0)
+									Update_RTO ((float)(DateTime.Now - _sendBuffer[i].Start).TotalMilliseconds);
 								_sendBuffer[i].Reset ();
 								_sendBufferFilled--;
 								_sendWaitHandle.Set ();
@@ -122,21 +137,21 @@ namespace p2pncs.Net
 
 			while (size > 0) {
 				int copy_size = Math.Min (_mss, size);
-				if (!_sendWaitHandle.WaitOne ())
+				if (!_sendWaitHandle.WaitOne () || !_active)
 					throw new SocketException ();
 				lock (_lock) {
 					for (int i = 0; i < _sendBuffer.Length; i ++) {
 						if (_sendBuffer[i].State != PacketState.Empty)
 							continue;
 						_sendBufferFilled ++;
-						_sendBuffer[i].Setup (buffer, offset, copy_size, _sendSequence, DateTime.Now + _rto, _rto, PacketState.AckWaiting);
+						_sendBuffer[i].Setup (buffer, offset, copy_size, _sendSequence, TimeSpan.FromMilliseconds (_rto), PacketState.AckWaiting);
 						_sock.SendTo (_sendBuffer[i].Data, 0, _sendBuffer[i].Filled, _remoteEP);
 						_sendSequence += (uint)copy_size;
 						offset += copy_size;
 						size -= copy_size;
 						break;
 					}
-					if (_sendBufferFilled < _currentSegments)
+					if (_sendBufferFilled < MaxSegments)
 						_sendWaitHandle.Set ();
 				}
 			}
@@ -166,10 +181,12 @@ namespace p2pncs.Net
 		public void Dispose ()
 		{
 			_active = false;
-			_sock.Dispose ();
+			_sendWaitHandle.Set ();
+			_shutdownWaitHandle.Set ();
 			_sendWaitHandle.Close ();
 			_shutdownWaitHandle.Close ();
 			_timeoutCheckInt.RemoveInterruption (CheckTimeout);
+			_sock.Dispose ();
 		}
 
 		#endregion
@@ -179,6 +196,7 @@ namespace p2pncs.Net
 			public byte[] Data;
 			public int Filled;
 			public uint Sequence;
+			public DateTime Start;
 			public DateTime RTO;
 			public TimeSpan RTO_Interval;
 			public int Retries;
@@ -192,10 +210,10 @@ namespace p2pncs.Net
 
 			public void Reset ()
 			{
-				Setup (null, 0, 0, 0, DateTime.MaxValue, TimeSpan.MaxValue, PacketState.Empty);
+				Setup (null, 0, 0, 0, TimeSpan.Zero, PacketState.Empty);
 			}
 
-			public void Setup (byte[] src, int offset, int size, uint sequence, DateTime rto, TimeSpan rto_interval, PacketState state)
+			public void Setup (byte[] src, int offset, int size, uint sequence, TimeSpan rto_interval, PacketState state)
 			{
 				if (src != null) {
 					Data[1] = (byte)(sequence >> 24);
@@ -210,10 +228,11 @@ namespace p2pncs.Net
 					Filled = 0;
 				}
 				Sequence = sequence;
-				RTO = rto;
+				RTO = DateTime.Now + rto_interval;
 				RTO_Interval = rto_interval;
 				Retries = 0;
 				State = state;
+				Start = DateTime.Now;
 			}
 		}
 

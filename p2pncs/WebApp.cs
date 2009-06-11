@@ -305,6 +305,7 @@ namespace p2pncs
 		void ThroughputTest (object o)
 		{
 			Key destKey = o as Key;
+			DateTime dt = DateTime.Now;
 			IAsyncResult ar = _node.AnonymousRouter.BeginConnect (_imPubKey, destKey, AnonymousConnectionType.HighThroughput, "ThroughputTest", null, null);
 			IAnonymousSocket sock = null;
 			try {
@@ -314,7 +315,7 @@ namespace p2pncs
 				return;
 			}
 
-			StreamSocket ssock = new StreamSocket (sock, AnonymousRouter.DummyEndPoint, MaxStreamSocketSegmentSize, _ints.StreamSocketTimeoutInt);
+			StreamSocket ssock = new StreamSocket (sock, AnonymousRouter.DummyEndPoint, MaxStreamSocketSegmentSize, DateTime.Now - dt, _ints.StreamSocketTimeoutInt);
 			sock.InitializedEventHandlers ();
 			try {
 				byte[] buffer = new byte[1000 * 1000];
