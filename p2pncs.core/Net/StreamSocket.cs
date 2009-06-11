@@ -16,10 +16,12 @@
  */
 
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using p2pncs.Threading;
+using p2pncs.Utility;
 
 namespace p2pncs.Net
 {
@@ -35,8 +37,10 @@ namespace p2pncs.Net
 		EndPoint _remoteEP;
 		Packet[] _sendBuffer = new Packet[MaxSegments];
 		int _sendBufferFilled = 0;
-		uint _sendSequence = 0x01020304;
+		uint _sendSequence = 0, _recvNextSequence = 0;
+		List<ReceiveSegment> _recvBuffer = new List<ReceiveSegment> ();
 		AutoResetEvent _sendWaitHandle = new AutoResetEvent (true);
+		AutoResetEvent _recvWaitHandle = new AutoResetEvent (false);
 		ManualResetEvent _shutdownWaitHandle = new ManualResetEvent (false);
 		IntervalInterrupter _timeoutCheckInt;
 		object _lock = new object ();
@@ -108,7 +112,12 @@ namespace p2pncs.Net
 					byte[] buf = new byte[5];
 					buf[0] = 1;
 					Buffer.BlockCopy (e.Buffer, 1, buf, 1, buf.Length - 1); // Copy sequence
+					uint rseq = ((uint)buf[1] << 24) | ((uint)buf[2] << 16) | ((uint)buf[3] << 8) | ((uint)buf[4]);
 					_sock.SendTo (buf, _remoteEP);
+					lock (_recvBuffer) {
+						_recvBuffer.Add (new ReceiveSegment (rseq, e.Buffer.CopyRange (HeaderSize, e.Size - HeaderSize)));
+						_recvWaitHandle.Set ();
+					}
 					break;
 				case 1: /* ACK */
 					uint seq = ((uint)e.Buffer[1] << 24) | ((uint)e.Buffer[2] << 16) | ((uint)e.Buffer[3] << 8) | ((uint)e.Buffer[4]);
@@ -159,7 +168,44 @@ namespace p2pncs.Net
 
 		public int Receive (byte[] buffer, int offset, int size)
 		{
-			throw new NotImplementedException ();
+			while (true) {
+				ReceiveSegment seg = null;
+				lock (_recvBuffer) {
+					for (int i = 0; i < _recvBuffer.Count; i ++) {
+						if (_recvBuffer[i].Sequence == _recvNextSequence) {
+							seg = _recvBuffer[i];
+							if (seg.Count <= size) {
+								_recvBuffer.RemoveAt (i);
+								_recvNextSequence = seg.NextSequence;
+								break;
+							} else {
+								Buffer.BlockCopy (seg.Array, seg.Offset, buffer, offset, size);
+								seg.Offset += size;
+								seg.Count -= size;
+								return size;
+							}
+						}
+					}
+				}
+				if (seg == null) {
+					if (!_recvWaitHandle.WaitOne ())
+						throw new SocketException ();
+					continue;
+				}
+				Buffer.BlockCopy (seg.Array, seg.Offset, buffer, offset, seg.Count);
+				return seg.Count;
+			}
+		}
+
+		public int CheckAvailableBytes ()
+		{
+			lock (_recvBuffer) {
+				for (int i = 0; i < _recvBuffer.Count; i++) {
+					if (_recvBuffer[i].Sequence == _recvNextSequence)
+						return _recvBuffer[i].Count;
+				}
+			}
+			return 0;
 		}
 
 		public void Shutdown ()
@@ -240,6 +286,24 @@ namespace p2pncs.Net
 		{
 			Empty,
 			AckWaiting
+		}
+
+		class ReceiveSegment
+		{
+			public ReceiveSegment (uint seq, byte[] array)
+			{
+				this.Sequence = seq;
+				this.Array = array;
+				this.Offset = 0;
+				this.Count = array.Length;
+				this.NextSequence = seq + (uint)array.Length;
+			}
+
+			public uint Sequence;
+			public byte[] Array;
+			public int Offset;
+			public int Count;
+			public uint NextSequence;
 		}
 	}
 }

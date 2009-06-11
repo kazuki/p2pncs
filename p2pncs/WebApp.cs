@@ -28,6 +28,7 @@ using p2pncs.Net;
 using p2pncs.Net.Overlay;
 using p2pncs.Net.Overlay.Anonymous;
 using p2pncs.Security.Cryptography;
+using p2pncs.Utility;
 
 namespace p2pncs
 {
@@ -56,7 +57,6 @@ namespace p2pncs
 		Key _imPubKey;
 		ISubscribeInfo _imSubscribe;
 		SubscribeRouteStatus _imLastStatus = SubscribeRouteStatus.Establishing;
-		List<KeyValuePair<IStreamSocket, DateTime>> _throughputTestSockets = new List<KeyValuePair<IStreamSocket,DateTime>> ();
 		Interrupters _ints;
 
 		public WebApp (Node node, Key imPubKey, ECKeyPair imPrivateKey, string name, Interrupters ints)
@@ -96,9 +96,7 @@ namespace p2pncs
 				}
 				StreamSocket sock = new StreamSocket (e.Socket, AnonymousRouter.DummyEndPoint, MaxStreamSocketSegmentSize, _ints.StreamSocketTimeoutInt);
 				e.Socket.InitializedEventHandlers ();
-				lock (_throughputTestSockets) {
-					_throughputTestSockets.Add (new KeyValuePair<IStreamSocket, DateTime> (sock, DateTime.Now + TimeSpan.FromMinutes (5)));
-				}
+				ThreadPool.QueueUserWorkItem (ThroughputTest_ReceiverSide, sock);
 				Console.WriteLine ("Accepted ThroughputTest");
 			};
 		}
@@ -121,17 +119,6 @@ namespace p2pncs
 
 			if (updated)
 				IncrementRevisionAndUpdate ();
-
-			lock (_throughputTestSockets) {
-				for (int i = 0; i < _throughputTestSockets.Count; i ++) {
-					if (_throughputTestSockets[i].Value <= DateTime.Now) {
-						try {
-							_throughputTestSockets[i].Key.Dispose ();
-						} catch {}
-						_throughputTestSockets.RemoveAt (i --);
-					}
-				}
-			}
 		}
 
 		public object Process (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
@@ -318,7 +305,17 @@ namespace p2pncs
 			StreamSocket ssock = new StreamSocket (sock, AnonymousRouter.DummyEndPoint, MaxStreamSocketSegmentSize, DateTime.Now - dt, _ints.StreamSocketTimeoutInt);
 			sock.InitializedEventHandlers ();
 			try {
-				byte[] buffer = new byte[1000 * 1000];
+				const int SendSize = 1000 * 1000;
+				const int HeaderSize = 24;
+				byte[] buffer = new byte[HeaderSize + SendSize];
+				new Random ().NextBytes (buffer);
+				buffer[0] = (byte)((SendSize >> 24) & 0xff);
+				buffer[1] = (byte)((SendSize >> 16) & 0xff);
+				buffer[2] = (byte)((SendSize >>  8) & 0xff);
+				buffer[3] = (byte)((SendSize >>  0) & 0xff);
+				byte[] hash = new System.Security.Cryptography.SHA1Managed ().ComputeHash (buffer, HeaderSize, SendSize);
+				Buffer.BlockCopy (hash, 0, buffer, 4, hash.Length);
+
 				Stopwatch sw = Stopwatch.StartNew ();
 				ssock.Send (buffer, 0, buffer.Length);
 				ssock.Shutdown ();
@@ -329,6 +326,55 @@ namespace p2pncs
 				Console.WriteLine ("ThroughputTest: Timeout");
 				Console.WriteLine (ex.ToString ());
 				return;
+			}
+		}
+
+		void ThroughputTest_ReceiverSide (object o)
+		{
+			const int HeaderSize = 24;
+			StreamSocket sock = (StreamSocket)o;
+			TimeSpan timeout = TimeSpan.FromSeconds (16);
+			byte[] buffer = new byte[64], hash = new byte[20];
+			bool in_header = true;
+			int received = 0, size = -1;
+			
+			try {
+				while (true) {
+					DateTime dt = DateTime.Now;
+					while (DateTime.Now.Subtract (dt) < timeout) {
+						if (sock.CheckAvailableBytes () > 0)
+							break;
+						Thread.Sleep (50);
+					}
+					if (sock.CheckAvailableBytes () == 0) {
+						Console.WriteLine ("ThroughputTest: Timeout");
+						return;
+					}
+					if (in_header) {
+						received += sock.Receive (buffer, received, HeaderSize - received);
+						if (received == HeaderSize) {
+							in_header = false;
+							size = (buffer[0] << 24) | (buffer[1] << 16) | (buffer[2] << 8) | buffer[3];
+							Buffer.BlockCopy (buffer, 4, hash, 0, 20);
+							received = 0;
+							buffer = new byte[size];
+							Console.WriteLine ("ThroughputTest: Received Header");
+							Console.WriteLine ("ThroughputTest:   TestSize={0}", size);
+							Console.WriteLine ("ThroughputTest:   Hash={0}", Convert.ToBase64String (hash));
+						}
+					} else {
+						received += sock.Receive (buffer, received, size - received);
+						if (received == size)
+							break;
+					}
+				}
+				Console.WriteLine ("ThroughputTest: Finished");
+				byte[] hash2 = new System.Security.Cryptography.SHA1Managed ().ComputeHash (buffer);
+				Console.WriteLine ("ThroughputTest:  Hash'={0}...{1}", Convert.ToBase64String (hash2), Convert.ToBase64String (hash) == Convert.ToBase64String (hash2) ? "OK" : "ERROR");
+			} catch {
+				Console.WriteLine ("ThroughputTest: ERROR");
+			} finally {
+				sock.Dispose ();
 			}
 		}
 
