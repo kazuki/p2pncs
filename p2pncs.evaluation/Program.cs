@@ -41,6 +41,8 @@ namespace p2pncs.Evaluation
 				{EvaluationTypes.AR, new AnonymousRouterEvaluation ()},
 				{EvaluationTypes.AR_SimCom, new AnonymousRouterSimultaneouslyCommunicationEvaluator ()},
 				{EvaluationTypes.AR_Throughput, new AnonymousHighThroughputEvaluator ()},
+				{EvaluationTypes.KBR1, new KBREval1 ()},
+				{EvaluationTypes.DHT1, new DHTEval1 ()},
 			};
 			evalutions[options.EvalutionType].Evaluate (options);
 		}

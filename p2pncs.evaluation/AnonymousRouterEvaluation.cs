@@ -33,7 +33,6 @@ namespace p2pncs.Evaluation
 		{
 			using (EvalEnvironment env = new EvalEnvironment (opt)) {
 				env.AddNodes (opt.NumberOfNodes, true);
-				env.StartChurn ();
 
 				ECKeyPair privateKey1 = ECKeyPair.Create (VirtualNode.DefaultECDomain);
 				Key recipientKey1 = Key.Create (privateKey1);
@@ -56,6 +55,7 @@ namespace p2pncs.Evaluation
 					Thread.Sleep (10);
 				}
 
+				env.StartChurn ();
 				bool routeEstablished = false;
 				do {
 					try {
@@ -64,7 +64,7 @@ namespace p2pncs.Evaluation
 							throw new System.Net.Sockets.SocketException ();
 
 						msock1 = env.Nodes[0].CreateAnonymousSocket (sock1);
-						msock2 = env.Nodes[1].AnonymousSocketInfoList[0].MessagingSocket;
+						msock2 = env.Nodes[1].AnonymousSocketInfoList[env.Nodes[1].AnonymousSocketInfoList.Count - 1].MessagingSocket;
 						routeEstablished = true;
 
 						DateTime dt = DateTime.Now;

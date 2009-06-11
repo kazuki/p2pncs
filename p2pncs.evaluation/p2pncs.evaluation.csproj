@@ -41,6 +41,8 @@
     <Compile Include="AnonymousRouterEvaluation.cs" />
     <Compile Include="AnonymousRouterSimultaneouslyCommunicationEvaluator.cs" />
     <Compile Include="AnonymousSocketInfo.cs" />
+    <Compile Include="DHTEval1.cs" />
+    <Compile Include="KBREval1.cs" />
     <Compile Include="EvalEnvironment.cs" />
     <Compile Include="EvalOptionSet.cs" />
     <Compile Include="EvaluationTypes.cs" />

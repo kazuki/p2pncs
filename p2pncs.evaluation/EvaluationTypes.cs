@@ -21,6 +21,8 @@ namespace p2pncs.Evaluation
 	{
 		AR,
 		AR_SimCom,
-		AR_Throughput
+		AR_Throughput,
+		KBR1,
+		DHT1,
 	}
 }

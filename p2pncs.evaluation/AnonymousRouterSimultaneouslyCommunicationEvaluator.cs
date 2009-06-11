@@ -45,6 +45,9 @@ namespace p2pncs.Evaluation
 			opt.ChurnInterval = 0;
 			opt.PacketLossRate = 0.0;
 
+			// 総コネクション数 = EvalOptionSet.Tests
+			int connections = opt.Tests;
+
 			Random rnd = new Random ();
 			using (EvalEnvironment env = new EvalEnvironment (opt)) {
 				env.AddNodes (opt.NumberOfNodes, true);
@@ -91,12 +94,12 @@ namespace p2pncs.Evaluation
 				_connectingDone.Set ();
 				px = Console.CursorLeft;
 				py = Console.CursorTop;
-				for (int i = 0; i < subscribedList.Count; i ++) {
+				for (int i = 0; i < connections; i++) {
 					_connectingDone.WaitOne ();
 					if (Interlocked.Increment (ref _connecting) < simultaneouslyProcess)
 						_connectingDone.Set ();
 
-					Info info = subscribedList[i];
+					Info info = subscribedList[rnd.Next (subscribedList.Count)];
 					Info destInfo;
 					while (true) {
 						int idx = rnd.Next (subscribedList.Count);
@@ -108,7 +111,7 @@ namespace p2pncs.Evaluation
 					ThreadPool.QueueUserWorkItem (EstablishConnect_Thread, new object[] {info, destInfo});
 					Console.CursorLeft = px;
 					Console.CursorTop = py;
-					Console.Write ("{0}/{1}", i, subscribedList.Count);
+					Console.Write ("{0}/{1}", i, connections);
 				}
 				Console.CursorLeft = px;
 				Console.CursorTop = py;
@@ -124,7 +127,7 @@ namespace p2pncs.Evaluation
 
 				Console.WriteLine ("Start");
 				long lastPackets = env.Network.Packets;
-				while (true) {
+				do {
 					for (int i = 0; i < subscribedList.Count; i ++) {
 						IList<AnonymousSocketInfo> list;
 						lock (subscribedList[i].Node.AnonymousSocketInfoList) {
@@ -154,7 +157,7 @@ namespace p2pncs.Evaluation
 							minJitter, avgJitter, sdJitter, maxJitter, (double)_success_count / (double)_tests, avgRtt, sdRtt, packets - lastPackets);
 					}
 					lastPackets = packets;
-				}
+				} while (false);
 			}
 		}
 
