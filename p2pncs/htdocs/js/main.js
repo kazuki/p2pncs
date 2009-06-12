@@ -4,7 +4,7 @@ $(function() {
 	var _roomDialogs = [];
 
 	function status2jp (status) {
-		return status == "Establishing" ? "接続中"
+		return status == "Establishing" ? "接続試行中"
 			: status == "Unstable" ? "接続(不安定)"
 			: status == "Stable" ? "接続"
 			: "切断";
@@ -19,6 +19,22 @@ $(function() {
 			error: basis_ajax_error,
 			timeout: 100 * 1000,
 			cache: false
+		});
+	}
+	function ajax_post_callback (data, textStatus) {
+		if (data == "OK")
+			return;
+		$.create("div", {title: "エラー"}, [
+			"p",{},[
+				"span", {'class':"ui-icon ui-icon-alert", 'style':"float:left;margin-right:.5em"},[],
+				data
+			]
+		]).appendTo("body").dialog({
+			autoOpen: true,
+			buttons: {
+				OK: function() {$(this).dialog("close");}
+			},
+			close: function() { $(this).dialog("destroy").remove(); }
 		});
 	}
 	function basis_ajax_success (data, textStatus) {
@@ -140,7 +156,7 @@ $(function() {
 											break;
 										}
 									}
-									$.post("/api?method=leave_room&id=" + room_id);
+									$.post("/api?method=leave_room&id=" + room_id, {}, ajax_post_callback, "text");
 									$(this2).dialog("destroy").remove();
 									$(this).dialog("close");
 								},
@@ -154,7 +170,7 @@ $(function() {
 				$(roomDialog).find("div.chat-post > input").keydown (function (e) {
 					if (e.keyCode == 13 && $(this).val().length > 0) {
 						var postdata = encodeURIComponent ($(this).val());
-						$.post("/api?method=post&id=" + room_id + "&msg=" + postdata);
+						$.post("/api?method=post&id=" + room_id + "&msg=" + postdata, {}, ajax_post_callback, "text");
 						$(this).val("");
 						return false;
 					}
@@ -198,7 +214,7 @@ $(function() {
 			buttons: {
 				"接続": function () {
 					var postdata = encodeURIComponent ($(this).children("input:first").val());
-					$.post("/api?method=connect&data=" + postdata);
+					$.post("/api?method=connect&data=" + postdata, {}, ajax_post_callback, "text");
 					$(this).dialog("close");
 				},
 				"キャンセル": function () {
@@ -221,7 +237,7 @@ $(function() {
 			resizable: false,
 			buttons: {
 				"終了": function() {
-					$.post("/api?method=exit");
+					$.post("/api?method=exit", {}, ajax_post_callback, "text");
 					$(this).dialog("close");
 				},
 				"キャンセル": function() {
@@ -245,7 +261,7 @@ $(function() {
 			buttons: {
 				"作成": function() {
 					var postdata = encodeURIComponent ($(this).children("input:first").val());
-					$.post("/api?method=create_room&data=" + postdata);
+					$.post("/api?method=create_room&data=" + postdata, {}, ajax_post_callback, "text");
 					$(this).dialog("close");
 				},
 				"キャンセル": function() {
@@ -269,7 +285,7 @@ $(function() {
 			buttons: {
 				"接続": function() {
 					var postdata = encodeURIComponent ($(this).children("input:first").val());
-					$.post("/api?method=join_room&data=" + postdata);
+					$.post("/api?method=join_room&data=" + postdata, {}, ajax_post_callback, "text");
 					$(this).dialog("close");
 				},
 				"キャンセル": function() {
@@ -285,7 +301,7 @@ $(function() {
 		$.create("div", {"title": "スループット測定"}, [
 			"p",{},["相手のID:"],
 			"input",{"size": 48},[],
-			"p",{},["この機能にはバグが多く含まれていると思われるので、利用するのはとても危険です"]
+			"p",{},["(結果は全てコマンドプロンプトの方に表示されます)"]
 		]).appendTo("body").dialog({
 			autoOpen: true,
 			minHeight: 0,
@@ -294,7 +310,7 @@ $(function() {
 			buttons: {
 				"測定": function() {
 					var postdata = encodeURIComponent ($(this).children("input:first").val());
-					$.post("/api?method=throughput_test&data=" + postdata);
+					$.post("/api?method=throughput_test&data=" + postdata, {}, ajax_post_callback, "text");
 					$(this).dialog("close");
 				},
 				"キャンセル": function() {

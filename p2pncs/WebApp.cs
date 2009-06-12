@@ -37,7 +37,6 @@ namespace p2pncs
 		const string DefaultTemplatePath = "templates";
 		const string DefaultStaticFilePath = "htdocs";
 
-		static byte[] EmptyData = new byte[0];
 		const int MaxRetries = 2;
 		static TimeSpan Timeout = TimeSpan.FromSeconds (2);
 		const int RetryBufferSize = 512;
@@ -198,21 +197,25 @@ namespace p2pncs
 
 		object ProcessAPI_POST (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
 		{
+			const string OK = "OK";
 			switch (Helpers.GetQueryValue (req, "method")) {
 				case "exit": {
 					_exitWaitHandle.Set ();
-					return EmptyData;
+					return OK;
 				}
 				case "connect": {
 					System.Net.EndPoint ep = Helpers.Parse (Helpers.GetQueryValue (req, "data"));
-					if (ep != null)
+					if (ep != null) {
 						_node.KeyBasedRouter.Join (new System.Net.EndPoint[] {ep});
-					return EmptyData;
+						return OK;
+					} else {
+						return "対応していない書式で入力したか、DNSエラーのため接続できませんでした";
+					}
 				}
 				case "create_room": {
-					string name = Helpers.GetQueryValue (req, "data");
+					string name = Helpers.GetQueryValue (req, "data").Trim ();
 					if (name.Length == 0)
-						break;
+						return "部屋名に何か文字を入力してください";
 					ECKeyPair roomPrivateKey = ECKeyPair.Create (Node.DefaultECDomainName);
 					Key roomPublicKey = Key.Create (roomPrivateKey);
 					_node.AnonymousRouter.SubscribeRecipient (roomPublicKey, roomPrivateKey);
@@ -224,69 +227,70 @@ namespace p2pncs
 						_joinRooms.Add (roomPublicKey, roomId);
 					}
 					IncrementRevisionAndUpdate ();
-					return EmptyData;
+					return OK;
 				}
 				case "join_room": {
 					Key roomKey = null;
 					try {
 						roomKey = new Key (Convert.FromBase64String (Helpers.GetQueryValue (req, "data")));
 					} catch {
-						break;
+						return "解析できないIDです";
 					}
 					try {
 						_node.AnonymousRouter.GetSubscribeInfo (roomKey);
-						break;
+						return "自分がオーナとなっている部屋または無効な部屋IDのためこの部屋には接続できません";
 					} catch {}
 					lock (_rooms) {
 						if (_joinRooms.ContainsKey (roomKey))
-							break;
+							return "現在接続中です...";
 						_joinRooms.Add (roomKey, Interlocked.Increment (ref _roomId));
 					}
 					_node.AnonymousRouter.BeginConnect (_imPubKey, roomKey, AnonymousConnectionType.LowLatency, _name, JoinRoom_Callback, roomKey);
 					IncrementRevisionAndUpdate ();
-					return EmptyData;
+					return OK;
 				}
 				case "leave_room": {
 					string str_id = Helpers.GetQueryValue (req, "id");
 					int id;
 					if (!int.TryParse (str_id, out id))
-						break;
+						return "解析できないIDです";
 					ChatRoomInfo roomInfo;
 					lock (_rooms) {
 						if (!_rooms.TryGetValue (id, out roomInfo))
-							break;
+							return "既に退室した部屋または、無効なIDです";
 						_rooms.Remove (id);
 						_joinRooms.Remove (roomInfo.RoomKey);
 					}
 					roomInfo.Close ();
-					return EmptyData;
+					return OK;
 				}
 				case "post": {
 					string str_id = Helpers.GetQueryValue (req, "id");
 					string msg = Helpers.GetQueryValue (req, "msg").TrimEnd ();
 					int id;
 					if (!int.TryParse (str_id, out id) || msg.Length == 0)
-						break;
+						return "無効なIDか、発言が空です";
 					ChatRoomInfo roomInfo;
 					lock (_rooms) {
 						if (!_rooms.TryGetValue (id, out roomInfo))
-							break;
+							return "既に退室した部屋または、無効なIDです";
 					}
 					roomInfo.Post (msg);
-					return EmptyData;
+					return OK;
 				}
 				case "throughput_test": {
 					Key destKey = null;
 					try {
 						destKey = new Key (Convert.FromBase64String (Helpers.GetQueryValue (req, "data")));
 					} catch {
-						break;
+						return "認識できない宛先です";
 					}
 					ThreadPool.QueueUserWorkItem (ThroughputTest, destKey);
-					return EmptyData;
+					return OK;
 				}
+				default:
+					return "Unknown Method";
 			}
-			throw new HttpException (HttpStatusCode.NotFound);
 		}
 
 		void ThroughputTest (object o)
