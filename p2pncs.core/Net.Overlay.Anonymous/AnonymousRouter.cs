@@ -83,8 +83,6 @@ namespace p2pncs.Net.Overlay.Anonymous
 		public static EndPoint DummyEndPoint = new IPEndPoint (IPAddress.Loopback, 0);
 
 		static Serializer DefaultSerializer = Serializer.Instance;
-
-		const int DHT_TYPEID = 1;
 		#endregion
 
 		bool _active = true;
@@ -117,7 +115,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			_privateNodeKey = privateNodeKey;
 			_interrupter = interrupter;
 
-			dht.RegisterTypeID (typeof (DHTEntry), DHT_TYPEID);
+			dht.RegisterTypeID (typeof (DHTEntry), 1);
 			_sock.AddInquiryDuplicationCheckType (typeof (EstablishRouteMessage));
 			_sock.AddInquiryDuplicationCheckType (typeof (RoutedMessage));
 			_sock.AddInquiredHandler (typeof (EstablishRouteMessage), Messaging_Inquired_EstablishRouteMessage);
@@ -561,7 +559,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			{
 				ConnectionEstablishMessage msg = msg_obj as ConnectionEstablishMessage;
 				if (msg != null) {
-					_dht.BeginGet (msg.DestinationId, DHT_TYPEID, ProcessMessage_ConnectionEstablish_DHTGet_Callback, msg);
+					_dht.BeginGet (msg.DestinationId, typeof (DHTEntry), ProcessMessage_ConnectionEstablish_DHTGet_Callback, msg);
 					return;
 				}
 			}
@@ -617,7 +615,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			if (completed) {
 				Thread.MemoryBarrier ();
 				if (state.Fails == state.Count) {
-					_dht.BeginGet (state.Destination, DHT_TYPEID, ProcessMessage_ConnectionSenderSide_Interterminal_DHT_Callback, state);
+					_dht.BeginGet (state.Destination, typeof (DHTEntry), ProcessMessage_ConnectionSenderSide_Interterminal_DHT_Callback, state);
 				}
 			}
 		}

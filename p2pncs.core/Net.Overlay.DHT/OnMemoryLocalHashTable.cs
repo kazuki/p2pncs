@@ -193,7 +193,7 @@ namespace p2pncs.Net.Overlay.DHT
 		#endregion
 
 		#region Internal Class
-		class PKey : IComparable, IComparable<PKey>, IEquatable<PKey>
+		class PKey : IEquatable<PKey>
 		{
 			Key _key;
 			int _typeId;
@@ -211,27 +211,6 @@ namespace p2pncs.Net.Overlay.DHT
 			public int TypeID {
 				get { return _typeId; }
 			}
-
-			#region IComparable Members
-
-			public int CompareTo (object obj)
-			{
-				return CompareTo ((PKey)obj);
-			}
-
-			#endregion
-
-			#region IComparable<KeyAndTypeID> Members
-
-			public int CompareTo (PKey other)
-			{
-				int ret = Math.Sign (_key.CompareTo (other)) * 2;
-				if (ret == 0)
-					ret = Math.Sign (_typeId.CompareTo (other._typeId));
-				return ret;
-			}
-
-			#endregion
 
 			#region IEquatable<KeyAndTypeID> Members
 

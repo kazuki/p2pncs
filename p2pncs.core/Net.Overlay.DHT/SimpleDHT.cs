@@ -73,8 +73,11 @@ namespace p2pncs.Net.Overlay.DHT
 			_typeMap.Add (type, id);
 		}
 
-		public IAsyncResult BeginGet (Key key, int typeId, AsyncCallback callback, object state)
+		public IAsyncResult BeginGet (Key key, Type type, AsyncCallback callback, object state)
 		{
+			int typeId;
+			if (!_typeMap.TryGetValue (type, out typeId))
+				throw new ArgumentException ();
 			AsyncResult ar = new AsyncResult (key, typeId, this, callback, state);
 			return ar;
 		}

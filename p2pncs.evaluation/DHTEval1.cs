@@ -44,7 +44,7 @@ namespace p2pncs.Evaluation
 				int returned = 0, successed = 0;
 				ManualResetEvent getDone = new ManualResetEvent (false);
 				for (int i = 0; i < opt.Tests; i++) {
-					testNode.DistributedHashTable.BeginGet (list[i], 0, delegate (IAsyncResult ar) {
+					testNode.DistributedHashTable.BeginGet (list[i], typeof (string), delegate (IAsyncResult ar) {
 						GetResult result = testNode.DistributedHashTable.EndGet (ar);
 						string expected = ar.AsyncState as string;
 						if (result != null && result.Values != null && result.Values.Length > 0) {

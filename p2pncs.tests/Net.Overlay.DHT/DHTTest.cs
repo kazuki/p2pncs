@@ -62,7 +62,7 @@ namespace p2pncs.tests.Net.Overlay.DHT
 				Assert.IsTrue (expectedSet.SetEquals (dhts[5].LocalHashTable.Get (reqKey, 0)));
 				Assert.IsNull (dhts[6].LocalHashTable.Get (reqKey, 0));
 				Assert.IsNull (dhts[7].LocalHashTable.Get (reqKey, 0));
-				GetResult ret = dhts[0].EndGet (dhts[0].BeginGet (reqKey, 0, null, null));
+				GetResult ret = dhts[0].EndGet (dhts[0].BeginGet (reqKey, typeof (string), null, null));
 				Assert.IsNotNull (ret);
 				Assert.IsTrue (expectedSet.SetEquals (ret.Values));
 
@@ -76,7 +76,7 @@ namespace p2pncs.tests.Net.Overlay.DHT
 				Assert.IsTrue (expectedSet.SetEquals (dhts[5].LocalHashTable.Get (reqKey, 0)));
 				Assert.IsNull (dhts[6].LocalHashTable.Get (reqKey, 0));
 				Assert.IsNull (dhts[7].LocalHashTable.Get (reqKey, 0));
-				ret = dhts[0].EndGet (dhts[0].BeginGet (reqKey, 0, null, null));
+				ret = dhts[0].EndGet (dhts[0].BeginGet (reqKey, typeof (string), null, null));
 				Assert.IsNotNull (ret);
 				Assert.IsTrue (expectedSet.SetEquals (ret.Values));
 
@@ -91,7 +91,7 @@ namespace p2pncs.tests.Net.Overlay.DHT
 				Assert.IsTrue (expectedSet.SetEquals (dhts[5].LocalHashTable.Get (reqKey, 0)));
 				Assert.IsNull (dhts[6].LocalHashTable.Get (reqKey, 0));
 				Assert.IsNull (dhts[7].LocalHashTable.Get (reqKey, 0));
-				ret = dhts[0].EndGet (dhts[0].BeginGet (reqKey, 0, null, null));
+				ret = dhts[0].EndGet (dhts[0].BeginGet (reqKey, typeof (string), null, null));
 				Assert.IsNotNull (ret);
 				Assert.IsTrue (expectedSet.SetEquals (ret.Values));
 			}
@@ -127,7 +127,7 @@ namespace p2pncs.tests.Net.Overlay.DHT
 				Assert.AreEqual (1, ary.Length);
 				Assert.AreEqual ("HELLO", ((EPStore)ary[0]).Message);
 				Assert.AreEqual (env.EndPoints[0], ((EPStore)ary[0]).EndPoint);
-				GetResult ret = dhts[0].EndGet (dhts[0].BeginGet (reqKey, 0, null, null));
+				GetResult ret = dhts[0].EndGet (dhts[0].BeginGet (reqKey, typeof (EPStore), null, null));
 				Assert.IsNotNull (ret);
 				ary = ret.Values;
 				Assert.AreEqual ("HELLO", ((EPStore)ary[0]).Message);
@@ -140,7 +140,7 @@ namespace p2pncs.tests.Net.Overlay.DHT
 				Assert.AreEqual (1, ary.Length);
 				Assert.AreEqual ("HOGE", ((EPStore)ary[0]).Message);
 				Assert.IsNull (((EPStore)ary[0]).EndPoint);
-				ret = dhts[0].EndGet (dhts[0].BeginGet (reqKey, 0, null, null));
+				ret = dhts[0].EndGet (dhts[0].BeginGet (reqKey, typeof (EPStore), null, null));
 				Assert.IsNotNull (ret);
 				ary = ret.Values;
 				Assert.AreEqual ("HOGE", ((EPStore)ary[0]).Message);

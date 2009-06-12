@@ -23,7 +23,7 @@ namespace p2pncs.Net.Overlay.DHT
 	{
 		void RegisterTypeID (Type type, int id);
 
-		IAsyncResult BeginGet (Key key, int typeId, AsyncCallback callback, object state);
+		IAsyncResult BeginGet (Key key, Type type, AsyncCallback callback, object state);
 		GetResult EndGet (IAsyncResult ar);
 
 		IAsyncResult BeginPut (Key key, TimeSpan lifeTime, object value, AsyncCallback callback, object state);
