@@ -19,17 +19,23 @@
 						<h1>p2pncs:</h1>
 					</div>
 					<div id="sidearea">
-						<div id="navigation">
-							<h3><a href="#">Network <span id="mainStatus" /></a></h3>
-							<div>
+						<div id="navigation" class="ui-accordion ui-widget ui-helper-reset">
+							<h3 class="ui-accordion-header ui-state-active ui-helper-reset">
+								<span class="ui-icon ui-icon-triangle-1-s" />
+								<a href="#">Network <span id="mainStatus" /></a>
+							</h3>
+							<div class="ui-accordion-content ui-helper-reset ui-widget-content ui-accordion-content-active">
 								<ul class="no-indent">
 									<li><a id="connect_dialog" href="#">初期ノードに接続</a></li>
-									<li><a id="exit_dialog" href="#">プログラムを終了</a></li>
 									<li><a id="throughput_test_dialog" href="#">スループット測定</a></li>
+									<li><a id="exit_dialog" href="#">プログラムを終了</a></li>
 								</ul>
 							</div>
-							<h3><a href="#">Chat</a></h3>
-							<div>
+							<h3 class="ui-accordion-header ui-state-active ui-helper-reset">
+								<span class="ui-icon ui-icon-triangle-1-s" />
+								<a href="#">Chat</a>
+							</h3>
+							<div class="ui-accordion-content ui-helper-reset ui-widget-content ui-accordion-content-active">
 								<ul class="no-indent">
 									<li><a id="create_room_dialog" href="#">部屋を作成</a></li>
 									<li><a id="join_dialog" href="#">部屋に接続</a></li>

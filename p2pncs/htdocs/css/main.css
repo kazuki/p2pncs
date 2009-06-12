@@ -17,7 +17,7 @@ ul.no-indent {
 }
 
 ul.no-indent li {
-  list-style: none;
+  line-height: 150%;
 }
 
 div.chat-content {

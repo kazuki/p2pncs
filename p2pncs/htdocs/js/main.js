@@ -198,9 +198,6 @@ $(function() {
 		window.setTimeout (start_basis_ajax, 10 * 1000);
 	}
 
-	$("#navigation").accordion({
-		autoHeight: false
-	});
 	$("#connect_dialog").click(function() {
 		$.create("div", {"title": "初期ノードに接続"}, [
 			"p",{},["初期ノードの情報を入力してください"],
