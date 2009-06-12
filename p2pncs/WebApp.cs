@@ -293,10 +293,11 @@ namespace p2pncs
 		{
 			Key destKey = o as Key;
 			DateTime dt = DateTime.Now;
-			IAsyncResult ar = _node.AnonymousRouter.BeginConnect (_imPubKey, destKey, AnonymousConnectionType.HighThroughput, "ThroughputTest", null, null);
 			IAnonymousSocket sock = null;
 			try {
+				IAsyncResult ar = _node.AnonymousRouter.BeginConnect (_imPubKey, destKey, AnonymousConnectionType.HighThroughput, "ThroughputTest", null, null);
 				sock = _node.AnonymousRouter.EndConnect (ar);
+				Console.WriteLine ("ThroughputTest: Connected to {0}", Convert.ToBase64String (destKey.GetByteArray ()));
 			} catch {
 				Console.WriteLine ("ThroughputTest: Connect failed");
 				return;

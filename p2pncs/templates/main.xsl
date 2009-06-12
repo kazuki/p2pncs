@@ -25,7 +25,7 @@
 								<ul class="no-indent">
 									<li><a id="connect_dialog" href="#">初期ノードに接続</a></li>
 									<li><a id="exit_dialog" href="#">プログラムを終了</a></li>
-									<li><a id="throughput_test_dialog" href="#">スループット測定 (危険!)</a></li>
+									<li><a id="throughput_test_dialog" href="#">スループット測定</a></li>
 								</ul>
 							</div>
 							<h3><a href="#">Chat</a></h3>
