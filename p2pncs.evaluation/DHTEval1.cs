@@ -27,7 +27,6 @@ namespace p2pncs.Evaluation
 	{
 		public void Evaluate (EvalOptionSet opt)
 		{
-			opt.UseNewKeyBasedRouter = true;
 			using (EvalEnvironment env = new EvalEnvironment (opt)) {
 				env.AddNodes (opt.NumberOfNodes, true);
 				env.StartChurn ();
