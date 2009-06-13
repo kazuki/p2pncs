@@ -147,6 +147,10 @@ namespace p2pncs.Evaluation
 			get { return _nodes; }
 		}
 
+		public IntervalInterrupter KBRStabilizeTimer {
+			get { return _kbrInt; }
+		}
+
 		void IDisposable.Dispose ()
 		{
 			_msgInt1.Dispose ();

@@ -52,9 +52,11 @@
     <Compile Include="Net.Overlay.Anonymous\IAnonymousSocket.cs" />
     <Compile Include="Net.Overlay.Anonymous\ISubscribeInfo.cs" />
     <Compile Include="Net.Overlay.Anonymous\SubscribeRouteStatus.cs" />
+    <Compile Include="Net.Overlay.DHT\DHTEntry.cs" />
     <Compile Include="Net.Overlay.DHT\GetResult.cs" />
     <Compile Include="Net.Overlay.DHT\IDistributedHashTable.cs" />
     <Compile Include="Net.Overlay.DHT\ILocalHashTable.cs" />
+    <Compile Include="Net.Overlay.DHT\IMassKeyDelivererLocalStore.cs" />
     <Compile Include="Net.Overlay.DHT\IPutterEndPointStore.cs" />
     <Compile Include="Net.Overlay.DHT\OnMemoryLocalHashTable.cs" />
     <Compile Include="Net.Overlay.DHT\SimpleDHT.cs" />
@@ -62,6 +64,7 @@
     <Compile Include="Net.Overlay\IKeyBasedRouter.cs" />
     <Compile Include="Net.Overlay\IKeyBasedRoutingAlgorithm.cs" />
     <Compile Include="Net.Overlay\Key.cs" />
+    <Compile Include="Net.Overlay.DHT\MassKeyDeliverer.cs" />
     <Compile Include="Net.Overlay\NodeHandle.cs" />
     <Compile Include="Net.Overlay\RoutingResult.cs" />
     <Compile Include="Net.Overlay\SimpleIterativeRouter.cs" />

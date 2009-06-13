@@ -18,17 +18,22 @@
 using System;
 using System.Collections.Generic;
 using p2pncs.Threading;
+using p2pncs.Utility;
 
 namespace p2pncs.Net.Overlay.DHT
 {
-	public class OnMemoryLocalHashTable : ILocalHashTable
+	public class OnMemoryLocalHashTable : ILocalHashTable, IMassKeyDelivererLocalStore
 	{
 		IntervalInterrupter _int;
 		ReaderWriterLockWrapper _lock = new ReaderWriterLockWrapper ();
 		Dictionary<PKey, List<Entry>> _dic = new Dictionary<PKey, List<Entry>> ();
+		Key _self;
+		IKeyBasedRoutingAlgorithm _algo;
 
-		public OnMemoryLocalHashTable (IntervalInterrupter interrupter)
+		public OnMemoryLocalHashTable (IKeyBasedRouter router, IntervalInterrupter interrupter)
 		{
+			_self = router.SelftNodeId;
+			_algo = router.RoutingAlgorithm;
 			_int = interrupter;
 			_int.AddInterruption (CheckExpiry);
 		}
@@ -72,8 +77,8 @@ namespace p2pncs.Net.Overlay.DHT
 		public void Put (Key key, int typeId, DateTime expires, object value)
 		{
 			List<Entry> list;
-			PKey pk = new PKey (key, typeId);
-			Entry entry = new Entry (expires, value);
+			PKey pk = new PKey (key, typeId, _algo.ComputeRoutingLevel (_self, key));
+			Entry entry = new Entry (pk, expires, value);
 			while (true) {
 				using (_lock.EnterReadLock ()) {
 					if (_dic.TryGetValue (pk, out list)) {
@@ -103,7 +108,7 @@ namespace p2pncs.Net.Overlay.DHT
 		public object[] Get (Key key, int typeId)
 		{
 			List<Entry> list;
-			PKey pk = new PKey (key, typeId);
+			PKey pk = new PKey (key, typeId, -1);
 			using (_lock.EnterReadLock ()) {
 				if (!_dic.TryGetValue (pk, out list))
 					return null;
@@ -140,7 +145,7 @@ namespace p2pncs.Net.Overlay.DHT
 		public void Remove (Key key, int typeId, object value)
 		{
 			List<Entry> list;
-			PKey pk = new PKey (key, typeId);
+			PKey pk = new PKey (key, typeId, -1);
 			bool removeKey = false;
 			
 			if (value != null) {
@@ -181,6 +186,58 @@ namespace p2pncs.Net.Overlay.DHT
 
 		#endregion
 
+		#region IMassKeyDelivererLocalStore Members
+
+		/// TODO: optimization
+		public void GetEachRoutingLevelValues (IList<DHTEntry>[] values)
+		{
+			const int MAX_LIST_SIZE = 10;
+			List<Entry>[] unsentList = new List<Entry>[values.Length];
+			List<Entry>[] sentList = new List<Entry>[values.Length];
+			for (int i = 0; i < sentList.Length; i ++) {
+				unsentList[i] = new List<Entry> ();
+				sentList[i] = new List<Entry> ();
+			}
+
+			using (_lock.EnterReadLock ()) {
+				foreach (KeyValuePair<PKey,List<Entry>> pair in _dic) {
+					List<Entry> list = pair.Value;
+					lock (list) {
+						for (int i = 0; i < list.Count; i++) {
+							if (list[i].Expiry <= DateTime.Now) {
+								list.RemoveAt (i --);
+								continue;
+							}
+							if (list[i].SendFlag) {
+								sentList[pair.Key.RoutingLevel].Add (list[i]);
+							} else {
+								unsentList[pair.Key.RoutingLevel].Add (list[i]);
+							}
+						}
+					}
+				}
+			}
+
+			for (int i = 0; i < values.Length; i ++) {
+				if (unsentList[i].Count > 0) {
+					Entry[] entries = unsentList[i].ToArray().RandomSelection(MAX_LIST_SIZE);
+					for (int k = 0; k < entries.Length; k ++) {
+						values[i].Add (entries[k].ToDHTEntry ());
+						entries[k].SendFlag = true;
+					}
+				}
+
+				/*int size = MAX_LIST_SIZE - values[i].Count;
+				if (size > 0 && sentList[i].Count > 0) {
+					Entry[] entries = sentList[i].ToArray ().RandomSelection (size);
+					for (int k = 0; k < entries.Length; k++)
+						values[i].Add (entries[k].ToDHTEntry ());
+				}*/
+			}
+		}
+
+		#endregion
+
 		#region IDisposable Members
 
 		public void Dispose ()
@@ -197,11 +254,13 @@ namespace p2pncs.Net.Overlay.DHT
 		{
 			Key _key;
 			int _typeId;
+			int _level;
 
-			public PKey (Key key, int typeId)
+			public PKey (Key key, int typeId, int level)
 			{
 				_key = key;
 				_typeId = typeId;
+				_level = level;
 			}
 
 			public Key Key {
@@ -210,6 +269,10 @@ namespace p2pncs.Net.Overlay.DHT
 
 			public int TypeID {
 				get { return _typeId; }
+			}
+
+			public int RoutingLevel {
+				get { return _level; }
 			}
 
 			#region IEquatable<KeyAndTypeID> Members
@@ -243,13 +306,24 @@ namespace p2pncs.Net.Overlay.DHT
 		}
 		class Entry : IEquatable<Entry>
 		{
+			PKey _key;
 			DateTime _expiry;
 			object _value;
+			bool _send = false;
 
-			public Entry (DateTime expiry, object value)
+			public Entry (PKey key, DateTime expiry, object value)
 			{
+				_key = key;
 				_expiry = expiry;
 				_value = value;
+			}
+
+			public Key Key {
+				get { return _key.Key; }
+			}
+
+			public int TypeId {
+				get { return _key.TypeID; }
 			}
 
 			public DateTime Expiry {
@@ -260,10 +334,22 @@ namespace p2pncs.Net.Overlay.DHT
 				get { return _value; }
 			}
 
+			public bool SendFlag {
+				get { return _send; }
+				set { _send = value; }
+			}
+
+			public DHTEntry ToDHTEntry ()
+			{
+				return new DHTEntry (_key.Key, _key.TypeID, _value, _expiry);
+			}
+
 			public void Extend (DateTime newExpiry)
 			{
-				if (_expiry < newExpiry)
+				if (_expiry < newExpiry) {
 					_expiry = newExpiry;
+					_send = false;
+				}
 			}
 
 			public bool Equals (Entry other)

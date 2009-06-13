@@ -37,6 +37,7 @@ namespace p2pncs.Evaluation
 		IPEndPoint _pubEP;
 		IMessagingSocket _msock;
 		IKeyBasedRouter _kbr;
+		ILocalHashTable _localDHT;
 		IDistributedHashTable _dht;
 		IAnonymousRouter _anonRouter;
 		IntervalInterrupter _kbrStabilizeInt;
@@ -74,7 +75,8 @@ namespace p2pncs.Evaluation
 			_kbr = opt.UseNewKeyBasedRouter
 				? (IKeyBasedRouter)new SimpleIterativeRouter2 (_nodeId, _msock, new SimpleRoutingAlgorithm (), Serializer.Instance, opt.NewKBRStrictMode)
 				: (IKeyBasedRouter)new SimpleIterativeRouter (_nodeId, _msock, new SimpleRoutingAlgorithm (), Serializer.Instance);
-			_dht = new SimpleDHT (_kbr, _msock, new OnMemoryLocalHashTable (dhtInt));
+			_localDHT = new OnMemoryLocalHashTable (_kbr, dhtInt);
+			_dht = new SimpleDHT (_kbr, _msock, _localDHT);
 			_dht.RegisterTypeID (typeof (string), 0);
 			p2pncs.Net.Overlay.Anonymous.AnonymousRouter.DefaultRelayNodes = opt.AnonymousRouteRelays;
 			p2pncs.Net.Overlay.Anonymous.AnonymousRouter.DefaultSubscribeRoutes = opt.AnonymousRouteRoutes + opt.AnonymousRouteBackupRoutes;
@@ -150,6 +152,10 @@ namespace p2pncs.Evaluation
 
 		public IDistributedHashTable DistributedHashTable {
 			get { return _dht; }
+		}
+
+		public ILocalHashTable LocalDistributedHashTable {
+			get { return _localDHT; }
 		}
 
 		public IAnonymousRouter AnonymousRouter {

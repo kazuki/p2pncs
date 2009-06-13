@@ -43,6 +43,7 @@ namespace p2pncs.Evaluation
 				{EvaluationTypes.AR_Throughput, new AnonymousHighThroughputEvaluator ()},
 				{EvaluationTypes.KBR1, new KBREval1 ()},
 				{EvaluationTypes.DHT1, new DHTEval1 ()},
+				{EvaluationTypes.MASSKEY1, new MassKeyEval1 ()},
 			};
 			evalutions[options.EvalutionType].Evaluate (options);
 		}

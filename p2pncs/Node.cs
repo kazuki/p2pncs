@@ -51,7 +51,7 @@ namespace p2pncs
 			TestLogger.SetupUdpMessagingSocket (_messagingSock);
 			_kbrPrivateKey = ECKeyPair.Create (DefaultECDomainName);
 			_kbr = new SimpleIterativeRouter2 (Key.Create (_kbrPrivateKey), _messagingSock, new SimpleRoutingAlgorithm (), p2pncs.Serializer.Instance, true);
-			_dht = new SimpleDHT (_kbr, _messagingSock, new OnMemoryLocalHashTable (ints.DHTInt));
+			_dht = new SimpleDHT (_kbr, _messagingSock, new OnMemoryLocalHashTable (_kbr, ints.DHTInt));
 			_anonymous = new AnonymousRouter (_dht, _kbrPrivateKey, ints.AnonymousInt);
 			ints.KBRStabilizeInt.AddInterruption (delegate () {
 				_kbr.RoutingAlgorithm.Stabilize ();

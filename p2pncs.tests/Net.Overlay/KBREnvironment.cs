@@ -74,7 +74,7 @@ namespace p2pncs.tests.Net.Overlay
 				IKeyBasedRouter router = new SimpleIterativeRouter2 (keys[i], msock, new SimpleRoutingAlgorithm (), Serializer.Instance, true);
 				_routers.Add (router);
 				if (_dhts != null) {
-					IDistributedHashTable dht = new SimpleDHT (router, msock, new OnMemoryLocalHashTable (_dhtInt));
+					IDistributedHashTable dht = new SimpleDHT (router, msock, new OnMemoryLocalHashTable (router, _dhtInt));
 					_dhts.Add (dht);
 					if (_anons != null) {
 						IAnonymousRouter anonRouter = new AnonymousRouter (dht, keyPairs[i], _anonInt);

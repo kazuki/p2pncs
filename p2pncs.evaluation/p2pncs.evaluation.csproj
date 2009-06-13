@@ -47,6 +47,7 @@
     <Compile Include="EvalOptionSet.cs" />
     <Compile Include="EvaluationTypes.cs" />
     <Compile Include="IEvaluator.cs" />
+    <Compile Include="MassKeyEval1.cs" />
     <Compile Include="NDesk.Options.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="AssemblyInfo.cs" />

@@ -24,5 +24,6 @@ namespace p2pncs.Evaluation
 		AR_Throughput,
 		KBR1,
 		DHT1,
+		MASSKEY1,
 	}
 }
