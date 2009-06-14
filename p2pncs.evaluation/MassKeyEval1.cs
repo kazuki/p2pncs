@@ -30,9 +30,9 @@ namespace p2pncs.Evaluation
 		{
 			const int KEYS = 100;
 			DateTime expiry = DateTime.Now + TimeSpan.FromHours (1);
-			IntervalInterrupter timer = new IntervalInterrupter (TimeSpan.FromSeconds (1), "TIMER");
 			for (int method = 0; method <= 1; method ++) {
 				using (EvalEnvironment env = new EvalEnvironment (opt)) {
+					IntervalInterrupter timer = new IntervalInterrupter (TimeSpan.FromSeconds (1), "TIMER");
 					env.AddNodes (opt.NumberOfNodes, true);
 					for (int i = 0; i < env.Nodes.Count; i ++) env.Nodes[i].KeyBasedRouter.RoutingAlgorithm.Stabilize ();
 					for (int i = 0; i < env.Nodes.Count; i++) env.Nodes[i].KeyBasedRouter.RoutingAlgorithm.Stabilize ();
@@ -82,9 +82,9 @@ namespace p2pncs.Evaluation
 					Console.WriteLine ("Method={0}", method);
 					Console.WriteLine ("  Total Packets: {0}", lastPacket2 - lastPacket);
 					Console.WriteLine ("  Total Traffic: {0}", lastTraffic2 - lastTraffic);
+					timer.Dispose ();
 				}
 			}
-			Console.ReadLine ();
 		}
 	}
 }
