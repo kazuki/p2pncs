@@ -319,6 +319,30 @@ $(function() {
 			}
 		});
 	});
+	$("#create_bbs_dialog").click(function() {
+		$.create("div", {"title": "掲示板の作成"}, [
+			"p",{},["タイトル:"],
+			"input",{size: "40"},[]
+		]).appendTo("body").dialog({
+			autoOpen: true,
+			minHeight: 0,
+			width: "auto",
+			resizable: false,
+			buttons: {
+				"作成": function() {
+					var postdata = encodeURIComponent ($(this).children("input:first").val());
+					$.post("/api?method=create_bbs&title=" + postdata, {}, ajax_post_callback, "text");
+					$(this).dialog("close");
+				},
+				"キャンセル": function() {
+					$(this).dialog("close");
+				}
+			},
+			close: function() {
+				$(this).dialog("destroy").remove();
+			}
+		});
+	});
 
 	start_basis_ajax ();
 });

@@ -1,0 +1,17 @@
+body {
+  font-size: 10pt;
+}
+
+table {
+  background-color: #333;
+}
+
+tr.header td {
+  background-color: #555;
+  color: #eee;
+  font-weight: bold;
+}
+
+td {
+  background-color: #fff;
+}

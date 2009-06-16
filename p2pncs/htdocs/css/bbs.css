@@ -1,0 +1,16 @@
+h1 {
+  margin: 0px;
+}
+
+#bbsinfo {
+  font-size: 80%;
+}
+
+div.postName {
+  margin-top: 1em;
+}
+
+div.postBody {
+  margin-top: 0.2em;
+  white-space: pre;
+}

@@ -6,12 +6,12 @@
 		<html>
 			<head>
 				<title>p2pncs</title>
-				<link type="text/css" rel="stylesheet" href="css/ui-lightness/jquery-ui-1.7.2.custom.css" />
-				<link type="text/css" rel="stylesheet" href="css/main.css" />
-				<script type="text/javascript" charset="utf-8" src="js/jquery-1.3.2.min.js" />
-				<script type="text/javascript" charset="utf-8" src="js/jquery-ui-1.7.2.custom.min.js" />
-				<script type="text/javascript" charset="utf-8" src="js/jquery-simple-dom.js" />
-				<script type="text/javascript" charset="utf-8" src="js/main.js" />
+				<link type="text/css" rel="stylesheet" href="/css/ui-lightness/jquery-ui-1.7.2.custom.css" />
+				<link type="text/css" rel="stylesheet" href="/css/main.css" />
+				<script type="text/javascript" charset="utf-8" src="/js/jquery-1.3.2.min.js" />
+				<script type="text/javascript" charset="utf-8" src="/js/jquery-ui-1.7.2.custom.min.js" />
+				<script type="text/javascript" charset="utf-8" src="/js/jquery-simple-dom.js" />
+				<script type="text/javascript" charset="utf-8" src="/js/main.js" />
 			</head>
 			<body>
 				<div id="container">
@@ -39,6 +39,16 @@
 								<ul class="no-indent">
 									<li><a id="create_room_dialog" href="#">部屋を作成</a></li>
 									<li><a id="join_dialog" href="#">部屋に接続</a></li>
+								</ul>
+							</div>
+							<h3 class="ui-accordion-header ui-state-active ui-helper-reset">
+								<span class="ui-icon ui-icon-triangle-1-s" />
+								<a href="#">BBS</a>
+							</h3>
+							<div class="ui-accordion-content ui-helper-reset ui-widget-content ui-accordion-content-active">
+								<ul class="no-indent">
+									<li><a id="create_bbs_dialog" href="#">掲示板を作成</a></li>
+									<li><a href="/bbs" target="_blank">掲示板の一覧を表示</a></li>
 								</ul>
 							</div>
 						</div>
