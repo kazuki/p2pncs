@@ -44,7 +44,7 @@ namespace p2pncs.Evaluation
 		EvalEnvironment _env;
 		List<AnonymousSocketInfo> _anonSockets = new List<AnonymousSocketInfo> ();
 
-		public static ECDomainNames DefaultECDomain = ECDomainNames.secp112r2;
+		public static ECDomainNames DefaultECDomain = DefaultAlgorithm.ECDomainName;
 		static Random _rnd = new Random ();
 		public static TimeSpan DefaultMessagingTimeout = TimeSpan.FromMilliseconds (200);
 		public static int DefaultMessagingRetries = 2;

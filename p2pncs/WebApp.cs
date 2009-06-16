@@ -216,7 +216,7 @@ namespace p2pncs
 					string name = Helpers.GetQueryValue (req, "data").Trim ();
 					if (name.Length == 0)
 						return "部屋名に何か文字を入力してください";
-					ECKeyPair roomPrivateKey = ECKeyPair.Create (Node.DefaultECDomainName);
+					ECKeyPair roomPrivateKey = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 					Key roomPublicKey = Key.Create (roomPrivateKey);
 					_node.AnonymousRouter.SubscribeRecipient (roomPublicKey, roomPrivateKey);
 					ISubscribeInfo info = _node.AnonymousRouter.GetSubscribeInfo (roomPublicKey);

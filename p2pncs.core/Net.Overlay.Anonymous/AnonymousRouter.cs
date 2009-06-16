@@ -478,7 +478,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					ECKeyPair pubKey = ECKeyPair.CreatePublic (domainName, msg.EphemeralPublicKey);
 					ConnectionEstablishPayload payload = ConnectionEstablishPayload.Decrypt (info.SubscribeInfo.PrivateKey, pubKey, msg.Encrypted);
 					SymmetricKey tmpKey = MultipleCipherHelper.ComputeSharedKey (info.SubscribeInfo.PrivateKey,
-						payload.InitiatorId.ToECPublicKey (domainName), payload.SharedInfo, PaddingMode.None, false);
+						payload.InitiatorId.ToECPublicKey (), payload.SharedInfo, PaddingMode.None, false);
 					if (!ConnectionInfo.CheckMAC (tmpKey, msg.Encrypted, msg.MAC)) {
 						Logger.Log (LogLevel.Error, this, "MAC Error");
 						return;
@@ -1265,7 +1265,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public SymmetricKey ComputeSharedKey (byte[] sharedInfo)
 			{
-				return ComputeSharedKey (_connectionPrivate, _destKey.ToECPublicKey (_subscribeInfo.PrivateKey.DomainName), _sharedInfo, sharedInfo);
+				return ComputeSharedKey (_connectionPrivate, _destKey.ToECPublicKey (), _sharedInfo, sharedInfo);
 			}
 
 			static SymmetricKey ComputeSharedKey (ECKeyPair privateKey, ECKeyPair publicKey, byte[] initiatorSharedInfo, byte[] otherSharedInfo)
@@ -1314,7 +1314,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				byte[] publicKey = _connectionPrivate.ExportPublicKey (true);
 				ConnectionEstablishPayload payload = new ConnectionEstablishPayload (_subscribeInfo.Key,
 					(ushort)(_connectionId >> 16), _subscribeInfo.GetRouteEndPoints (), _payload, _type, _sharedInfo);
-				ECKeyPair destPub = _destKey.ToECPublicKey (_connectionPrivate.DomainName);
+				ECKeyPair destPub = _destKey.ToECPublicKey ();
 				byte[] encrypted_payload = payload.Encrypt (_connectionPrivate, destPub);
 				SymmetricKey tmpKey = MultipleCipherHelper.ComputeSharedKey (_subscribeInfo.PrivateKey, destPub, _sharedInfo, PaddingMode.None, false);
 				byte[] mac = ComputeMAC (tmpKey, encrypted_payload);
@@ -1672,7 +1672,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					// Ephemeralキーと中継ノードの公開鍵とで鍵共有
 					ECKeyPair privateKey = ECKeyPair.Create (domain);
 					byte[] pubKey = privateKey.ExportPublicKey (true);
-					relayKeys[i] = ComputeSharedKey (privateKey, relayNodes[i].NodeID.ToECPublicKey (domain), null, PaddingMode.None, false);
+					relayKeys[i] = ComputeSharedKey (privateKey, relayNodes[i].NodeID.ToECPublicKey (), null, PaddingMode.None, false);
 					byte[] cipher = relayKeys[i].Encrypt (payload, 0, payload_size);
 					if (i == 0) {
 						Buffer.BlockCopy (pubKey, 0, payload, 0, pubKey.Length);

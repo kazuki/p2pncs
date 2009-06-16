@@ -28,15 +28,14 @@ namespace p2pncs.tests.Net.Overlay
 		[Test]
 		public void EC_RoundtripTest ()
 		{
-			Array domains = Enum.GetValues (typeof (ECDomainNames));
-			foreach (object domain in domains) {
-				ECDomainNames d = (ECDomainNames)domain;
-				if (d == ECDomainNames.none) continue;
-				if (d == ECDomainNames.secp224r1) continue; // not support point-compression
-
-				ECKeyPair pair1 = ECKeyPair.Create (d);
+			ECDomainNames[] domains = new ECDomainNames[] {
+				ECDomainNames.secp192r1,
+				ECDomainNames.secp256r1
+			};
+			foreach (ECDomainNames domain in domains) {
+				ECKeyPair pair1 = ECKeyPair.Create (domain);
 				Key key1 = Key.Create (pair1);
-				ECKeyPair pair2 = key1.ToECPublicKey (d);
+				ECKeyPair pair2 = key1.ToECPublicKey ();
 				Assert.AreEqual (pair1.PublicKey, pair2.PublicKey);
 			}
 		}

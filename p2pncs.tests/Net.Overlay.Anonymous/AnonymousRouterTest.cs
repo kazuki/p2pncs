@@ -22,6 +22,7 @@ using NUnit.Framework;
 using p2pncs.Net;
 using p2pncs.Net.Overlay;
 using p2pncs.Net.Overlay.Anonymous;
+using p2pncs.Security.Cryptography;
 using openCrypto.EllipticCurve;
 
 namespace p2pncs.tests.Net.Overlay.Anonymous
@@ -33,18 +34,17 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 		public void BidirectionalCommunicationTest ()
 		{
 			using (KBREnvironment env = new KBREnvironment (true, true)) {
-				ECDomainNames domain = ECDomainNames.secp112r2;
 				int nodes = 20;
 				ECKeyPair[] nodePrivateKeys = new ECKeyPair[nodes];
 				Key[] nodeKeys = new Key[nodes];
 				for (int i = 0; i < nodePrivateKeys.Length; i ++) {
-					nodePrivateKeys[i] = ECKeyPair.Create (domain);
+					nodePrivateKeys[i] = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 					nodeKeys[i] = Key.Create (nodePrivateKeys[i]);
 				}
 				env.AddNodes (nodeKeys, nodePrivateKeys);
 
-				ECKeyPair priv1 = ECKeyPair.Create (domain);
-				ECKeyPair priv2 = ECKeyPair.Create (domain);
+				ECKeyPair priv1 = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
+				ECKeyPair priv2 = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 				Key id1 = Key.Create (priv1);
 				Key id2 = Key.Create (priv2);
 				env.AnonymousRouters[0].SubscribeRecipient (id1, priv1);
@@ -132,18 +132,17 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 		public void EstablishFailTest ()
 		{
 			using (KBREnvironment env = new KBREnvironment (true, true)) {
-				ECDomainNames domain = ECDomainNames.secp112r2;
 				int nodes = 20;
 				ECKeyPair[] nodePrivateKeys = new ECKeyPair[nodes];
 				Key[] nodeKeys = new Key[nodes];
 				for (int i = 0; i < nodePrivateKeys.Length; i ++) {
-					nodePrivateKeys[i] = ECKeyPair.Create (domain);
+					nodePrivateKeys[i] = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 					nodeKeys[i] = Key.Create (nodePrivateKeys[i]);
 				}
 				env.AddNodes (nodeKeys, nodePrivateKeys);
 
-				ECKeyPair priv1 = ECKeyPair.Create (domain);
-				ECKeyPair priv2 = ECKeyPair.Create (domain);
+				ECKeyPair priv1 = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
+				ECKeyPair priv2 = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 				Key id1 = Key.Create (priv1);
 				Key id2 = Key.Create (priv2);
 				env.AnonymousRouters[0].SubscribeRecipient (id1, priv1);
@@ -178,18 +177,17 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 		public void ConnectionFailTest ()
 		{
 			using (KBREnvironment env = new KBREnvironment (true, true)) {
-				ECDomainNames domain = ECDomainNames.secp112r2;
 				int nodes = 20;
 				ECKeyPair[] nodePrivateKeys = new ECKeyPair[nodes];
 				Key[] nodeKeys = new Key[nodes];
 				for (int i = 0; i < nodePrivateKeys.Length; i++) {
-					nodePrivateKeys[i] = ECKeyPair.Create (domain);
+					nodePrivateKeys[i] = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 					nodeKeys[i] = Key.Create (nodePrivateKeys[i]);
 				}
 				env.AddNodes (nodeKeys, nodePrivateKeys);
 
-				ECKeyPair priv1 = ECKeyPair.Create (domain);
-				ECKeyPair priv2 = ECKeyPair.Create (domain);
+				ECKeyPair priv1 = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
+				ECKeyPair priv2 = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 				Key id1 = Key.Create (priv1);
 				Key id2 = Key.Create (priv2);
 				env.AnonymousRouters[0].SubscribeRecipient (id1, priv1);

@@ -31,7 +31,6 @@ namespace p2pncs
 		public const int DefaultMessagingRetry = 2;
 		public const int DefaultMessagingRetryBufferSize = 8192;
 		public const int DefaultMessagingDuplicationCheckBufferSize = 1024;
-		public const ECDomainNames DefaultECDomainName = ECDomainNames.secp192r1;
 
 		IDatagramEventSocket _dgramSock;
 		IMessagingSocket _messagingSock;
@@ -49,7 +48,7 @@ namespace p2pncs
 			_messagingSock = new MessagingSocket (_dgramSock, true, SymmetricKey.NoneKey, p2pncs.Serializer.Instance,
 				null, ints.MessagingInt, DefaultMessagingTimeout, DefaultMessagingRetry, DefaultMessagingRetryBufferSize, DefaultMessagingDuplicationCheckBufferSize);
 			TestLogger.SetupUdpMessagingSocket (_messagingSock);
-			_kbrPrivateKey = ECKeyPair.Create (DefaultECDomainName);
+			_kbrPrivateKey = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 			_kbr = new SimpleIterativeRouter2 (Key.Create (_kbrPrivateKey), _messagingSock, new SimpleRoutingAlgorithm (), p2pncs.Serializer.Instance, true);
 			_dht = new SimpleDHT (_kbr, _messagingSock, new OnMemoryLocalHashTable (_kbr, ints.DHTInt));
 			_anonymous = new AnonymousRouter (_dht, _kbrPrivateKey, ints.AnonymousInt);

@@ -86,6 +86,7 @@
     <Compile Include="Net\SimplePublicIPAddressVotingBox.cs" />
     <Compile Include="Net\StreamSocket.cs" />
     <Compile Include="Net\UdpSocket.cs" />
+    <Compile Include="Security.Cryptography\DefaultAlgorithm.cs" />
     <Compile Include="Security.Cryptography\SymmetricAlgorithmType.cs" />
     <Compile Include="Security.Cryptography\SymmetricKey.cs" />
     <Compile Include="Threading\InterruptHandler.cs" />

@@ -22,6 +22,7 @@ using Kazuki.Net.HttpServer;
 using openCrypto.EllipticCurve;
 using p2pncs.Net;
 using p2pncs.Net.Overlay;
+using p2pncs.Security.Cryptography;
 using XmlConfigLibrary;
 
 namespace p2pncs
@@ -72,11 +73,11 @@ namespace p2pncs
 
 			byte[] raw = config.GetValue<byte[]> ("im/private-key");
 			if (raw == null || raw.Length == 0) {
-				imPrivateKey = ECKeyPair.Create (Node.DefaultECDomainName);
+				imPrivateKey = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 				config.SetValue<byte[]> ("im/private-key", imPrivateKey.PrivateKey, false);
 				saveFlag = true;
 			} else {
-				imPrivateKey = ECKeyPair.CreatePrivate (Node.DefaultECDomainName, raw);
+				imPrivateKey = ECKeyPair.CreatePrivate (DefaultAlgorithm.ECDomainName, raw);
 			}
 			imPublicKey = Key.Create (imPrivateKey);
 
