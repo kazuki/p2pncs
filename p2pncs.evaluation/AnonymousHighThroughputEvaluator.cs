@@ -34,17 +34,8 @@ namespace p2pncs.Evaluation
 				env.AddNodes (opt.NumberOfNodes, true);
 				env.StartChurn ();
 
-				ECKeyPair privateKey1 = ECKeyPair.Create (VirtualNode.DefaultECDomain);
-				Key recipientKey1 = Key.Create (privateKey1);
-				ECKeyPair privateKey2 = ECKeyPair.Create (VirtualNode.DefaultECDomain);
-				Key recipientKey2 = Key.Create (privateKey2);
-
-				env.Nodes[0].AnonymousRouter.SubscribeRecipient (recipientKey1, privateKey1);
-				env.Nodes[0].SubscribeKey = recipientKey1.ToString ();
-				ISubscribeInfo subscribeInfo1 = env.Nodes[0].AnonymousRouter.GetSubscribeInfo (recipientKey1);
-				env.Nodes[1].AnonymousRouter.SubscribeRecipient (recipientKey2, privateKey2);
-				env.Nodes[1].SubscribeKey = recipientKey2.ToString ();
-				ISubscribeInfo subscribeInfo2 = env.Nodes[1].AnonymousRouter.GetSubscribeInfo (recipientKey2);
+				ISubscribeInfo subscribeInfo1 = env.Nodes[0].Subscribe ();
+				ISubscribeInfo subscribeInfo2 = env.Nodes[1].Subscribe ();
 
 				while (true) {
 					if (subscribeInfo1.Status == SubscribeRouteStatus.Stable && subscribeInfo2.Status == SubscribeRouteStatus.Stable)
@@ -56,11 +47,11 @@ namespace p2pncs.Evaluation
 				IAnonymousSocket sock1 = null, sock2 = null;
 				StreamSocket strm1 = null, strm2 = null;
 				do {
-					int packets = 10000;
+					int datasize = 1000 * 1000;
 					IntervalInterrupter timeoutChecker = new IntervalInterrupter (TimeSpan.FromMilliseconds (100), "StreamSocket TimeoutChecker");
 					timeoutChecker.Start ();
 					try {
-						IAsyncResult ar = env.Nodes[0].AnonymousRouter.BeginConnect (recipientKey1, recipientKey2, AnonymousConnectionType.HighThroughput, null, null, null);
+						IAsyncResult ar = env.Nodes[0].AnonymousRouter.BeginConnect (subscribeInfo1.Key, subscribeInfo2.Key, AnonymousConnectionType.HighThroughput, null, null, null);
 						sock1 = env.Nodes[0].AnonymousRouter.EndConnect (ar);
 						if (env.Nodes[1].AnonymousSocketInfoList.Count == 0)
 							throw new System.Net.Sockets.SocketException ();
@@ -71,13 +62,11 @@ namespace p2pncs.Evaluation
 						sock1.InitializedEventHandlers ();
 						sock2.InitializedEventHandlers ();
 						Stopwatch sw = Stopwatch.StartNew ();
-						byte[] data = System.Text.Encoding.UTF8.GetBytes ("HELLO WORLD");
-						for (int i = 0; i < packets; i ++) {
-							strm1.Send (data, 0, data.Length);
-						}
+						byte[] data = new byte[datasize];
+						strm1.Send (data, 0, data.Length);
 						strm1.Shutdown ();
 						strm2.Shutdown ();
-						Logger.Log (LogLevel.Info, this, "{0:f1}sec, {1:f2}Mbps", sw.Elapsed.TotalSeconds, 800 * packets * 8 / sw.Elapsed.TotalSeconds / 1000.0 / 1000.0);
+						Logger.Log (LogLevel.Info, this, "{0:f1}sec, {1:f2}Mbps", sw.Elapsed.TotalSeconds, datasize * 8 / sw.Elapsed.TotalSeconds / 1000.0 / 1000.0);
 					} catch {
 					} finally {
 						timeoutChecker.Dispose ();

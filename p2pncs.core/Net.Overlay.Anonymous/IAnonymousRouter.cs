@@ -24,10 +24,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 {
 	public interface IAnonymousRouter
 	{
-		event AcceptingEventHandler Accepting;
-		event AcceptedEventHandler Accepted;
-
-		void SubscribeRecipient (Key recipientId, ECKeyPair privateKey);
+		ISubscribeInfo SubscribeRecipient (Key recipientId, ECKeyPair privateKey);
 		void UnsubscribeRecipient (Key recipientId);
 
 		IAsyncResult BeginConnect (Key recipientId, Key destinationId, AnonymousConnectionType type, object payload, AsyncCallback callback, object state);

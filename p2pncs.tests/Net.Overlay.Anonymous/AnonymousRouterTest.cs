@@ -47,10 +47,8 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 				ECKeyPair priv2 = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 				Key id1 = Key.Create (priv1);
 				Key id2 = Key.Create (priv2);
-				env.AnonymousRouters[0].SubscribeRecipient (id1, priv1);
-				env.AnonymousRouters[1].SubscribeRecipient (id2, priv2);
-				ISubscribeInfo subscribeInfo1 = env.AnonymousRouters[0].GetSubscribeInfo (id1);
-				ISubscribeInfo subscribeInfo2 = env.AnonymousRouters[1].GetSubscribeInfo (id2);
+				ISubscribeInfo subscribeInfo1 = env.AnonymousRouters[0].SubscribeRecipient (id1, priv1);
+				ISubscribeInfo subscribeInfo2 = env.AnonymousRouters[1].SubscribeRecipient (id2, priv2);
 				while (true) {
 					if (subscribeInfo1.Status != SubscribeRouteStatus.Establishing && subscribeInfo2.Status != SubscribeRouteStatus.Establishing)
 						break;
@@ -65,13 +63,13 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 				AutoResetEvent received2_done = new AutoResetEvent (false);
 				AutoResetEvent accepted_done = new AutoResetEvent (false);
 				IAnonymousSocket sock2 = null;
-				env.AnonymousRouters[1].Accepting += delegate (object sender, AcceptingEventArgs args) {
+				subscribeInfo2.Accepting += delegate (object sender, AcceptingEventArgs args) {
 					string msg = args.Payload as string;
 					Assert.IsNotNull (msg);
 					Assert.AreEqual ("HELLO", msg);
 					args.Accept ("HELLO2", null);
 				};
-				env.AnonymousRouters[1].Accepted += delegate (object sender, AcceptedEventArgs args) {
+				subscribeInfo2.Accepted += delegate (object sender, AcceptedEventArgs args) {
 					lock (received2_lock) {
 						Assert.IsNull (sock2, "2.accepted.#1");
 						sock2 = args.Socket;
@@ -145,10 +143,8 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 				ECKeyPair priv2 = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 				Key id1 = Key.Create (priv1);
 				Key id2 = Key.Create (priv2);
-				env.AnonymousRouters[0].SubscribeRecipient (id1, priv1);
-				env.AnonymousRouters[1].SubscribeRecipient (id2, priv2);
-				ISubscribeInfo subscribeInfo1 = env.AnonymousRouters[0].GetSubscribeInfo (id1);
-				ISubscribeInfo subscribeInfo2 = env.AnonymousRouters[1].GetSubscribeInfo (id2);
+				ISubscribeInfo subscribeInfo1 = env.AnonymousRouters[0].SubscribeRecipient (id1, priv1);
+				ISubscribeInfo subscribeInfo2 = env.AnonymousRouters[1].SubscribeRecipient (id2, priv2);
 				while (true) {
 					if (subscribeInfo1.Status != SubscribeRouteStatus.Establishing && subscribeInfo2.Status != SubscribeRouteStatus.Establishing)
 						break;
@@ -157,10 +153,10 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 
 				AutoResetEvent accepted_done = new AutoResetEvent (false);
 				IAnonymousSocket sock2 = null;
-				env.AnonymousRouters[1].Accepting += delegate (object sender, AcceptingEventArgs args) {
+				subscribeInfo2.Accepting += delegate (object sender, AcceptingEventArgs args) {
 					args.Reject ();
 				};
-				env.AnonymousRouters[1].Accepted += delegate (object sender, AcceptedEventArgs args) {
+				subscribeInfo2.Accepted += delegate (object sender, AcceptedEventArgs args) {
 					accepted_done.Set ();
 					sock2 = args.Socket;
 				};
@@ -190,10 +186,8 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 				ECKeyPair priv2 = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 				Key id1 = Key.Create (priv1);
 				Key id2 = Key.Create (priv2);
-				env.AnonymousRouters[0].SubscribeRecipient (id1, priv1);
-				env.AnonymousRouters[1].SubscribeRecipient (id2, priv2);
-				ISubscribeInfo subscribeInfo1 = env.AnonymousRouters[0].GetSubscribeInfo (id1);
-				ISubscribeInfo subscribeInfo2 = env.AnonymousRouters[1].GetSubscribeInfo (id2);
+				ISubscribeInfo subscribeInfo1 = env.AnonymousRouters[0].SubscribeRecipient (id1, priv1);
+				ISubscribeInfo subscribeInfo2 = env.AnonymousRouters[1].SubscribeRecipient (id2, priv2);
 				while (true) {
 					if (subscribeInfo1.Status != SubscribeRouteStatus.Establishing && subscribeInfo2.Status != SubscribeRouteStatus.Establishing)
 						break;
@@ -202,10 +196,10 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 
 				AutoResetEvent accepted_done = new AutoResetEvent (false);
 				IAnonymousSocket sock2 = null;
-				env.AnonymousRouters[1].Accepting += delegate (object sender, AcceptingEventArgs args) {
+				subscribeInfo1.Accepting += delegate (object sender, AcceptingEventArgs args) {
 					args.Accept (null, null);
 				};
-				env.AnonymousRouters[1].Accepted += delegate (object sender, AcceptedEventArgs args) {
+				subscribeInfo2.Accepted += delegate (object sender, AcceptedEventArgs args) {
 					accepted_done.Set ();
 					sock2 = args.Socket;
 				};

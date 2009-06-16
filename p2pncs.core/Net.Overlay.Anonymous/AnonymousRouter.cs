@@ -132,19 +132,16 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 		#region IAnonymousRouter Members
 
-		public event AcceptingEventHandler Accepting;
-
-		public event AcceptedEventHandler Accepted;
-
-		public void SubscribeRecipient (Key recipientId, ECKeyPair privateKey)
+		public ISubscribeInfo SubscribeRecipient (Key recipientId, ECKeyPair privateKey)
 		{
 			SubscribeInfo info = new SubscribeInfo (this, recipientId, privateKey, DefaultSubscribeRoutes, DefaultRelayNodes, DefaultSubscribeRouteFactor);
 			using (_subscribeMapLock.EnterWriteLock ()) {
 				if (_subscribeMap.ContainsKey (recipientId))
-					return;
+					return _subscribeMap[recipientId];
 				_subscribeMap.Add (recipientId, info);
 			}
 			info.Start ();
+			return info;
 		}
 
 		public void UnsubscribeRecipient (Key recipientId)
@@ -483,13 +480,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 						return;
 					}
 
-					AcceptingEventArgs args = new AcceptingEventArgs (info.SubscribeInfo.Key, payload.InitiatorId, payload.ConnectionType, payload.Payload);
-					if (Accepting != null) {
-						try {
-							Accepting (this, args);
-						} catch {}
-					}
-					if (!args.Accepted || Accepted == null)
+					SubscribeInfo subscribeInfo = info.SubscribeInfo;
+					AcceptingEventArgs args = new AcceptingEventArgs (subscribeInfo.Key, payload.InitiatorId, payload.ConnectionType, payload.Payload);
+					if (!subscribeInfo.InvokeAccepting (args))
 						return; // Reject
 
 					ConnectionInfo cinfo;
@@ -498,14 +491,12 @@ namespace p2pncs.Net.Overlay.Anonymous
 					using (_connectionMapLock.EnterWriteLock ()) {
 						while (_connectionMap.ContainsKey (id))
 							id ++;
-						cinfo = new ConnectionInfo (this, info.SubscribeInfo, id, sharedInfo, payload.ConnectionType, pubKey, payload);
+						cinfo = new ConnectionInfo (this, subscribeInfo, id, sharedInfo, payload.ConnectionType, pubKey, payload);
 						_connectionMap.Add (id, cinfo);
 					}
 					cinfo.Start (sharedInfo, args.Response);
 
-					try {
-						Accepted (this, new AcceptedEventArgs (cinfo.Socket, args));
-					} catch {}
+					subscribeInfo.InvokeAccepted (new AcceptedEventArgs (cinfo.Socket, args));
 					return;
 				}
 			}
@@ -807,6 +798,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 			HashSet<StartPointInfo> _establishedList = new HashSet<StartPointInfo> ();
 			HashSet<StartPointInfo> _establishingList = new HashSet<StartPointInfo> ();
 
+			public event AcceptingEventHandler Accepting;
+			public event AcceptedEventHandler Accepted;
+
 			public SubscribeInfo (AnonymousRouter router, Key key, ECKeyPair privateKey, int numOfRoutes, int numOfRelays, float factor)
 			{
 				_router = router;
@@ -895,6 +889,24 @@ namespace p2pncs.Net.Overlay.Anonymous
 				array = array.RandomSelection (routes);
 				for (int i = 0; i < array.Length; i ++)
 					array[i].SendMessage (_router.KeyBasedRouter.MessagingSocket, msg, useInquiry);
+			}
+
+			public bool InvokeAccepting (AcceptingEventArgs args)
+			{
+				if (Accepting == null || Accepted == null)
+					return false;
+
+				try {
+					Accepting (this, args);
+				} catch {}
+				return args.Accepted;
+			}
+
+			public void InvokeAccepted (AcceptedEventArgs args)
+			{
+				try {
+					Accepted (this, args);
+				} catch {}
 			}
 
 			public AnonymousEndPoint[] GetRouteEndPoints ()

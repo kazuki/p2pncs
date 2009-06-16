@@ -85,8 +85,17 @@ namespace p2pncs.Evaluation
 			_kbrStabilizeInt = kbrStabilizeInt;
 			_kbrStabilizeInt.AddInterruption (_kbr.RoutingAlgorithm.Stabilize);
 			_env = env;
-			_anonRouter.Accepting += AnonymousRouter_Accepting;
-			_anonRouter.Accepted += AnonymousRouter_Accepted;
+		}
+
+		public ISubscribeInfo Subscribe ()
+		{
+			ECKeyPair pair = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
+			Key key = Key.Create (pair);
+			ISubscribeInfo info = _anonRouter.SubscribeRecipient (key, pair);
+			info.Accepting += AnonymousRouter_Accepting;
+			info.Accepted += AnonymousRouter_Accepted;
+			SubscribeKey = info.Key.ToString ();
+			return info;
 		}
 
 		void AnonymousRouter_Accepting (object sender, AcceptingEventArgs args)

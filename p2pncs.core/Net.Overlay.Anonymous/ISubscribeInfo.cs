@@ -21,6 +21,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 {
 	public interface ISubscribeInfo
 	{
+		event AcceptingEventHandler Accepting;
+		event AcceptedEventHandler Accepted;
+
 		Key Key { get; }
 		ECKeyPair PrivateKey { get; }
 		SubscribeRouteStatus Status { get; }

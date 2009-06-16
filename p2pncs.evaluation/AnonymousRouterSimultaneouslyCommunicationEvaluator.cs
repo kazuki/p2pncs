@@ -67,9 +67,6 @@ namespace p2pncs.Evaluation
 
 					Info info = new Info (env.Nodes[i]);
 					aliveRecipients.Add (info.PublicKey);
-					env.Nodes[i].AnonymousRouter.SubscribeRecipient (info.PublicKey, info.PrivateKey);
-					env.Nodes[i].SubscribeKey = info.PublicKey.ToString ();
-					info.SubscribeInfo = env.Nodes[i].AnonymousRouter.GetSubscribeInfo (info.PublicKey);
 					mapping.Add (env.Nodes[i], info);
 					subscribedList.Add (info);
 					ThreadPool.QueueUserWorkItem (SubscribeWait_Thread, info);
@@ -231,9 +228,10 @@ namespace p2pncs.Evaluation
 		{
 			public Info (VirtualNode node)
 			{
-				PrivateKey = ECKeyPair.Create (VirtualNode.DefaultECDomain);
-				PublicKey = Key.Create (PrivateKey);
 				Node = node;
+				SubscribeInfo = node.Subscribe ();
+				PrivateKey = SubscribeInfo.PrivateKey;
+				PublicKey = SubscribeInfo.Key;
 			}
 
 			public ECKeyPair PrivateKey { get; set; }

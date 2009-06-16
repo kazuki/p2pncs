@@ -34,18 +34,10 @@ namespace p2pncs.Evaluation
 			using (EvalEnvironment env = new EvalEnvironment (opt)) {
 				env.AddNodes (opt.NumberOfNodes, true);
 
-				ECKeyPair privateKey1 = ECKeyPair.Create (VirtualNode.DefaultECDomain);
-				Key recipientKey1 = Key.Create (privateKey1);
-				ECKeyPair privateKey2 = ECKeyPair.Create (VirtualNode.DefaultECDomain);
-				Key recipientKey2 = Key.Create (privateKey2);
-				string strKey1 = recipientKey1.ToString (), strKey2 = recipientKey2.ToString ();
-
-				env.Nodes[0].AnonymousRouter.SubscribeRecipient (recipientKey1, privateKey1);
-				env.Nodes[0].SubscribeKey = recipientKey1.ToString ();
-				ISubscribeInfo subscribeInfo1 = env.Nodes[0].AnonymousRouter.GetSubscribeInfo (recipientKey1);
-				env.Nodes[1].AnonymousRouter.SubscribeRecipient (recipientKey2, privateKey2);
-				env.Nodes[1].SubscribeKey = recipientKey2.ToString ();
-				ISubscribeInfo subscribeInfo2 = env.Nodes[1].AnonymousRouter.GetSubscribeInfo (recipientKey2);
+				ISubscribeInfo subscribeInfo1 = env.Nodes[0].Subscribe ();
+				ISubscribeInfo subscribeInfo2 = env.Nodes[1].Subscribe ();
+				string strKey1 = subscribeInfo1.Key.ToString ();
+				string strKey2 = subscribeInfo2.Key.ToString ();
 
 				IMessagingSocket msock1 = null, msock2 = null;
 
@@ -59,7 +51,7 @@ namespace p2pncs.Evaluation
 				bool routeEstablished = false;
 				do {
 					try {
-						IAnonymousSocket sock1 = env.Nodes[0].AnonymousRouter.EndConnect (env.Nodes[0].AnonymousRouter.BeginConnect (recipientKey1, recipientKey2, AnonymousConnectionType.LowLatency, null, null, null));
+						IAnonymousSocket sock1 = env.Nodes[0].AnonymousRouter.EndConnect (env.Nodes[0].AnonymousRouter.BeginConnect (subscribeInfo1.Key, subscribeInfo2.Key, AnonymousConnectionType.LowLatency, null, null, null));
 						if (env.Nodes[1].AnonymousSocketInfoList.Count == 0)
 							throw new System.Net.Sockets.SocketException ();
 

@@ -64,35 +64,16 @@ namespace p2pncs
 			_imPubKey = imPubKey;
 			_name = name;
 			_ints = ints;
-			node.AnonymousRouter.SubscribeRecipient (imPubKey, imPrivateKey);
-			_imSubscribe = node.AnonymousRouter.GetSubscribeInfo (imPubKey);
+			_imSubscribe = node.AnonymousRouter.SubscribeRecipient (imPubKey, imPrivateKey);
 			ints.WebAppInt.AddInterruption (CheckUpdate);
-			node.AnonymousRouter.Accepting += delegate (object sender, AcceptingEventArgs e) {
-				ChatRoomInfo selected = null;
-				lock (_rooms) {
-					foreach (ChatRoomInfo room in _rooms.Values) {
-						if (room.IsOwner && room.RoomKey.Equals (e.RecipientId)) {
-							selected = room;
-							break;
-						}
-					}
-				}
-				if (selected != null) {
-					e.Accept (selected.RoomName, selected);
+			_imSubscribe.Accepting += delegate (object sender, AcceptingEventArgs e) {
+				if (e.Payload is string && ((string)e.Payload) == "ThroughputTest") {
+					e.Accept (null, null);
 				} else {
-					if (e.Payload is string && ((string)e.Payload) == "ThroughputTest") {
-						e.Accept (null, null);
-					} else {
-						e.Reject ();
-					}
+					e.Reject ();
 				}
 			};
-			node.AnonymousRouter.Accepted += delegate (object sender, AcceptedEventArgs e) {
-				ChatRoomInfo selected = e.State as ChatRoomInfo;
-				if (selected != null) {
-					selected.AcceptedClient (e.Socket, e.DestinationId, e.Payload);
-					return;
-				}
+			_imSubscribe.Accepted += delegate (object sender, AcceptedEventArgs e) {
 				StreamSocket sock = new StreamSocket (e.Socket, AnonymousRouter.DummyEndPoint, MaxStreamSocketSegmentSize, _ints.StreamSocketTimeoutInt);
 				e.Socket.InitializedEventHandlers ();
 				ThreadPool.QueueUserWorkItem (ThroughputTest_ReceiverSide, sock);
@@ -218,8 +199,7 @@ namespace p2pncs
 						return "部屋名に何か文字を入力してください";
 					ECKeyPair roomPrivateKey = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 					Key roomPublicKey = Key.Create (roomPrivateKey);
-					_node.AnonymousRouter.SubscribeRecipient (roomPublicKey, roomPrivateKey);
-					ISubscribeInfo info = _node.AnonymousRouter.GetSubscribeInfo (roomPublicKey);
+					ISubscribeInfo info = _node.AnonymousRouter.SubscribeRecipient (roomPublicKey, roomPrivateKey);
 					int roomId = Interlocked.Increment (ref _roomId);
 					ChatRoomInfo ownerInfo = new ChatRoomInfo (this, roomId, name, roomPublicKey, info, null);
 					lock (_rooms) {
@@ -502,6 +482,12 @@ namespace p2pncs
 				if (IsOwner) {
 					_clients = new List<IMessagingSocket> ();
 					_clientNames = new List<string> ();
+					subscribeInfo.Accepting += delegate (object sender, AcceptingEventArgs args) {
+						args.Accept (roomName, null);
+					};
+					subscribeInfo.Accepted += delegate (object sender, AcceptedEventArgs args) {
+						AcceptedClient (args.Socket, args.DestinationId, args.Payload);
+					};
 				} else {
 					_sock = sock;
 					sock.AddInquiredHandler (typeof (ChatMessage), Messaging_Inquired);
@@ -707,7 +693,7 @@ namespace p2pncs
 			}
 		}
 
-		[SerializableTypeId (0x400)]
+		[SerializableTypeId (0x1000)]
 		class ChatMessage
 		{
 			[SerializableFieldId (0)]
@@ -731,13 +717,13 @@ namespace p2pncs
 			}
 		}
 
-		[SerializableTypeId (0x401)]
+		[SerializableTypeId (0x1001)]
 		class ACK
 		{
 			public static ACK Instance = new ACK ();
 		}
 
-		[SerializableTypeId (0x402)]
+		[SerializableTypeId (0x1002)]
 		class LeaveMessage
 		{
 			public static LeaveMessage Instance = new LeaveMessage ();
