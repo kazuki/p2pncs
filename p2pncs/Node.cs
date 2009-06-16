@@ -20,6 +20,7 @@ using openCrypto.EllipticCurve;
 using p2pncs.Net;
 using p2pncs.Net.Overlay;
 using p2pncs.Net.Overlay.Anonymous;
+using p2pncs.Net.Overlay.DFS.MMLC;
 using p2pncs.Net.Overlay.DHT;
 using p2pncs.Security.Cryptography;
 
@@ -38,6 +39,8 @@ namespace p2pncs
 		IDistributedHashTable _dht;
 		IAnonymousRouter _anonymous;
 		Interrupters _ints;
+		MassKeyDeliverer _mkd;
+		MMLC _mmlc;
 
 		ECKeyPair _kbrPrivateKey;
 
@@ -50,11 +53,14 @@ namespace p2pncs
 			TestLogger.SetupUdpMessagingSocket (_messagingSock);
 			_kbrPrivateKey = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 			_kbr = new SimpleIterativeRouter2 (Key.Create (_kbrPrivateKey), _messagingSock, new SimpleRoutingAlgorithm (), p2pncs.Serializer.Instance, true);
-			_dht = new SimpleDHT (_kbr, _messagingSock, new OnMemoryLocalHashTable (_kbr, ints.DHTInt));
+			OnMemoryLocalHashTable localDHT = new OnMemoryLocalHashTable (_kbr, ints.DHTInt);
+			_dht = new SimpleDHT (_kbr, _messagingSock, localDHT);
 			_anonymous = new AnonymousRouter (_dht, _kbrPrivateKey, ints.AnonymousInt);
 			ints.KBRStabilizeInt.AddInterruption (delegate () {
 				_kbr.RoutingAlgorithm.Stabilize ();
 			});
+			_mkd = new MassKeyDeliverer (_kbr, localDHT, ints.MassKeyDeliverTimerInt);
+			_mmlc = new MMLC (_anonymous, _dht, localDHT, ints.StreamSocketTimeoutInt, ints.DFSRePutTimerInt);
 		}
 
 		public IDatagramEventSocket DatagramEventSocket {
@@ -77,8 +83,13 @@ namespace p2pncs
 			get { return _anonymous; }
 		}
 
+		public MMLC MMLC {
+			get { return _mmlc; }
+		}
+
 		public void Dispose ()
 		{
+			_mmlc.Dispose ();
 			_anonymous.Close ();
 			_dht.Dispose ();
 			_kbr.Close ();

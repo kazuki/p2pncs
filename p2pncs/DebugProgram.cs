@@ -23,6 +23,7 @@ using Kazuki.Net.HttpServer;
 using openCrypto.EllipticCurve;
 using p2pncs.Net;
 using p2pncs.Net.Overlay;
+using p2pncs.Net.Overlay.DFS.MMLC;
 using p2pncs.Security.Cryptography;
 using p2pncs.Simulation;
 using p2pncs.Simulation.VirtualNet;
@@ -66,6 +67,7 @@ namespace p2pncs
 				AddNode (base_port);
 				if (i == 10) base_port = -1;
 			}
+			Console.WriteLine ("{0} Nodes Inserted", NODES);
 
 			_churnInt.AddInterruption (delegate () {
 				lock (_list) {
@@ -146,6 +148,13 @@ namespace p2pncs
 				_app = new WebApp (_node, _imPublicKey, _imPrivateKey, _name, ints);
 				if (base_port >= 0)
 					_server = HttpServer.CreateEmbedHttpServer (_app, null, true, true, false, base_port + _idx, 16);
+				if (_idx == 0) {
+					ECKeyPair bbsPrivate = ECKeyPair.CreatePrivate (DefaultAlgorithm.ECDomainName, Convert.FromBase64String ("u8capbI/9NXcJJJkGtdt8LtpBWDeMhcQ0sGNvNO9nmA="));
+					Key bbsPublic = Key.Create (bbsPrivate);
+					MergeableFileHeader header = new MergeableFileHeader (bbsPrivate, DateTime.Now, new SimpleBBSHeader ("てすとびーびーえす"));
+					_node.MMLC.CreateNew (header);
+					_node.MMLC.AppendRecord (header.Key, new MergeableFileRecord (new SimpleBBSRecord ("名無し", "ほげ", DateTime.Now)));
+				}
 			}
 
 			public void WaitOne ()

@@ -53,6 +53,9 @@
     <Compile Include="Net.Overlay.Anonymous\IAnonymousSocket.cs" />
     <Compile Include="Net.Overlay.Anonymous\ISubscribeInfo.cs" />
     <Compile Include="Net.Overlay.Anonymous\SubscribeRouteStatus.cs" />
+    <Compile Include="Net.Overlay.DFS.MMLC\MergeableFileHeader.cs" />
+    <Compile Include="Net.Overlay.DFS.MMLC\MergeableFileRecord.cs" />
+    <Compile Include="Net.Overlay.DFS.MMLC\MMLC.cs" />
     <Compile Include="Net.Overlay.DHT\DHTEntry.cs" />
     <Compile Include="Net.Overlay.DHT\GetResult.cs" />
     <Compile Include="Net.Overlay.DHT\IDistributedHashTable.cs" />
@@ -89,6 +92,7 @@
     <Compile Include="Net\UdpSocket.cs" />
     <Compile Include="Security.Cryptography\DefaultAlgorithm.cs" />
     <Compile Include="Security.Cryptography\ECKeyPairExtensions.cs" />
+    <Compile Include="Security.Cryptography\IHashComputable.cs" />
     <Compile Include="Security.Cryptography\SymmetricAlgorithmType.cs" />
     <Compile Include="Security.Cryptography\SymmetricKey.cs" />
     <Compile Include="Threading\InterruptHandler.cs" />

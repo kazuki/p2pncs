@@ -27,6 +27,7 @@ using openCrypto.EllipticCurve;
 using p2pncs.Net;
 using p2pncs.Net.Overlay;
 using p2pncs.Net.Overlay.Anonymous;
+using p2pncs.Net.Overlay.DFS.MMLC;
 using p2pncs.Security.Cryptography;
 using p2pncs.Utility;
 
@@ -109,6 +110,10 @@ namespace p2pncs
 				if (req.HttpMethod == HttpMethod.POST)
 					return ProcessAPI_POST (server, req, res);
 				return ProcessAPI_GET (server, req, res);
+			} else if (req.Url.AbsolutePath == "/bbs" || req.Url.AbsolutePath == "/bbs/") {
+				return ProcessBBSList (server, req, res);
+			} else if (req.Url.AbsolutePath.StartsWith ("/bbs/")) {
+				return ProcessBBS (server, req, res);
 			}
 
 			return ProcessStaticFile (server, req, res);
@@ -132,6 +137,81 @@ namespace p2pncs
 			node.AppendChild (doc.CreateTextNode (Convert.ToBase64String (_imPubKey.GetByteArray())));
 			rootNode.AppendChild (node);
 			return _xslCache.Process (req, res, doc, Path.Combine (DefaultTemplatePath, "main.xsl"));
+		}
+
+		object ProcessBBSList (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
+		{
+			XmlDocument doc = CreateEmptyDocument ();
+			XmlElement rootNode = doc.DocumentElement;
+			MergeableFileHeader[] headers = _node.MMLC.GetHeaderList ();
+			foreach (MergeableFileHeader header in headers) {
+				SimpleBBSHeader simpleBBS = header.Content as SimpleBBSHeader;
+				XmlElement e1 = doc.CreateElement ("bbs");
+				e1.SetAttribute ("key", header.Key.ToString ());
+				e1.SetAttribute ("recordset", header.RecordsetHash.ToString ());
+				XmlElement title = doc.CreateElement ("title");
+				title.AppendChild (doc.CreateTextNode (simpleBBS.Title));
+				e1.AppendChild (title);
+				rootNode.AppendChild (e1);
+			}			
+			return _xslCache.Process (req, res, doc, Path.Combine (DefaultTemplatePath, "bbs_list.xsl"));
+		}
+
+		object ProcessBBS (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
+		{
+			string str_key = req.Url.AbsolutePath.Substring (5);
+			Key key;
+			try {
+				key = Key.Parse (str_key);
+			} catch {
+				throw new HttpException (HttpStatusCode.NotFound);
+			}
+
+			MergeableFileHeader header;
+			List<MergeableFileRecord> records = _node.MMLC.GetRecords (key, out header);
+			if (records == null) {
+				_node.MMLC.StartMerge (key);
+				return "現在ダウンロード中♪";
+			}
+			_node.MMLC.StartMerge (key);
+
+			if (req.HttpMethod == HttpMethod.POST) {
+				// posting...
+				string name = Helpers.GetQueryValue (req, "name").Trim ();
+				string body = Helpers.GetQueryValue (req, "body").Trim ();
+				if (body.Length > 0) {
+					MergeableFileRecord record = new MergeableFileRecord (new SimpleBBSRecord (name, body, DateTime.Now));
+					_node.MMLC.AppendRecord (key, record);
+				}
+				return "OK";
+			}
+
+			XmlDocument doc = CreateEmptyDocument ();
+			XmlElement rootNode = doc.DocumentElement;
+			SimpleBBSHeader simpleBBS = header.Content as SimpleBBSHeader;
+			XmlElement e1 = doc.CreateElement ("bbs");
+			e1.SetAttribute ("key", header.Key.ToString ());
+			e1.SetAttribute ("recordset", header.RecordsetHash.ToString ());
+			XmlElement title = doc.CreateElement ("title");
+			title.AppendChild (doc.CreateTextNode (simpleBBS.Title));
+			e1.AppendChild (title);
+			for (int i = 0; i < records.Count; i ++) {
+				XmlElement e2 = doc.CreateElement ("record");
+				e2.SetAttribute ("hash", records[i].Hash.ToString ());
+				SimpleBBSRecord record = records[i].Content as SimpleBBSRecord;
+				XmlElement e3 = doc.CreateElement ("name");
+				e3.AppendChild (doc.CreateTextNode (record.Name));
+				e2.AppendChild (e3);
+				e3 = doc.CreateElement ("body");
+				e3.AppendChild (doc.CreateTextNode (record.Body));
+				e2.AppendChild (e3);
+				e3 = doc.CreateElement ("posted");
+				e3.AppendChild (doc.CreateTextNode (record.PostedTime.ToString ("yyyy/MM/dd HH:mm:ss")));
+				e2.AppendChild (e3);
+				e1.AppendChild (e2);
+			}
+			rootNode.AppendChild (e1);
+			return _xslCache.Process (req, res, doc, Path.Combine (DefaultTemplatePath, "bbs.xsl"));
 		}
 
 		object ProcessAPI_GET (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
@@ -266,6 +346,13 @@ namespace p2pncs
 						return "認識できない宛先です";
 					}
 					ThreadPool.QueueUserWorkItem (ThroughputTest, destKey);
+					return OK;
+				}
+				case "create_bbs": {
+					string title = Helpers.GetQueryValue (req, "title").Trim ();
+					if (title.Length == 0)
+						return "タイトルに何か文字を入力してください";
+					_node.MMLC.CreateNew (new SimpleBBSHeader (title));
 					return OK;
 				}
 				default:

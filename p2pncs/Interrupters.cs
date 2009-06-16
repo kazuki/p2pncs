@@ -22,7 +22,7 @@ namespace p2pncs
 {
 	class Interrupters : IDisposable
 	{
-		IntervalInterrupter _msgInt, _dhtInt, _kbrInt, _anonInt, _updateCheckInt, _messagingInt, _streamTimeoutInt;
+		IntervalInterrupter _msgInt, _dhtInt, _kbrInt, _anonInt, _updateCheckInt, _messagingInt, _streamTimeoutInt, _mkdTimer, _dfsRePutTimer;
 
 		public Interrupters ()
 		{
@@ -33,6 +33,8 @@ namespace p2pncs
 			_updateCheckInt = new IntervalInterrupter (TimeSpan.FromMilliseconds (500), "WebApp UpdateChecker");
 			_messagingInt = new IntervalInterrupter (TimeSpan.FromMilliseconds (100), "AnonymousMessagingSocket RetryTimer");
 			_streamTimeoutInt = new IntervalInterrupter (TimeSpan.FromMilliseconds (100), "StreamSocket TimeoutTimer");
+			_mkdTimer = new IntervalInterrupter (TimeSpan.FromSeconds (5), "MassKeyDeliver Timer");
+			_dfsRePutTimer = new IntervalInterrupter (TimeSpan.FromSeconds (1), "DFS RePut Timer");
 
 			_msgInt.Start ();
 			_dhtInt.Start ();
@@ -41,6 +43,8 @@ namespace p2pncs
 			_updateCheckInt.Start ();
 			_messagingInt.Start ();
 			_streamTimeoutInt.Start ();
+			_mkdTimer.Start ();
+			_dfsRePutTimer.Start ();
 		}
 
 		public IntervalInterrupter MessagingInt {
@@ -71,6 +75,14 @@ namespace p2pncs
 			get { return _streamTimeoutInt; }
 		}
 
+		public IntervalInterrupter MassKeyDeliverTimerInt {
+			get { return _mkdTimer; }
+		}
+
+		public IntervalInterrupter DFSRePutTimerInt {
+			get { return _dfsRePutTimer; }
+		}
+
 		public void Dispose ()
 		{
 			_msgInt.Dispose ();
@@ -80,6 +92,8 @@ namespace p2pncs
 			_updateCheckInt.Dispose ();
 			_messagingInt.Dispose ();
 			_streamTimeoutInt.Dispose ();
+			_mkdTimer.Dispose ();
+			_dfsRePutTimer.Dispose ();
 		}
 	}
 }
