@@ -474,8 +474,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			{
 				ConnectionEstablishMessage msg = msg_obj as ConnectionEstablishMessage;
 				if (msg != null) {
-					ECDomainNames domainName = info.SubscribeInfo.PrivateKey.DomainName;
-					ECKeyPair pubKey = ECKeyPair.CreatePublic (domainName, msg.EphemeralPublicKey);
+					ECKeyPair pubKey = ECKeyPairExtensions.CreatePublic (msg.EphemeralPublicKey);
 					ConnectionEstablishPayload payload = ConnectionEstablishPayload.Decrypt (info.SubscribeInfo.PrivateKey, pubKey, msg.Encrypted);
 					SymmetricKey tmpKey = MultipleCipherHelper.ComputeSharedKey (info.SubscribeInfo.PrivateKey,
 						payload.InitiatorId.ToECPublicKey (), payload.SharedInfo, PaddingMode.None, false);
@@ -1691,7 +1690,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public static EstablishRoutePayload DecryptEstablishPayload (byte[] payload, ECKeyPair privateNodeKey, int pubKeyLen)
 			{
-				ECKeyPair ephemeralKey = ECKeyPair.CreatePublic (privateNodeKey.DomainName, Copy (payload, 0, pubKeyLen));
+				ECKeyPair ephemeralKey = ECKeyPairExtensions.CreatePublic (Copy (payload, 0, pubKeyLen));
 				SymmetricKey sk = ComputeSharedKey (privateNodeKey, ephemeralKey, null, PaddingMode.None, false);
 				
 				int len = payload.Length - pubKeyLen;

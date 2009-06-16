@@ -72,12 +72,19 @@ namespace p2pncs
 			}
 
 			byte[] raw = config.GetValue<byte[]> ("im/private-key");
-			if (raw == null || raw.Length == 0) {
-				imPrivateKey = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
-				config.SetValue<byte[]> ("im/private-key", imPrivateKey.PrivateKey, false);
-				saveFlag = true;
-			} else {
-				imPrivateKey = ECKeyPair.CreatePrivate (DefaultAlgorithm.ECDomainName, raw);
+			while (true) {
+				if (raw == null || raw.Length == 0) {
+					imPrivateKey = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
+					config.SetValue<byte[]> ("im/private-key", imPrivateKey.PrivateKey, false);
+					saveFlag = true;
+				} else {
+					imPrivateKey = ECKeyPairExtensions.CreatePrivate (raw);
+					if (imPrivateKey.DomainName != DefaultAlgorithm.ECDomainName) {
+						raw = null;
+						continue;
+					}
+				}
+				break;
 			}
 			imPublicKey = Key.Create (imPrivateKey);
 

@@ -19,6 +19,7 @@ using System;
 using p2pncs.Net.Overlay;
 using NUnit.Framework;
 using openCrypto.EllipticCurve;
+using p2pncs.Security.Cryptography;
 
 namespace p2pncs.tests.Net.Overlay
 {
@@ -36,6 +37,13 @@ namespace p2pncs.tests.Net.Overlay
 				ECKeyPair pair1 = ECKeyPair.Create (domain);
 				Key key1 = Key.Create (pair1);
 				ECKeyPair pair2 = key1.ToECPublicKey ();
+				Assert.AreEqual (pair1.DomainName, pair2.DomainName);
+				Assert.AreEqual (pair1.PublicKey, pair2.PublicKey);
+				pair2 = ECKeyPairExtensions.CreatePrivate (pair1.PrivateKey);
+				Assert.AreEqual (pair1.DomainName, pair2.DomainName);
+				Assert.AreEqual (pair1.PrivateKey, pair2.PrivateKey);
+				pair2 = ECKeyPairExtensions.CreatePublic (pair1.ExportPublicKey (true));
+				Assert.AreEqual (pair1.DomainName, pair2.DomainName);
 				Assert.AreEqual (pair1.PublicKey, pair2.PublicKey);
 			}
 		}
