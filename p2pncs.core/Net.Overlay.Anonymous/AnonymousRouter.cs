@@ -1244,7 +1244,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				IMessagingSocket _sock;
 				uint _id;
 
-				public ReceivedEventArgs (TerminalPointInfo info, IMessagingSocket sock, InsideMessage msg) : base (msg.Payload)
+				public ReceivedEventArgs (TerminalPointInfo info, IMessagingSocket sock, InsideMessage msg) : base (info.RecipientKey, msg.Payload)
 				{
 					_info = info;
 					_sock = sock;

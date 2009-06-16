@@ -21,11 +21,17 @@ namespace p2pncs.Net.Overlay.Anonymous
 {
 	public abstract class BoundaryNodeReceivedEventArgs : EventArgs
 	{
+		Key _key;
 		object _req;
 
-		public BoundaryNodeReceivedEventArgs (object request)
+		public BoundaryNodeReceivedEventArgs (Key key, object request)
 		{
+			_key = key;
 			_req = request;
+		}
+
+		public Key RecipientKey {
+			get { return _key; }
 		}
 
 		public object Request {
