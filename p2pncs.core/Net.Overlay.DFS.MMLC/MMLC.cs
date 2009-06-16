@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using openCrypto.EllipticCurve;
 using p2pncs.Net.Overlay.Anonymous;
@@ -68,6 +69,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			_ar.AddBoundaryNodeReceivedEventHandler (typeof (PublishMessage), PublishMessage_Handler);
 		}
 
+		#region AnonymousRouter.BoundaryNode ReceivedEvent Handlers
 		void PublishMessage_Handler (object sender, BoundaryNodeReceivedEventArgs args)
 		{
 			PublishMessage msg = args.Request as PublishMessage;
@@ -91,13 +93,9 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				args.StartResponse (new DHTLookupResponse (list.ToArray ()));
 			}, null);
 		}
+		#endregion
 
-		public void StartMerge (Key key)
-		{
-			InitiatorSideMergeProcess proc = new InitiatorSideMergeProcess (this, key);
-			proc.Thread.Start ();
-		}
-
+		#region Manipulating MergeableFile/MergeabileFileRecord
 		public void CreateNew (IHashComputable headerContent)
 		{
 			ECKeyPair privateKey = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
@@ -159,6 +157,51 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				kv.Key.RecordsetHash = kv.Key.RecordsetHash.Xor (record.Hash);
 			}
 		}
+		#endregion
+
+		#region Misc
+		void RePut ()
+		{
+			lock (_rePutList) {
+				if (_rePutList.Count == 0) {
+					if (_rePutNextTime > DateTime.Now)
+						return;
+
+					using (_dbLock.EnterReadLock ()) {
+						foreach (KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>> value in _db.Values) {
+							_rePutList.Add (value.Key.Key);
+						}
+					}
+					_rePutNextTime = DateTime.Now + _rePutInterval;
+					if (_rePutList.Count == 0)
+						return;
+				}
+
+				Key[] keys = new Key[Math.Min (10, _rePutList.Count)];
+				_rePutList.CopyTo (0, keys, 0, keys.Length);
+				_rePutList.RemoveRange (0, keys.Length);
+				_uploadSide.MessagingSocket.BeginInquire (new PublishMessage (keys), null, null, null);
+			}
+		}
+
+		public void Dispose ()
+		{
+			_ar.RemoveBoundaryNodeReceivedEventHandler (typeof (DHTLookupRequest));
+			_ar.RemoveBoundaryNodeReceivedEventHandler (typeof (PublishMessage));
+			try {
+				_ar.UnsubscribeRecipient (_uploadSide.Key);
+			} catch { }
+			_int.RemoveInterruption (RePut);
+		}
+		#endregion
+
+		#region Merge
+
+		public void StartMerge (Key key)
+		{
+			MergeProcess proc = new MergeProcess (this, key);
+			proc.Thread.Start ();
+		}
 
 		void AnonymousRouter_Accepting (object sender, AcceptingEventArgs args)
 		{
@@ -189,65 +232,19 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		{
 			StreamSocket sock = new StreamSocket (args.Socket, AnonymousRouter.DummyEndPoint, MaxDatagramSize, _anonStrmSockInt);
 			args.Socket.InitializedEventHandlers ();
-			AccepterSideMergeProcess proc = new AccepterSideMergeProcess (sock, args.Payload as MergeableFileHeader, args.State);
+			MergeProcess proc = new MergeProcess (sock, args.State);
 			proc.Thread.Start ();
 		}
 
-		void RePut ()
-		{
-			lock (_rePutList) {
-				if (_rePutList.Count == 0) {
-					if (_rePutNextTime > DateTime.Now)
-						return;
-
-					using (_dbLock.EnterReadLock ()) {
-						foreach (KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>> value in _db.Values) {
-							_rePutList.Add (value.Key.Key);
-						}
-					}
-					_rePutNextTime = DateTime.Now + _rePutInterval;
-					if (_rePutList.Count == 0)
-						return;
-				}
-
-				Key[] keys = new Key[Math.Min (10, _rePutList.Count)];
-				_rePutList.CopyTo (0, keys, 0, keys.Length);
-				_rePutList.RemoveRange (0, keys.Length);
-				_uploadSide.MessagingSocket.BeginInquire (new PublishMessage (keys), null, null, null);
-			}
-		}
-
-		public void Dispose ()
-		{
-			try {
-				_ar.UnsubscribeRecipient (_uploadSide.Key);
-			} catch {}
-			_int.RemoveInterruption (RePut);
-		}
-
-		abstract class ThreadProcess
-		{
-			Thread _thrd;
-
-			public ThreadProcess ()
-			{
-				_thrd = new Thread (Process);
-			}
-
-			protected abstract void Process ();
-
-			public Thread Thread {
-				get { return _thrd; }
-			}
-		}
-
-		sealed class InitiatorSideMergeProcess : ThreadProcess
+		sealed class MergeProcess
 		{
 			MMLC _mmlc;
 			Key _key;
+			StreamSocket _sock;
 			KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>> _kvPair;
+			Thread _thrd;
 
-			public InitiatorSideMergeProcess (MMLC mmlc, Key key) : base ()
+			public MergeProcess (MMLC mmlc, Key key)
 			{
 				_mmlc = mmlc;
 				_key = key;
@@ -255,9 +252,21 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					if (_mmlc._db.TryGetValue (key, out _kvPair))
 						_key = null;
 				}
+				_thrd = new Thread (InitiatorSideProcess);
 			}
 
-			protected override void Process ()
+			public MergeProcess (StreamSocket sock, object state)
+			{
+				_sock = sock;
+				_kvPair = (KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>>)state;
+				_thrd = new Thread (AccepterSideProcess);
+			}
+
+			public Thread Thread {
+				get { return _thrd; }
+			}
+
+			void InitiatorSideProcess ()
 			{
 				Console.WriteLine ("I: START");
 				Console.WriteLine ("I: DHTに問い合わせ中...");
@@ -269,14 +278,14 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				foreach (Key value in dhtres.Keys)
 					Console.WriteLine ("I:   {0}", value.ToString ().Substring (0, 8));
 				bool connecting = false;
-				for (int i = 0; i < dhtres.Keys.Length; i ++) {
+				for (int i = 0; i < dhtres.Keys.Length; i++) {
 					try {
 						Console.WriteLine ("I: {0}へ接続", dhtres.Keys[i].ToString ().Substring (0, 8));
 						ar = _mmlc._ar.BeginConnect (_mmlc._uploadSide.Key, dhtres.Keys[i], AnonymousConnectionType.HighThroughput,
 							_key != null ? (object)_key : (object)_kvPair.Key, null, null);
 						connecting = true;
 						break;
-					} catch {}
+					} catch { }
 				}
 				if (!connecting) {
 					Console.WriteLine ("I: 接続失敗'");
@@ -290,11 +299,11 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					return;
 				}
 				Console.WriteLine ("I: 接続OK");
-				StreamSocket ssock = new StreamSocket (sock, null, MaxDatagramSize, _mmlc._anonStrmSockInt);
+				_sock = new StreamSocket (sock, null, MaxDatagramSize, _mmlc._anonStrmSockInt);
 				sock.InitializedEventHandlers ();
 				Console.WriteLine ("I: StreamSocket...OK");
 				MergeableFileHeader header = sock.PayloadAtEstablishing as MergeableFileHeader;
-				if (header == null || !(_key == null ? _kvPair.Key.Key : _key).Equals (header.Key) ||!header.Verify ()) {
+				if (header == null || !(_key == null ? _kvPair.Key.Key : _key).Equals (header.Key) || !header.Verify ()) {
 					Console.WriteLine ("I: 不正なヘッダだよん");
 					return;
 				}
@@ -312,7 +321,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 								continue;
 							}
 							header.RecordsetHash = new Key (new byte[header.RecordsetHash.KeyBytes]);
-							_kvPair = new KeyValuePair<MergeableFileHeader,List<MergeableFileRecord>> (header, new List<MergeableFileRecord> ());
+							_kvPair = new KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>> (header, new List<MergeableFileRecord> ());
 							_mmlc._db.Add (_key, _kvPair);
 							_key = null;
 							break;
@@ -320,33 +329,24 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					}
 				}
 				Console.WriteLine ("I: ヘッダを受信");
-				Console.WriteLine ("I: 保持しているレコード一覧を生成中");
+
+				byte[] buf = new byte[4];
+				Console.WriteLine ("I: 保持しているレコード一覧を送信中");
 				List<Key> list = new List<Key> ();
 				lock (_kvPair.Value) {
-					for (int i = 0; i < _kvPair.Value.Count; i ++)
+					for (int i = 0; i < _kvPair.Value.Count; i++)
 						list.Add (_kvPair.Value[i].Hash);
 				}
-				byte[] raw = Serializer.Instance.Serialize (new MergeableRecordList (list.ToArray ()));
-				byte[] buf = new byte[raw.Length + 4];
-				BitConverter.GetBytes (raw.Length).CopyTo (buf, 0);
-				Buffer.BlockCopy (raw, 0, buf, 4, raw.Length);
-				Console.WriteLine ("I: 保持しているレコード一覧を送信中");
-				ssock.Send (buf, 0, buf.Length);
+				SendMessage (new MergeableRecordList (list.ToArray ()));
 
-				ssock.Receive (buf, 0, 4);
-				int size = BitConverter.ToInt32 (buf, 0);
-				Console.WriteLine ("I: 保持しているレコード一覧を受信中...{0}Bytes", size);
-				buf = new byte[size];
-				int received = 0;
-				while (received < size)
-					received += ssock.Receive (buf, received, buf.Length - received);
-				Console.WriteLine ("I: 受信完了. デシリアライズ中");
-				MergeableRecordList recordList = Serializer.Instance.Deserialize (buf) as MergeableRecordList;
+				Console.WriteLine ("I: レコード一覧を受信中...");
+				MergeableRecordList recordList = ReceiveMessage (ref buf) as MergeableRecordList;
 				if (recordList == null) {
 					Console.WriteLine ("I: デシリアライズ失敗");
 					return;
 				}
-				Console.WriteLine ("I: 送信するレコードを作成中");
+
+				Console.WriteLine ("I: レコードを送信中");
 				HashSet<Key> sendSet = new HashSet<Key> (recordList.HashList);
 				List<MergeableFileRecord> sendList = new List<MergeableFileRecord> ();
 				lock (_kvPair.Value) {
@@ -355,80 +355,34 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 							sendList.Add (_kvPair.Value[i]);
 					}
 				}
-				MergeableRecords records = new MergeableRecords (sendList.ToArray ());
-				raw = Serializer.Instance.Serialize (records);
-				buf = new byte[raw.Length + 4];
-				BitConverter.GetBytes (raw.Length).CopyTo (buf, 0);
-				Buffer.BlockCopy (raw, 0, buf, 4, raw.Length);
-				Console.WriteLine ("I: レコードを送信中");
-				ssock.Send (buf, 0, buf.Length);
-				Console.WriteLine ("I: レコードの受信準備中");
-				ssock.Receive (buf, 0, 4);
-				size = BitConverter.ToInt32 (buf, 0);
-				Console.WriteLine ("I: レコードを受信中...{0}Bytes", size);
-				buf = new byte[size];
-				received = 0;
-				while (received < size)
-					received += ssock.Receive (buf, received, buf.Length - received);
-				Console.WriteLine ("I: 受信完了. デシリアライズ中");
-				records = Serializer.Instance.Deserialize (buf) as MergeableRecords;
+				SendMessage (new MergeableRecords (sendList.ToArray ()));
+
+				Console.WriteLine ("I: レコードを受信中...");
+				MergeableRecords records = ReceiveMessage (ref buf) as MergeableRecords;
 				if (recordList == null) {
 					Console.WriteLine ("I: デシリアライズ失敗");
 					return;
 				}
+
 				Console.WriteLine ("I: マージ中");
-				lock (_kvPair.Value) {
-					Key hash = _kvPair.Key.RecordsetHash;
-					HashSet<Key> set = new HashSet<Key> ();
-					for (int i = 0; i < _kvPair.Value.Count; i++)
-						set.Add (_kvPair.Value[i].Hash);
-					for (int i = 0; i < records.Records.Length; i ++) {
-						if (set.Add (records.Records[i].Hash)) {
-							_kvPair.Value.Add (records.Records[i]);
-							hash = hash.Xor (records.Records[i].Hash);
-							Console.WriteLine ("I:  {0}", records.Records[i].Hash);
-							Console.WriteLine ("I:  {0}", hash.ToString ());
-						}
-					}
-					_kvPair.Key.RecordsetHash = hash;
-				}
+				Merge (records);
 				Console.WriteLine ("I: マージ完了!!!");
 			}
-		}
 
-		sealed class AccepterSideMergeProcess : ThreadProcess
-		{
-			StreamSocket _sock;
-			MergeableFileHeader _header2;
-			KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>> _kvPair;
-
-			public AccepterSideMergeProcess (StreamSocket sock, MergeableFileHeader other_header, object state) : base ()
-			{
-				_sock = sock;
-				_header2 = other_header;
-				_kvPair = (KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>>)state;
-			}
-
-			protected override void Process ()
+			void AccepterSideProcess ()
 			{
 				byte[] buf = new byte[4];
 				Console.WriteLine ("A: START");
-				_sock.Receive (buf, 0, 4);
-				int size = BitConverter.ToInt32 (buf, 0);
-				Console.WriteLine ("A: 保持しているレコード一覧を受信中...{0}Bytes", size);
-				buf = new byte[size];
-				int received = 0;
-				while (received < size)
-					received += _sock.Receive (buf, received, buf.Length - received);
-				Console.WriteLine ("A: 受信完了. デシリアライズ中");
-				MergeableRecordList recordList = Serializer.Instance.Deserialize (buf) as MergeableRecordList;
+				Console.WriteLine ("A: 保持しているレコード一覧を受信中...");
+				MergeableRecordList recordList = ReceiveMessage (ref buf) as MergeableRecordList;
 				if (recordList == null) {
 					Console.WriteLine ("A: デシリアライズ失敗");
 					return;
 				}
+
 				HashSet<Key> otherSet = new HashSet<Key> (recordList.HashList);
 				List<MergeableFileRecord> sendList = new List<MergeableFileRecord> ();
-				Console.WriteLine ("A: 保持しているレコード一覧を作成中");
+				Console.WriteLine ("A: 保持しているレコード一覧を送信中");
 				lock (_kvPair.Value) {
 					for (int i = 0; i < _kvPair.Value.Count; i++)
 						if (!otherSet.Remove (_kvPair.Value[i].Hash))
@@ -436,35 +390,58 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				}
 				Key[] keys = new Key[otherSet.Count];
 				otherSet.CopyTo (keys);
-				byte[] raw = Serializer.Instance.Serialize (new MergeableRecordList (keys));
-				buf = new byte[raw.Length + 4];
-				BitConverter.GetBytes (raw.Length).CopyTo (buf, 0);
-				Buffer.BlockCopy (raw, 0, buf, 4, raw.Length);
-				Console.WriteLine ("A: 保持しているレコード一覧を送信中");
-				_sock.Send (buf, 0, buf.Length);
-				Console.WriteLine ("A: 送信するレコードを作成中");
-				MergeableRecords records = new MergeableRecords (sendList.ToArray ());
-				raw = Serializer.Instance.Serialize (records);
-				buf = new byte[raw.Length + 4];
-				BitConverter.GetBytes (raw.Length).CopyTo (buf, 0);
-				Buffer.BlockCopy (raw, 0, buf, 4, raw.Length);
+				SendMessage (new MergeableRecordList (keys));
+
 				Console.WriteLine ("A: レコードを送信中");
-				_sock.Send (buf, 0, buf.Length);
-				Console.WriteLine ("A: レコードの受信準備中");
-				_sock.Receive (buf, 0, 4);
-				size = BitConverter.ToInt32 (buf, 0);
-				Console.WriteLine ("A: レコードを受信中...{0}Bytes", size);
-				buf = new byte[size];
-				received = 0;
-				while (received < size)
-					received += _sock.Receive (buf, received, buf.Length - received);
-				Console.WriteLine ("A: 受信完了. デシリアライズ中");
-				records = Serializer.Instance.Deserialize (buf) as MergeableRecords;
+				SendMessage (new MergeableRecords (sendList.ToArray ()));
+
+				Console.WriteLine ("A: レコードを受信中...");
+				MergeableRecords records = ReceiveMessage (ref buf) as MergeableRecords;
 				if (recordList == null) {
 					Console.WriteLine ("A: デシリアライズ失敗");
 					return;
 				}
+
 				Console.WriteLine ("A: マージ中");
+				Merge (records);
+				Console.WriteLine ("A: マージ完了!!!");
+			}
+
+			void SendMessage (object msg)
+			{
+				byte[] buf;
+				using (MemoryStream ms = new MemoryStream ()) {
+					ms.Seek (4, SeekOrigin.Begin);
+					Serializer.Instance.Serialize (ms, msg);
+					ms.Close ();
+					buf = ms.ToArray ();
+				}
+
+				int size = buf.Length - 4;
+				buf[0] = (byte)(size >> 24);
+				buf[1] = (byte)(size >> 16);
+				buf[2] = (byte)(size >>  8);
+				buf[3] = (byte)(size);
+				
+				_sock.Send (buf, 0, buf.Length);
+			}
+
+			object ReceiveMessage (ref byte[] buf)
+			{
+				int size = 4, received = 0;
+				while (received < size)
+					received += _sock.Receive (buf, received, size - received);
+				size = (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3];
+				received = 0;
+				if (buf.Length < size)
+					buf = new byte[size];
+				while (received < size)
+					received += _sock.Receive (buf, received, size - received);
+				return Serializer.Instance.Deserialize (buf);
+			}
+
+			void Merge (MergeableRecords records)
+			{
 				lock (_kvPair.Value) {
 					Key hash = _kvPair.Key.RecordsetHash;
 					HashSet<Key> set = new HashSet<Key> ();
@@ -478,10 +455,11 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					}
 					_kvPair.Key.RecordsetHash = hash;
 				}
-				Console.WriteLine ("A: マージ完了!!!");
 			}
 		}
+		#endregion
 
+		#region Messages
 		[SerializableTypeId (0x402)]
 		class MergeableEndPoint
 		{
@@ -567,5 +545,6 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				get { return _records; }
 			}
 		}
+		#endregion
 	}
 }
