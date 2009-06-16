@@ -196,7 +196,7 @@ namespace p2pncs.tests.Net.Overlay.Anonymous
 
 				AutoResetEvent accepted_done = new AutoResetEvent (false);
 				IAnonymousSocket sock2 = null;
-				subscribeInfo1.Accepting += delegate (object sender, AcceptingEventArgs args) {
+				subscribeInfo2.Accepting += delegate (object sender, AcceptingEventArgs args) {
 					args.Accept (null, null);
 				};
 				subscribeInfo2.Accepted += delegate (object sender, AcceptedEventArgs args) {
