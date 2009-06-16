@@ -77,9 +77,6 @@ namespace p2pncs.Net
 
 		public virtual IAsyncResult BeginInquire (object obj, EndPoint remoteEP, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state)
 		{
-			if (remoteEP == null)
-				throw new ArgumentNullException ();
-
 			MsgLabel id = CreateMessageID ();
 			InquiredAsyncResultBase ar = CreateInquiredAsyncResult (id, obj, remoteEP, timeout, maxRetry, callback, state);
 			ar.Transmit (_sock);
@@ -199,7 +196,7 @@ namespace p2pncs.Net
 				return;
 			_active = false;
 			_interrupter.RemoveInterruption (TimeoutCheck);
-			if (_ownSocket) {
+			if (_ownSocket && _sock != null) {
 				_sock.Close ();
 			}
 			lock (_retryList) {

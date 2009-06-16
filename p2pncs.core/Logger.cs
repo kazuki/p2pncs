@@ -48,8 +48,8 @@ namespace p2pncs
 
 		public static void Log (LogLevel level, object sender, string message, params object[] args)
 		{
-			Type type = sender.GetType ();
-			LogEventInfo info = new LogEventInfo (_levelMap[level], type.FullName, string.Format (message, args));
+			string typeName = (sender == null ? "(null)" : sender.GetType ().FullName);
+			LogEventInfo info = new LogEventInfo (_levelMap[level], typeName, string.Format (message, args));
 			info.Context.Add ("sender", sender);
 			_logger.Log (info);
 		}
