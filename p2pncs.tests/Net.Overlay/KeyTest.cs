@@ -68,5 +68,18 @@ namespace p2pncs.tests.Net.Overlay
 			Assert.AreEqual (16, Key.MatchBitsFromMSB (key1, key_eq));
 			Assert.AreEqual (4, Key.MatchDigitsFromMSB (key1, key_eq, 16));
 		}
+
+		[Test]
+		public void ParseTest ()
+		{
+			for (int len = 1; len <= 32; len ++) {
+				for (int i = 0; i < 3; i ++) {
+					Key k1 = Key.CreateRandom (len);
+					string str = k1.ToString ();
+					Key k2 = Key.Parse (str);
+					Assert.AreEqual (k1, k2);
+				}
+			}
+		}
 	}
 }

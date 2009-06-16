@@ -274,5 +274,33 @@ namespace p2pncs.Net.Overlay
 			return (char)('a' + (value - 10));
 		}
 		#endregion
+
+		#region Parse
+		public static Key Parse (string text)
+		{
+			return Parse (text, 16);
+		}
+		public static Key Parse (string text, int radix)
+		{
+			if (radix != 16)
+				throw new NotImplementedException ();
+			if (text.Length % 2 != 0)
+				throw new ArgumentException ();
+			byte[] raw = new byte[text.Length / 2];
+			for (int i = 0, q = raw.Length - 1; i < text.Length; i += 2, q --)
+				raw[q] = (byte)((FromHex (text[i]) << 4) | FromHex (text[i + 1]));
+			return new Key (raw);
+		}
+		static int FromHex (char c)
+		{
+			if (c >= '0' && c <= '9')
+				return c - '0';
+			else if (c >= 'a' && c <= 'z')
+				return c - 'a' + 10;
+			else if (c >= 'A' && c <= 'Z')
+				return c - 'A' + 10;
+			throw new FormatException ();
+		}
+		#endregion
 	}
 }
