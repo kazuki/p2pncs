@@ -17,8 +17,8 @@
 
 using System;
 using System.Collections.Generic;
-using p2pncs.Net.Overlay.DHT;
 using openCrypto.EllipticCurve;
+using p2pncs.Net.Overlay.DHT;
 
 namespace p2pncs.Net.Overlay.Anonymous
 {
@@ -26,6 +26,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 	{
 		ISubscribeInfo SubscribeRecipient (Key recipientId, ECKeyPair privateKey);
 		void UnsubscribeRecipient (Key recipientId);
+
+		void AddBoundaryNodeReceivedEventHandler (Type type, EventHandler<BoundaryNodeReceivedEventArgs> handler);
+		void RemoveBoundaryNodeReceivedEventHandler (Type type);
 
 		IAsyncResult BeginConnect (Key recipientId, Key destinationId, AnonymousConnectionType type, object payload, AsyncCallback callback, object state);
 		IAnonymousSocket EndConnect (IAsyncResult ar);

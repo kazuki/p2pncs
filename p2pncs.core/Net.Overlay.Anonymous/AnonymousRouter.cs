@@ -19,7 +19,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
-using System.Runtime.Serialization;
 using System.Security.Cryptography;
 using System.Threading;
 using openCrypto;
@@ -28,11 +27,11 @@ using p2pncs.Net.Overlay.DHT;
 using p2pncs.Security.Cryptography;
 using p2pncs.Threading;
 using p2pncs.Utility;
-using ECDiffieHellman = openCrypto.EllipticCurve.KeyAgreement.ECDiffieHellman;
-using RouteLabel = System.Int32;
 using ConnectionHalfLabel = System.UInt16;
 using ConnectionLabel = System.UInt32;
 using DupCheckLabel = System.Int64;
+using ECDiffieHellman = openCrypto.EllipticCurve.KeyAgreement.ECDiffieHellman;
+using RouteLabel = System.Int32;
 
 namespace p2pncs.Net.Overlay.Anonymous
 {
@@ -102,6 +101,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 		HashSet<ushort> _usedConnectionIDs = new HashSet<ushort> ();
 		ReaderWriterLockWrapper _connectionMapLock = new ReaderWriterLockWrapper ();
 
+		Dictionary<Type, EventHandler<BoundaryNodeReceivedEventArgs>> _boundaryHandlers = new Dictionary<Type,EventHandler<BoundaryNodeReceivedEventArgs>> ();
+		ReaderWriterLockWrapper _boundaryHandlerLock = new ReaderWriterLockWrapper ();
+
 		const int DefaultDuplicationCheckerBufferSize = 1024;
 		DuplicationChecker<DupCheckLabel> _startPointDupChecker = new DuplicationChecker<long> (DefaultDuplicationCheckerBufferSize);
 		DuplicationChecker<DupCheckLabel> _terminalDupChecker = new DuplicationChecker<long> (DefaultDuplicationCheckerBufferSize);
@@ -153,6 +155,22 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_subscribeMap.Remove (recipientId);
 			}
 			info.Close ();
+		}
+
+		public void AddBoundaryNodeReceivedEventHandler (Type type, EventHandler<BoundaryNodeReceivedEventArgs> handler)
+		{
+			if (type == null || handler == null)
+				throw new ArgumentNullException ();
+			using (_boundaryHandlerLock.EnterWriteLock ()) {
+				_boundaryHandlers.Add (type, handler);
+			}
+		}
+
+		public void RemoveBoundaryNodeReceivedEventHandler (Type type)
+		{
+			using (_boundaryHandlerLock.EnterWriteLock ()) {
+				_boundaryHandlers.Remove (type);
+			}
 		}
 
 		public IAsyncResult BeginConnect (Key recipientId, Key destinationId, AnonymousConnectionType type, object payload, AsyncCallback callback, object state)
@@ -537,6 +555,13 @@ namespace p2pncs.Net.Overlay.Anonymous
 					return;
 				}
 			}
+			{
+				InsideMessage msg = msg_obj as InsideMessage;
+				if (msg != null) {
+					info.SubscribeInfo.ReceiveInsideMessage (msg);
+					return;
+				}
+			}
 			Logger.Log (LogLevel.Error, this, "Unknown Message at StartPoint {0}", msg_obj);
 		}
 
@@ -567,6 +592,24 @@ namespace p2pncs.Net.Overlay.Anonymous
 							_sock.Send (imsg, ep.EndPoint);
 						}
 					}
+					return;
+				}
+			}
+			{
+				InsideMessage msg = msg_obj as InsideMessage;
+				if (msg != null) {
+					if (msg.Payload == null) {
+						Logger.Log (LogLevel.Error, this, "Payload of InsideMessage is null");
+						return;
+					}
+					EventHandler<BoundaryNodeReceivedEventArgs> handler;
+					using (_boundaryHandlerLock.EnterReadLock ()) {
+						if (!_boundaryHandlers.TryGetValue (msg.Payload.GetType (), out handler)) {
+							Logger.Log (LogLevel.Error, this, "Unknown Payload ({0}) of InsideMessage", msg.Payload.GetType ());
+							return;
+						}
+					}
+					handler (this, info.CreateBoundaryNodeReceivedEventArgs (_sock, msg));
 					return;
 				}
 			}
@@ -797,6 +840,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			object _listLock = new object ();
 			HashSet<StartPointInfo> _establishedList = new HashSet<StartPointInfo> ();
 			HashSet<StartPointInfo> _establishingList = new HashSet<StartPointInfo> ();
+			MessagingObjectSocket _msock = null;
 
 			public event AcceptingEventHandler Accepting;
 			public event AcceptedEventHandler Accepted;
@@ -809,6 +853,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_numOfRoutes = numOfRoutes;
 				_numOfRelays = numOfRelays;
 				_factor = factor;
+
+				TimeSpan timeout = p2pncs.Net.Overlay.Anonymous.AnonymousRouter.MCR_EstablishingTimeout + p2pncs.Net.Overlay.Anonymous.AnonymousRouter.DHT_GetTimeout;
+				_msock = new MessagingObjectSocket (this, router._interrupter, timeout, 2, 128, 16);
 			}
 
 			public void Start ()
@@ -891,6 +938,11 @@ namespace p2pncs.Net.Overlay.Anonymous
 					array[i].SendMessage (_router.KeyBasedRouter.MessagingSocket, msg, useInquiry);
 			}
 
+			public void ReceiveInsideMessage (InsideMessage msg)
+			{
+				_msock.Received (msg);
+			}
+
 			public bool InvokeAccepting (AcceptingEventArgs args)
 			{
 				if (Accepting == null || Accepted == null)
@@ -948,6 +1000,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			public void Close ()
 			{
 				_active = false;
+				_msock.Dispose ();
 			}
 
 			#region ISubscribeInfo Members
@@ -968,6 +1021,70 @@ namespace p2pncs.Net.Overlay.Anonymous
 				get { return _router; }
 			}
 
+			public IMessagingSocket MessagingSocket {
+				get { return _msock; }
+			}
+
+			#endregion
+
+			#region Internal Class
+			class MessagingObjectSocket : MessagingSocketBase
+			{
+				SubscribeInfo _info;
+
+				public MessagingObjectSocket (SubscribeInfo info, IntervalInterrupter insideTimeoutTimer,
+					TimeSpan timeout, int maxRetry, int retryBufferSize, int inquiryDupCheckSize)
+					: base (null, true, insideTimeoutTimer, timeout, maxRetry, retryBufferSize, inquiryDupCheckSize)
+				{
+					_info = info;
+				}
+
+				public void Received (InsideMessage msg)
+				{
+					if (!IsActive)
+						return;
+					InquiredAsyncResultBase ar = RemoveFromRetryList (msg.ID, DummyEndPoint);
+					if (ar == null)
+						return;
+					ar.Complete (msg.Payload, this);
+					InvokeInquirySuccess (this, new InquiredEventArgs (ar.Request, msg.Payload, null, DateTime.Now - ar.TransmitTime));
+				}
+
+				public override void Send (object obj, EndPoint remoteEP)
+				{
+					throw new NotImplementedException ();
+				}
+
+				protected override void StartResponse_Internal (InquiredResponseState state, object response)
+				{
+					_info.SendMessage (new InsideMessage (state.ID, response), _info._numOfRoutes, true);
+				}
+
+				public override int MaxMessageSize {
+					get { return 0; }
+				}
+
+				protected override InquiredAsyncResultBase CreateInquiredAsyncResult (uint id, object obj, EndPoint remoteEP, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state)
+				{
+					return new InquiredAsyncResult (_info, obj, DummyEndPoint, id, timeout, maxRetry, callback, state);
+				}
+
+				class InquiredAsyncResult : InquiredAsyncResultBase
+				{
+					SubscribeInfo _info;
+
+					public InquiredAsyncResult (SubscribeInfo info, object req, EndPoint remoteEP, uint id, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state)
+						: base (req, remoteEP, id, timeout, maxRetry, callback, state)
+					{
+						_info = info;
+					}
+
+					protected override void Transmit_Internal (IDatagramEventSocket sock)
+					{
+						_info.SendMessage (new InsideMessage (_id, _req), _info._numOfRoutes, true);
+					}
+				}
+			}
 			#endregion
 		}
 
@@ -1114,6 +1231,36 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public DateTime NextPutTime {
 				get { return _nextPutTime; }
+			}
+
+			public BoundaryNodeReceivedEventArgs CreateBoundaryNodeReceivedEventArgs (IMessagingSocket sock, InsideMessage msg)
+			{
+				return new ReceivedEventArgs (this, sock, msg);
+			}
+
+			class ReceivedEventArgs : BoundaryNodeReceivedEventArgs
+			{
+				TerminalPointInfo _info;
+				IMessagingSocket _sock;
+				uint _id;
+
+				public ReceivedEventArgs (TerminalPointInfo info, IMessagingSocket sock, InsideMessage msg) : base (msg.Payload)
+				{
+					_info = info;
+					_sock = sock;
+					_id = msg.ID;
+				}
+
+				public override void StartResponse (object response)
+				{
+					TerminalPointInfo info = _info;
+					lock (this) {
+						if (_info == null)
+							return;
+						_info = null;
+					}
+					info.SendMessage (_sock, new InsideMessage (_id, response), true);
+				}
 			}
 		}
 
@@ -2106,6 +2253,30 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public object Message {
 				get { return _msg; }
+			}
+		}
+
+		[SerializableTypeId (0x21b)]
+		class InsideMessage
+		{
+			[SerializableFieldId (0)]
+			uint _id;
+
+			[SerializableFieldId (1)]
+			object _payload;
+
+			public InsideMessage (uint id, object payload)
+			{
+				_id = id;
+				_payload = payload;
+			}
+
+			public uint ID {
+				get { return _id; }
+			}
+
+			public object Payload {
+				get { return _payload; }
 			}
 		}
 

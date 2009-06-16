@@ -15,20 +15,23 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using openCrypto.EllipticCurve;
+using System;
 
 namespace p2pncs.Net.Overlay.Anonymous
 {
-	public interface ISubscribeInfo
+	public abstract class BoundaryNodeReceivedEventArgs : EventArgs
 	{
-		event AcceptingEventHandler Accepting;
-		event AcceptedEventHandler Accepted;
+		object _req;
 
-		Key Key { get; }
-		ECKeyPair PrivateKey { get; }
-		SubscribeRouteStatus Status { get; }
-		IAnonymousRouter AnonymousRouter { get; }
+		public BoundaryNodeReceivedEventArgs (object request)
+		{
+			_req = request;
+		}
 
-		IMessagingSocket MessagingSocket { get; }
+		public object Request {
+			get { return _req; }
+		}
+
+		public abstract void StartResponse (object response);
 	}
 }
