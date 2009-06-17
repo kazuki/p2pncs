@@ -39,6 +39,7 @@ namespace p2pncs
 		IDistributedHashTable _dht;
 		IAnonymousRouter _anonymous;
 		Interrupters _ints;
+		ILocalHashTable _localHT;
 		MassKeyDeliverer _mkd;
 		MMLC _mmlc;
 
@@ -53,14 +54,18 @@ namespace p2pncs
 			TestLogger.SetupUdpMessagingSocket (_messagingSock);
 			_kbrPrivateKey = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 			_kbr = new SimpleIterativeRouter2 (Key.Create (_kbrPrivateKey), _messagingSock, new SimpleRoutingAlgorithm (), p2pncs.Serializer.Instance, true);
-			OnMemoryLocalHashTable localDHT = new OnMemoryLocalHashTable (_kbr, ints.DHTInt);
-			_dht = new SimpleDHT (_kbr, _messagingSock, localDHT);
+			_localHT = new OnMemoryLocalHashTable (_kbr, ints.DHTInt);
+			IMassKeyDelivererLocalStore mkdLocalStore = _localHT as IMassKeyDelivererLocalStore;
+			_dht = new SimpleDHT (_kbr, _messagingSock, _localHT);
 			_anonymous = new AnonymousRouter (_dht, _kbrPrivateKey, ints.AnonymousInt);
-			ints.KBRStabilizeInt.AddInterruption (delegate () {
-				_kbr.RoutingAlgorithm.Stabilize ();
-			});
-			_mkd = new MassKeyDeliverer (_dht, localDHT, ints.MassKeyDeliverTimerInt);
-			_mmlc = new MMLC (_anonymous, _dht, localDHT, ints.StreamSocketTimeoutInt, ints.DFSRePutTimerInt);
+			ints.KBRStabilizeInt.AddInterruption (Stabilize);
+			_mkd = new MassKeyDeliverer (_dht, mkdLocalStore, ints.MassKeyDeliverTimerInt);
+			_mmlc = new MMLC (_anonymous, _dht, mkdLocalStore, ints.StreamSocketTimeoutInt, ints.DFSRePutTimerInt);
+		}
+
+		void Stabilize ()
+		{
+			_kbr.RoutingAlgorithm.Stabilize ();
 		}
 
 		public IDatagramEventSocket DatagramEventSocket {
@@ -89,6 +94,8 @@ namespace p2pncs
 
 		public void Dispose ()
 		{
+			_ints.KBRStabilizeInt.RemoveInterruption (Stabilize);
+			_localHT.Dispose ();
 			_mmlc.Dispose ();
 			_mkd.Dispose ();
 			_anonymous.Close ();

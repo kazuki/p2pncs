@@ -51,7 +51,6 @@ namespace p2pncs
 		Dictionary<int, ChatRoomInfo> _rooms = new Dictionary<int, ChatRoomInfo> ();
 		Dictionary<Key, int> _joinRooms = new Dictionary<Key, int> ();
 		long _rev = 1;
-		XmlDocument _cometLogDoc = new XmlDocument ();
 		List<ManualResetEvent> _cometWaits = new List<ManualResetEvent> ();
 		string _name;
 		Key _imPubKey;
@@ -84,6 +83,12 @@ namespace p2pncs
 
 		public void Dispose ()
 		{
+			_ints.WebAppInt.RemoveInterruption (CheckUpdate);
+			lock (_rooms) {
+				foreach (ChatRoomInfo room in _rooms.Values)
+					room.Close ();
+			}
+			_node.AnonymousRouter.UnsubscribeRecipient (_imPubKey);
 		}
 
 		void CheckUpdate ()

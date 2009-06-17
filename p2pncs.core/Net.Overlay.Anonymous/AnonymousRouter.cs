@@ -271,6 +271,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			_subscribeMapLock.Dispose ();
 			_routingMapLock.Dispose ();
 			_connectionMapLock.Dispose ();
+			_boundaryHandlerLock.Dispose ();
 		}
 
 		#endregion

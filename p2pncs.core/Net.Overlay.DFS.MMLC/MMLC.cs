@@ -201,6 +201,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				_ar.UnsubscribeRecipient (_uploadSide.Key);
 			} catch { }
 			_int.RemoveInterruption (RePut);
+			_dbLock.Dispose ();
 		}
 		#endregion
 
