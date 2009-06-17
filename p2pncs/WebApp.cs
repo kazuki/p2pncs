@@ -113,7 +113,7 @@ namespace p2pncs
 			} else if (req.Url.AbsolutePath == "/bbs" || req.Url.AbsolutePath == "/bbs/") {
 				return ProcessBBSList (server, req, res);
 			} else if (req.Url.AbsolutePath.StartsWith ("/bbs/")) {
-				return ProcessBBS (server, req, res);
+				return ProcessBBS (server, req, res, false);
 			}
 
 			return ProcessStaticFile (server, req, res);
@@ -157,7 +157,7 @@ namespace p2pncs
 			return _xslCache.Process (req, res, doc, Path.Combine (DefaultTemplatePath, "bbs_list.xsl"));
 		}
 
-		object ProcessBBS (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
+		object ProcessBBS (IHttpServer server, IHttpRequest req, HttpResponseHeader res, bool callByCallback)
 		{
 			string str_key = req.Url.AbsolutePath.Substring (5);
 			Key key;
@@ -167,24 +167,32 @@ namespace p2pncs
 				throw new HttpException (HttpStatusCode.NotFound);
 			}
 
-			MergeableFileHeader header;
-			List<MergeableFileRecord> records = _node.MMLC.GetRecords (key, out header);
-			if (records == null) {
-				_node.MMLC.StartMerge (key);
-				return "現在ダウンロード中♪";
-			}
-			_node.MMLC.StartMerge (key);
-
 			if (req.HttpMethod == HttpMethod.POST) {
 				// posting...
 				string name = Helpers.GetQueryValue (req, "name").Trim ();
 				string body = Helpers.GetQueryValue (req, "body").Trim ();
 				if (body.Length > 0) {
 					MergeableFileRecord record = new MergeableFileRecord (new SimpleBBSRecord (name, body, DateTime.Now));
-					_node.MMLC.AppendRecord (key, record);
+					try {
+						_node.MMLC.AppendRecord (key, record);
+					} catch {
+						return "ERROR";
+					}
 				}
 				return "OK";
 			}
+
+			if (!callByCallback) {
+				ManualResetEvent done = new ManualResetEvent (false);
+				CometInfo info = new CometInfo (done, req, res, null, DateTime.Now + TimeSpan.FromSeconds (5), ProcessBBS_CometHandler);
+				_node.MMLC.StartMerge (key, ProcessBBS_Callback, done);
+				return info;
+			}
+
+			MergeableFileHeader header;
+			List<MergeableFileRecord> records = _node.MMLC.GetRecords (key, out header);
+			if (records == null)
+				throw new HttpException (HttpStatusCode.NotFound);
 
 			XmlDocument doc = CreateEmptyDocument ();
 			XmlElement rootNode = doc.DocumentElement;
@@ -212,6 +220,18 @@ namespace p2pncs
 			}
 			rootNode.AppendChild (e1);
 			return _xslCache.Process (req, res, doc, Path.Combine (DefaultTemplatePath, "bbs.xsl"));
+		}
+
+		void ProcessBBS_Callback (object sender, MergeDoneCallbackArgs args)
+		{
+			ManualResetEvent done = args.State as ManualResetEvent;
+			done.Set ();
+		}
+
+		object ProcessBBS_CometHandler (CometInfo info)
+		{
+			info.WaitHandle.Close ();
+			return ProcessBBS (null, info.Request, info.Response, true);
 		}
 
 		object ProcessAPI_GET (IHttpServer server, IHttpRequest req, HttpResponseHeader res)

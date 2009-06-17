@@ -55,6 +55,7 @@
     <Compile Include="Net.Overlay.Anonymous\SubscribeRouteStatus.cs" />
     <Compile Include="Net.Overlay.DFS.MMLC\MergeableFileHeader.cs" />
     <Compile Include="Net.Overlay.DFS.MMLC\MergeableFileRecord.cs" />
+    <Compile Include="Net.Overlay.DFS.MMLC\MergeDoneCallbackArgs.cs" />
     <Compile Include="Net.Overlay.DFS.MMLC\MMLC.cs" />
     <Compile Include="Net.Overlay.DHT\DHTEntry.cs" />
     <Compile Include="Net.Overlay.DHT\GetResult.cs" />

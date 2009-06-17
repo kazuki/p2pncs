@@ -197,9 +197,9 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 		#region Merge
 
-		public void StartMerge (Key key)
+		public void StartMerge (Key key, EventHandler<MergeDoneCallbackArgs> callback, object state)
 		{
-			MergeProcess proc = new MergeProcess (this, key);
+			MergeProcess proc = new MergeProcess (this, key, callback, state);
 			proc.Thread.Start ();
 		}
 
@@ -243,8 +243,11 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			StreamSocket _sock;
 			KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>> _kvPair;
 			Thread _thrd;
+			EventHandler<MergeDoneCallbackArgs> _callback;
+			object _state;
+			bool _isInitiator;
 
-			public MergeProcess (MMLC mmlc, Key key)
+			public MergeProcess (MMLC mmlc, Key key, EventHandler<MergeDoneCallbackArgs> callback, object state)
 			{
 				_mmlc = mmlc;
 				_key = key;
@@ -252,18 +255,41 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					if (_mmlc._db.TryGetValue (key, out _kvPair))
 						_key = null;
 				}
-				_thrd = new Thread (InitiatorSideProcess);
+				_isInitiator = true;
+				_thrd = new Thread (Process);
+				_callback = callback;
+				_state = state;
 			}
 
 			public MergeProcess (StreamSocket sock, object state)
 			{
 				_sock = sock;
 				_kvPair = (KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>>)state;
-				_thrd = new Thread (AccepterSideProcess);
+				_isInitiator = false;
+				_thrd = new Thread (Process);
 			}
 
 			public Thread Thread {
 				get { return _thrd; }
+			}
+
+			void Process ()
+			{
+				try {
+					if (_isInitiator) {
+						InitiatorSideProcess ();
+					} else {
+						AccepterSideProcess ();
+					}
+				} catch (Exception exception) {
+					Console.WriteLine ("{0}: マージ中に例外. {1}", _isInitiator ? "I" : "A", exception.ToString ());
+				} finally {
+					if (_callback != null) {
+						try {
+							_callback (null, new MergeDoneCallbackArgs (_state));
+						} catch {}
+					}
+				}
 			}
 
 			void InitiatorSideProcess ()
