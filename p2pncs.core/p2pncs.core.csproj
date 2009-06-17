@@ -61,8 +61,11 @@
     <Compile Include="Net.Overlay.DHT\GetResult.cs" />
     <Compile Include="Net.Overlay.DHT\IDistributedHashTable.cs" />
     <Compile Include="Net.Overlay.DHT\ILocalHashTable.cs" />
+    <Compile Include="Net.Overlay.DHT\ILocalHashTableValueMerger.cs" />
     <Compile Include="Net.Overlay.DHT\IMassKeyDelivererLocalStore.cs" />
+    <Compile Include="Net.Overlay.DHT\IMassKeyDelivererValueGetter.cs" />
     <Compile Include="Net.Overlay.DHT\IPutterEndPointStore.cs" />
+    <Compile Include="Net.Overlay.DHT\LocalHashTableValueMerger.cs" />
     <Compile Include="Net.Overlay.DHT\OnMemoryLocalHashTable.cs" />
     <Compile Include="Net.Overlay.DHT\SimpleDHT.cs" />
     <Compile Include="Net.Overlay\FailReason.cs" />

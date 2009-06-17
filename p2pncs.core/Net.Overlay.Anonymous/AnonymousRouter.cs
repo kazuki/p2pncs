@@ -117,7 +117,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			_privateNodeKey = privateNodeKey;
 			_interrupter = interrupter;
 
-			dht.RegisterTypeID (typeof (DHTEntry), 1);
+			dht.RegisterTypeID (typeof (DHTEntry), 1, DHTEntry.Merger);
 			_sock.AddInquiryDuplicationCheckType (typeof (EstablishRouteMessage));
 			_sock.AddInquiryDuplicationCheckType (typeof (RoutedMessage));
 			_sock.AddInquiredHandler (typeof (EstablishRouteMessage), Messaging_Inquired_EstablishRouteMessage);
@@ -2501,6 +2501,11 @@ namespace p2pncs.Net.Overlay.Anonymous
 				if (_ep == null)
 					return other._ep == null;
 				return _ep.Equals (other._ep);
+			}
+
+			static ILocalHashTableValueMerger _mergerInstance = new LocalHashTableValueMerger<DHTEntry> ();
+			public static ILocalHashTableValueMerger Merger {
+				get { return _mergerInstance; }
 			}
 		}
 		#endregion

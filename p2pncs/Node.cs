@@ -59,7 +59,7 @@ namespace p2pncs
 			ints.KBRStabilizeInt.AddInterruption (delegate () {
 				_kbr.RoutingAlgorithm.Stabilize ();
 			});
-			_mkd = new MassKeyDeliverer (_kbr, localDHT, ints.MassKeyDeliverTimerInt);
+			_mkd = new MassKeyDeliverer (_dht, localDHT, ints.MassKeyDeliverTimerInt);
 			_mmlc = new MMLC (_anonymous, _dht, localDHT, ints.StreamSocketTimeoutInt, ints.DFSRePutTimerInt);
 		}
 
@@ -90,6 +90,7 @@ namespace p2pncs
 		public void Dispose ()
 		{
 			_mmlc.Dispose ();
+			_mkd.Dispose ();
 			_anonymous.Close ();
 			_dht.Dispose ();
 			_kbr.Close ();

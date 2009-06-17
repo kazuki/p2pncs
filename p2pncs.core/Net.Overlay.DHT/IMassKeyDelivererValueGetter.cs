@@ -15,16 +15,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using System;
-
 namespace p2pncs.Net.Overlay.DHT
 {
-	public interface ILocalHashTable : IDisposable
+	public interface IMassKeyDelivererValueGetter
 	{
-		void Put (Key key, int typeId, DateTime expires, object value, ILocalHashTableValueMerger merger);
+		DHTEntry[] GetSendEntries (Key key, int typeId, object value, int max_num);
 
-		object[] Get (Key key, int typeId, ILocalHashTableValueMerger merger);
-
-		void Clear ();
+		void UnmarkSendFlag (object value, object mark_value);
 	}
 }

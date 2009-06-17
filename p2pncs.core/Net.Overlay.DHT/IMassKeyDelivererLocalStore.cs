@@ -23,7 +23,5 @@ namespace p2pncs.Net.Overlay.DHT
 	public interface IMassKeyDelivererLocalStore
 	{
 		void GetEachRoutingLevelValues (IList<DHTEntry>[] values);
-
-		void Put (Key key, int typeId, DateTime expires, object value);
 	}
 }

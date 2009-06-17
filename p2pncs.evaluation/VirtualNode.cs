@@ -77,7 +77,7 @@ namespace p2pncs.Evaluation
 				: (IKeyBasedRouter)new SimpleIterativeRouter (_nodeId, _msock, new SimpleRoutingAlgorithm (), Serializer.Instance);
 			_localDHT = new OnMemoryLocalHashTable (_kbr, dhtInt);
 			_dht = new SimpleDHT (_kbr, _msock, _localDHT);
-			_dht.RegisterTypeID (typeof (string), 0);
+			_dht.RegisterTypeID (typeof (string), 0, new LocalHashTableValueMerger<string> ());
 			p2pncs.Net.Overlay.Anonymous.AnonymousRouter.DefaultRelayNodes = opt.AnonymousRouteRelays;
 			p2pncs.Net.Overlay.Anonymous.AnonymousRouter.DefaultSubscribeRoutes = opt.AnonymousRouteRoutes + opt.AnonymousRouteBackupRoutes;
 			p2pncs.Net.Overlay.Anonymous.AnonymousRouter.AC_DefaultUseSubscribeRoutes = opt.AnonymousRouteRoutes;

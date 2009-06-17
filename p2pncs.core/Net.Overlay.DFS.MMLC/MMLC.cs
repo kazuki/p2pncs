@@ -62,7 +62,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			_uploadSide.Accepting += new AcceptingEventHandler (AnonymousRouter_Accepting);
 			_uploadSide.Accepted += new AcceptedEventHandler (AnonymousRouter_Accepted);
 
-			dht.RegisterTypeID (typeof (Key), 1);
+			dht.RegisterTypeID (typeof (Key), 2, new LocalHashTableValueMerger <Key> ());
 			_int.AddInterruption (RePut);
 
 			_ar.AddBoundaryNodeReceivedEventHandler (typeof (DHTLookupRequest), DHTLookupRequest_Handler);
@@ -74,7 +74,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		{
 			PublishMessage msg = args.Request as PublishMessage;
 			for (int i = 0; i < msg.Keys.Length; i ++)
-				_mkd.Put (msg.Keys[i], 1, DateTime.Now + TimeSpan.FromMinutes (5), args.RecipientKey);
+				_dht.LocalPut (msg.Keys[i], TimeSpan.FromMinutes (5), args.RecipientKey);
 		}
 
 		void DHTLookupRequest_Handler (object sender, BoundaryNodeReceivedEventArgs args)

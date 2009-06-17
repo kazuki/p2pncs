@@ -21,13 +21,15 @@ namespace p2pncs.Net.Overlay.DHT
 {
 	public interface IDistributedHashTable : IDisposable
 	{
-		void RegisterTypeID (Type type, int id);
+		void RegisterTypeID (Type type, int id, ILocalHashTableValueMerger merger);
 
 		IAsyncResult BeginGet (Key key, Type type, AsyncCallback callback, object state);
 		GetResult EndGet (IAsyncResult ar);
 
 		IAsyncResult BeginPut (Key key, TimeSpan lifeTime, object value, AsyncCallback callback, object state);
 		void EndPut (IAsyncResult ar);
+
+		void LocalPut (Key key, TimeSpan lifeTime, object value);
 
 		IKeyBasedRouter KeyBasedRouter { get; }
 	}

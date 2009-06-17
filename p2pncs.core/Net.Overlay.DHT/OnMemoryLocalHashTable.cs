@@ -26,7 +26,8 @@ namespace p2pncs.Net.Overlay.DHT
 	{
 		IntervalInterrupter _int;
 		ReaderWriterLockWrapper _lock = new ReaderWriterLockWrapper ();
-		Dictionary<PKey, List<Entry>> _dic = new Dictionary<PKey, List<Entry>> ();
+		Dictionary<PKey, object> _dic = new Dictionary<PKey, object> ();
+		HashSet<PKey>[] _dicEachRoutingLevel;
 		Key _self;
 		IKeyBasedRoutingAlgorithm _algo;
 
@@ -36,11 +37,15 @@ namespace p2pncs.Net.Overlay.DHT
 			_algo = router.RoutingAlgorithm;
 			_int = interrupter;
 			_int.AddInterruption (CheckExpiry);
+			_dicEachRoutingLevel = new HashSet<PKey> [_algo.MaxRoutingLevel];
+			for (int i = 0; i < _dicEachRoutingLevel.Length; i ++)
+				_dicEachRoutingLevel[i] = new HashSet<PKey> ();
 		}
 
 		void CheckExpiry ()
 		{
-			List<PKey> removeKeys = null;
+			/// TODO:
+			/*List<PKey> removeKeys = null;
 			using (_lock.EnterReadLock ()) {
 				foreach (KeyValuePair<PKey, List<Entry>> pair in _dic) {
 					List<Entry> list = pair.Value;
@@ -69,111 +74,46 @@ namespace p2pncs.Net.Overlay.DHT
 							_dic.Remove (key);
 					}
 				}
-			}
+			}*/
 		}
 
 		#region ILocalHashTable Members
 
-		public void Put (Key key, int typeId, DateTime expires, object value)
+		public void Put (Key key, int typeId, DateTime expires, object value, ILocalHashTableValueMerger merger)
 		{
-			List<Entry> list;
-			PKey pk = new PKey (key, typeId, _algo.ComputeRoutingLevel (_self, key));
-			Entry entry = new Entry (pk, expires, value);
-			while (true) {
-				using (_lock.EnterReadLock ()) {
-					if (_dic.TryGetValue (pk, out list)) {
-						lock (list) {
-							for (int i = 0; i < list.Count; i ++) {
-								if (entry.Equals (list[i])) {
-									list[i].Extend (entry.Expiry);
-									return;
-								}
-							}
-							list.Add (entry);
-						}
-						return;
-					}
-				}
+			PKey pk = new PKey (key, typeId, _algo.ComputeRoutingLevel (_self, key), merger);
+			object cur_value;
+			using (_lock.EnterReadLock ()) {
+				if (!_dic.TryGetValue (pk, out cur_value))
+					cur_value = null;
+			}
+			if (cur_value == null) {
 				using (_lock.EnterWriteLock ()) {
-					if (!_dic.TryGetValue (pk, out list)) {
-						list = new List<Entry> ();
-						list.Add (entry);
-						_dic.Add (pk, list);
+					if (!_dic.TryGetValue (pk, out cur_value)) {
+						cur_value = merger.Merge (null, value, expires);
+						_dic.Add (pk, cur_value);
+						_dicEachRoutingLevel[pk.RoutingLevel].Add (pk);
 						return;
 					}
 				}
 			}
+
+			lock (cur_value) {
+				merger.Merge (cur_value, value, expires);
+			}
 		}
 
-		public object[] Get (Key key, int typeId)
+		public object[] Get (Key key, int typeId, ILocalHashTableValueMerger merger)
 		{
-			List<Entry> list;
-			PKey pk = new PKey (key, typeId, -1);
+			object value;
+			PKey pk = new PKey (key, typeId, -1, merger);
 			using (_lock.EnterReadLock ()) {
-				if (!_dic.TryGetValue (pk, out list))
+				if (!_dic.TryGetValue (pk, out value))
 					return null;
 			}
 
-			List<Entry> temp = new List<Entry> (list.Count);
-			lock (list) {
-				for (int i = 0; i < list.Count; i ++) {
-					if (list[i].Expiry < DateTime.Now) {
-						list.RemoveAt (i);
-						i --;
-						continue;
-					}
-					temp.Add (list[i]);
-				}
-			}
-
-			if (temp.Count == 0)
-				return new object[0];
-
-			if (temp.Count == 1)
-				return new object[] {temp[0].Value};
-
-			temp.Sort (delegate (Entry x, Entry y) {
-				return x.Expiry.CompareTo (y.Expiry);
-			});
-
-			object[] objects = new object[temp.Count];
-			for (int i = 0; i < temp.Count; i ++)
-				objects[i] = temp[i].Value;
-			return objects;
-		}
-
-		public void Remove (Key key, int typeId, object value)
-		{
-			List<Entry> list;
-			PKey pk = new PKey (key, typeId, -1);
-			bool removeKey = false;
-			
-			if (value != null) {
-				using (_lock.EnterReadLock ()) {
-					if (!_dic.TryGetValue (pk, out list))
-						return;
-				}
-				lock (list) {
-					for (int i = 0; i < list.Count; i ++) {
-						if (value.Equals (list[i].Value)) {
-							list.RemoveAt (i);
-							break;
-						}
-					}
-					removeKey = true;
-				}
-			}
-
-			if (value == null || removeKey) {
-				using (_lock.EnterWriteLock ()) {
-					if (value != null) {
-						if (!_dic.TryGetValue (pk, out list))
-							return;
-						if (list.Count != 0)
-							return;
-					}
-					_dic.Remove (pk);
-				}
+			lock (value) {
+				return merger.GetEntries (value, 5);
 			}
 		}
 
@@ -192,47 +132,39 @@ namespace p2pncs.Net.Overlay.DHT
 		public void GetEachRoutingLevelValues (IList<DHTEntry>[] values)
 		{
 			const int MAX_LIST_SIZE = 10;
-			List<Entry>[] unsentList = new List<Entry>[values.Length];
-			List<Entry>[] sentList = new List<Entry>[values.Length];
-			for (int i = 0; i < sentList.Length; i ++) {
-				unsentList[i] = new List<Entry> ();
-				sentList[i] = new List<Entry> ();
-			}
-
-			using (_lock.EnterReadLock ()) {
-				foreach (KeyValuePair<PKey,List<Entry>> pair in _dic) {
-					List<Entry> list = pair.Value;
-					lock (list) {
-						for (int i = 0; i < list.Count; i++) {
-							if (list[i].Expiry <= DateTime.Now) {
-								list.RemoveAt (i --);
-								continue;
-							}
-							if (list[i].SendFlag) {
-								sentList[pair.Key.RoutingLevel].Add (list[i]);
-							} else {
-								unsentList[pair.Key.RoutingLevel].Add (list[i]);
-							}
+			for (int i = 0; i < values.Length; i ++) {
+				using (_lock.EnterReadLock ()) {
+					if (_dicEachRoutingLevel[i].Count == 0)
+						continue;
+					List<KeyValuePair<PKey, DHTEntry>> list = new List<KeyValuePair<PKey, DHTEntry>> ();
+					int num = MAX_LIST_SIZE / _dicEachRoutingLevel[i].Count;
+					if (num == 0) num = 1;
+					while (list.Count < MAX_LIST_SIZE) {
+						int tmp = list.Count;
+						foreach (PKey pk in _dicEachRoutingLevel[i]) {
+							if (pk.MKDGetter == null) continue;
+							DHTEntry[] entries = pk.MKDGetter.GetSendEntries (pk.Key, pk.TypeID, _dic[pk], num);
+							for (int k = 0; k < entries.Length; k ++)
+								list.Add (new KeyValuePair<PKey, DHTEntry> (pk, entries[k]));
+						}
+						if (list.Count == tmp)
+							break;
+						num = 1;
+					}
+					if (list.Count > MAX_LIST_SIZE) {
+						Random rnd = new Random ();
+						while (list.Count > MAX_LIST_SIZE) {
+							int idx = rnd.Next (list.Count);
+							list[idx].Key.MKDGetter.UnmarkSendFlag (_dic[list[idx].Key], list[idx].Value.Value);
+							list.RemoveAt (idx);
 						}
 					}
-				}
-			}
-
-			for (int i = 0; i < values.Length; i ++) {
-				if (unsentList[i].Count > 0) {
-					Entry[] entries = unsentList[i].ToArray().RandomSelection(MAX_LIST_SIZE);
-					for (int k = 0; k < entries.Length; k ++) {
-						values[i].Add (entries[k].ToDHTEntry ());
-						entries[k].SendFlag = true;
+					HashSet<object> set = new HashSet<object> ();
+					for (int k = 0; k < list.Count; k ++) {
+						values[i].Add (list[k].Value);
+						set.Add (list[k].Value.Value);
 					}
 				}
-
-				/*int size = MAX_LIST_SIZE - values[i].Count;
-				if (size > 0 && sentList[i].Count > 0) {
-					Entry[] entries = sentList[i].ToArray ().RandomSelection (size);
-					for (int k = 0; k < entries.Length; k++)
-						values[i].Add (entries[k].ToDHTEntry ());
-				}*/
 			}
 		}
 
@@ -255,12 +187,14 @@ namespace p2pncs.Net.Overlay.DHT
 			Key _key;
 			int _typeId;
 			int _level;
+			ILocalHashTableValueMerger _merger;
 
-			public PKey (Key key, int typeId, int level)
+			public PKey (Key key, int typeId, int level, ILocalHashTableValueMerger merger)
 			{
 				_key = key;
 				_typeId = typeId;
 				_level = level;
+				_merger = merger;
 			}
 
 			public Key Key {
@@ -273,6 +207,14 @@ namespace p2pncs.Net.Overlay.DHT
 
 			public int RoutingLevel {
 				get { return _level; }
+			}
+
+			public ILocalHashTableValueMerger Merger {
+				get { return _merger; }
+			}
+
+			public IMassKeyDelivererValueGetter MKDGetter {
+				get { return _merger as IMassKeyDelivererValueGetter; }
 			}
 
 			#region IEquatable<KeyAndTypeID> Members
@@ -303,72 +245,6 @@ namespace p2pncs.Net.Overlay.DHT
 				return _key.ToString () + ":" + _typeId.ToString ();
 			}
 			#endregion
-		}
-		class Entry : IEquatable<Entry>
-		{
-			PKey _key;
-			DateTime _expiry;
-			object _value;
-			bool _send = false;
-
-			public Entry (PKey key, DateTime expiry, object value)
-			{
-				_key = key;
-				_expiry = expiry;
-				_value = value;
-			}
-
-			public Key Key {
-				get { return _key.Key; }
-			}
-
-			public int TypeId {
-				get { return _key.TypeID; }
-			}
-
-			public DateTime Expiry {
-				get { return _expiry; }
-			}
-
-			public object Value {
-				get { return _value; }
-			}
-
-			public bool SendFlag {
-				get { return _send; }
-				set { _send = value; }
-			}
-
-			public DHTEntry ToDHTEntry ()
-			{
-				return new DHTEntry (_key.Key, _key.TypeID, _value, _expiry);
-			}
-
-			public void Extend (DateTime newExpiry)
-			{
-				if (_expiry < newExpiry) {
-					_expiry = newExpiry;
-					_send = false;
-				}
-			}
-
-			public bool Equals (Entry other)
-			{
-				return _value.Equals (other._value);
-			}
-
-			public override bool Equals (object obj)
-			{
-				Entry entry = obj as Entry;
-				if (entry == null)
-					return false;
-				return Equals (entry);
-			}
-
-			public override int GetHashCode ()
-			{
-				return _value.GetHashCode ();
-			}
 		}
 		#endregion
 	}

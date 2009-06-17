@@ -24,21 +24,23 @@ namespace p2pncs.Net.Overlay.DHT
 {
 	public class MassKeyDeliverer : IDisposable
 	{
-		const int SEND_NODES = 3;
+		const int SEND_NODES = 2;
 		IKeyBasedRouter _router;
+		IDistributedHashTable _dht;
 		IMessagingSocket _sock;
 		IMassKeyDelivererLocalStore _store;
 		IntervalInterrupter _int;
 		List<DHTEntry>[] _values;
 
-		public MassKeyDeliverer (IKeyBasedRouter router, IMassKeyDelivererLocalStore store, IntervalInterrupter timer)
+		public MassKeyDeliverer (IDistributedHashTable dht, IMassKeyDelivererLocalStore store, IntervalInterrupter timer)
 		{
-			_router = router;
-			_sock = router.MessagingSocket;
+			_router = dht.KeyBasedRouter;
+			_dht = dht;
+			_sock = _router.MessagingSocket;
 			_store = store;
 			_int = timer;
 			timer.AddInterruption (Deliver);
-			_values = new List<DHTEntry> [router.RoutingAlgorithm.MaxRoutingLevel];
+			_values = new List<DHTEntry> [_router.RoutingAlgorithm.MaxRoutingLevel];
 			for (int i = 0; i < _values.Length; i ++)
 				_values[i] = new List<DHTEntry> ();
 			_sock.AddInquiredHandler (typeof (Message), Messaging_Inquired);
@@ -54,7 +56,7 @@ namespace p2pncs.Net.Overlay.DHT
 				IPutterEndPointStore epStore = entry.Value as IPutterEndPointStore;
 				if (epStore != null)
 					epStore.EndPoint = e.EndPoint;
-				_store.Put (entry.Key, entry.TypeId, entry.ExpirationDate, entry.Value);
+				_dht.LocalPut (entry.Key, entry.ExpirationDate - DateTime.Now, entry.Value);
 			}
 		}
 

@@ -33,6 +33,7 @@ namespace p2pncs.Net.Overlay.DHT
 		ILocalHashTable _lht;
 		int _numOfReplicas = 3, _numOfSimultaneous = 3;
 		Dictionary<Type, int> _typeMap = new Dictionary<Type, int> ();
+		Dictionary<int, ILocalHashTableValueMerger> _mergerMap = new Dictionary<int,ILocalHashTableValueMerger> ();
 
 		public SimpleDHT (IKeyBasedRouter kbr, IMessagingSocket sock, ILocalHashTable lht)
 		{
@@ -46,7 +47,7 @@ namespace p2pncs.Net.Overlay.DHT
 		void MessagingSocket_Inquired_GetRequest (object sender, InquiredEventArgs e)
 		{
 			GetRequest getReq = (GetRequest)e.InquireMessage;
-			_sock.StartResponse (e, new GetResponse (_lht.Get (getReq.Key, getReq.TypeID)));
+			_sock.StartResponse (e, new GetResponse (_lht.Get (getReq.Key, getReq.TypeID, _mergerMap[getReq.TypeID])));
 		}
 		void MessagingSocket_Inquired_PutRequest (object sender, InquiredEventArgs e)
 		{
@@ -62,15 +63,16 @@ namespace p2pncs.Net.Overlay.DHT
 
 			int typeId;
 			if (_typeMap.TryGetValue (value.GetType (), out typeId)) {
-				_lht.Put (key, typeId, DateTime.Now + lifeTime, value);
+				_lht.Put (key, typeId, DateTime.Now + lifeTime, value, _mergerMap[typeId]);
 			}
 		}
 
 		#region IDistributedHashTable Members
 
-		public void RegisterTypeID (Type type, int id)
+		public void RegisterTypeID (Type type, int id, ILocalHashTableValueMerger merger)
 		{
 			_typeMap.Add (type, id);
+			_mergerMap.Add (id, merger);
 		}
 
 		public IAsyncResult BeginGet (Key key, Type type, AsyncCallback callback, object state)
@@ -96,6 +98,14 @@ namespace p2pncs.Net.Overlay.DHT
 		public void EndPut (IAsyncResult ar)
 		{
 			ar.AsyncWaitHandle.WaitOne ();
+		}
+
+		public void LocalPut (Key key, TimeSpan lifeTime, object value)
+		{
+			int typeId;
+			if (!_typeMap.TryGetValue (value.GetType (), out typeId))
+				throw new ArgumentException ();
+			_lht.Put (key, typeId, DateTime.Now + lifeTime, value, _mergerMap[typeId]);
 		}
 
 		public IKeyBasedRouter KeyBasedRouter {
@@ -208,7 +218,7 @@ namespace p2pncs.Net.Overlay.DHT
 						if (_getMethod) {
 							lock (_getLock) {
 								_getInquires --;
-								object[] ret = _dht.LocalHashTable.Get (_key, _typeId);
+								object[] ret = _dht.LocalHashTable.Get (_key, _typeId, _dht._mergerMap[_typeId]);
 								if (ret != null || _getInquires == 0) {
 									_result = new GetResult (_key, ret, rr.Hops);
 									Done ();

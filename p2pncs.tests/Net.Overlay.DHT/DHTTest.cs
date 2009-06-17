@@ -44,9 +44,10 @@ namespace p2pncs.tests.Net.Overlay.DHT
 				};
 				env.AddNodes (keys, null);
 				SimpleDHT[] dhts = new SimpleDHT[env.DistributedHashTables.Count];
+				ILocalHashTableValueMerger merger = new LocalHashTableValueMerger<string> ();
 				for (int i = 0; i < dhts.Length; i ++) {
 					dhts[i] = (SimpleDHT)env.DistributedHashTables[i];
-					dhts[i].RegisterTypeID (typeof (string), 0);
+					dhts[i].RegisterTypeID (typeof (string), 0, merger);
 					dhts[i].NumberOfReplicas = 1;
 				}
 
@@ -54,28 +55,28 @@ namespace p2pncs.tests.Net.Overlay.DHT
 				HashSet<object> expectedSet = new HashSet<object> ();
 				expectedSet.Add ("HELLO");
 				dhts[0].EndPut (dhts[0].BeginPut (reqKey, TimeSpan.FromHours (1), "HELLO", null, null));
-				Assert.IsNull (dhts[0].LocalHashTable.Get (reqKey, 0));
-				Assert.IsNull (dhts[1].LocalHashTable.Get (reqKey, 0));
-				Assert.IsNull (dhts[2].LocalHashTable.Get (reqKey, 0));
-				Assert.IsNull (dhts[3].LocalHashTable.Get (reqKey, 0));
-				Assert.IsNull (dhts[4].LocalHashTable.Get (reqKey, 0));
-				Assert.IsTrue (expectedSet.SetEquals (dhts[5].LocalHashTable.Get (reqKey, 0)));
-				Assert.IsNull (dhts[6].LocalHashTable.Get (reqKey, 0));
-				Assert.IsNull (dhts[7].LocalHashTable.Get (reqKey, 0));
+				Assert.IsNull (dhts[0].LocalHashTable.Get (reqKey, 0, merger));
+				Assert.IsNull (dhts[1].LocalHashTable.Get (reqKey, 0, merger));
+				Assert.IsNull (dhts[2].LocalHashTable.Get (reqKey, 0, merger));
+				Assert.IsNull (dhts[3].LocalHashTable.Get (reqKey, 0, merger));
+				Assert.IsNull (dhts[4].LocalHashTable.Get (reqKey, 0, merger));
+				Assert.IsTrue (expectedSet.SetEquals (dhts[5].LocalHashTable.Get (reqKey, 0, merger)));
+				Assert.IsNull (dhts[6].LocalHashTable.Get (reqKey, 0, merger));
+				Assert.IsNull (dhts[7].LocalHashTable.Get (reqKey, 0, merger));
 				GetResult ret = dhts[0].EndGet (dhts[0].BeginGet (reqKey, typeof (string), null, null));
 				Assert.IsNotNull (ret);
 				Assert.IsTrue (expectedSet.SetEquals (ret.Values));
 
 				dhts[0].EndPut (dhts[0].BeginPut (reqKey, TimeSpan.FromHours (1), "HOGE", null, null));
 				expectedSet.Add ("HOGE");
-				Assert.IsNull (dhts[0].LocalHashTable.Get (reqKey, 0));
-				Assert.IsNull (dhts[1].LocalHashTable.Get (reqKey, 0));
-				Assert.IsNull (dhts[2].LocalHashTable.Get (reqKey, 0));
-				Assert.IsNull (dhts[3].LocalHashTable.Get (reqKey, 0));
-				Assert.IsNull (dhts[4].LocalHashTable.Get (reqKey, 0));
-				Assert.IsTrue (expectedSet.SetEquals (dhts[5].LocalHashTable.Get (reqKey, 0)));
-				Assert.IsNull (dhts[6].LocalHashTable.Get (reqKey, 0));
-				Assert.IsNull (dhts[7].LocalHashTable.Get (reqKey, 0));
+				Assert.IsNull (dhts[0].LocalHashTable.Get (reqKey, 0, merger));
+				Assert.IsNull (dhts[1].LocalHashTable.Get (reqKey, 0, merger));
+				Assert.IsNull (dhts[2].LocalHashTable.Get (reqKey, 0, merger));
+				Assert.IsNull (dhts[3].LocalHashTable.Get (reqKey, 0, merger));
+				Assert.IsNull (dhts[4].LocalHashTable.Get (reqKey, 0, merger));
+				Assert.IsTrue (expectedSet.SetEquals (dhts[5].LocalHashTable.Get (reqKey, 0, merger)));
+				Assert.IsNull (dhts[6].LocalHashTable.Get (reqKey, 0, merger));
+				Assert.IsNull (dhts[7].LocalHashTable.Get (reqKey, 0, merger));
 				ret = dhts[0].EndGet (dhts[0].BeginGet (reqKey, typeof (string), null, null));
 				Assert.IsNotNull (ret);
 				Assert.IsTrue (expectedSet.SetEquals (ret.Values));
@@ -83,14 +84,14 @@ namespace p2pncs.tests.Net.Overlay.DHT
 				// Put to local only test
 				dhts[5].EndPut (dhts[5].BeginPut (reqKey, TimeSpan.FromHours (1), "LOCAL PUT", null, null));
 				expectedSet.Add ("LOCAL PUT");
-				Assert.IsNull (dhts[0].LocalHashTable.Get (reqKey, 0));
-				Assert.IsNull (dhts[1].LocalHashTable.Get (reqKey, 0));
-				Assert.IsNull (dhts[2].LocalHashTable.Get (reqKey, 0));
-				Assert.IsNull (dhts[3].LocalHashTable.Get (reqKey, 0));
-				Assert.IsNull (dhts[4].LocalHashTable.Get (reqKey, 0));
-				Assert.IsTrue (expectedSet.SetEquals (dhts[5].LocalHashTable.Get (reqKey, 0)));
-				Assert.IsNull (dhts[6].LocalHashTable.Get (reqKey, 0));
-				Assert.IsNull (dhts[7].LocalHashTable.Get (reqKey, 0));
+				Assert.IsNull (dhts[0].LocalHashTable.Get (reqKey, 0, merger));
+				Assert.IsNull (dhts[1].LocalHashTable.Get (reqKey, 0, merger));
+				Assert.IsNull (dhts[2].LocalHashTable.Get (reqKey, 0, merger));
+				Assert.IsNull (dhts[3].LocalHashTable.Get (reqKey, 0, merger));
+				Assert.IsNull (dhts[4].LocalHashTable.Get (reqKey, 0, merger));
+				Assert.IsTrue (expectedSet.SetEquals (dhts[5].LocalHashTable.Get (reqKey, 0, merger)));
+				Assert.IsNull (dhts[6].LocalHashTable.Get (reqKey, 0, merger));
+				Assert.IsNull (dhts[7].LocalHashTable.Get (reqKey, 0, merger));
 				ret = dhts[0].EndGet (dhts[0].BeginGet (reqKey, typeof (string), null, null));
 				Assert.IsNotNull (ret);
 				Assert.IsTrue (expectedSet.SetEquals (ret.Values));
@@ -113,16 +114,17 @@ namespace p2pncs.tests.Net.Overlay.DHT
 				};
 				env.AddNodes (keys, null);
 				SimpleDHT[] dhts = new SimpleDHT[env.DistributedHashTables.Count];
+				ILocalHashTableValueMerger merger = new LocalHashTableValueMerger<EPStore> ();
 				for (int i = 0; i < dhts.Length; i++) {
 					dhts[i] = (SimpleDHT)env.DistributedHashTables[i];
-					dhts[i].RegisterTypeID (typeof (EPStore), 0);
+					dhts[i].RegisterTypeID (typeof (EPStore), 0, merger);
 					dhts[i].NumberOfReplicas = 1;
 				}
 
 				object[] ary;
 				Key reqKey = new Key (new byte[] { 0xb4, 0x07 });
 				dhts[0].EndPut (dhts[0].BeginPut (reqKey, TimeSpan.FromHours (1), new EPStore ("HELLO"), null, null));
-				ary = dhts[5].LocalHashTable.Get (reqKey, 0);
+				ary = dhts[5].LocalHashTable.Get (reqKey, 0, merger);
 				Assert.IsNotNull (ary);
 				Assert.AreEqual (1, ary.Length);
 				Assert.AreEqual ("HELLO", ((EPStore)ary[0]).Message);
@@ -135,7 +137,7 @@ namespace p2pncs.tests.Net.Overlay.DHT
 				dhts[5].LocalHashTable.Clear ();
 
 				dhts[5].EndPut (dhts[5].BeginPut (reqKey, TimeSpan.FromHours (1), new EPStore ("HOGE"), null, null));
-				ary = dhts[5].LocalHashTable.Get (reqKey, 0);
+				ary = dhts[5].LocalHashTable.Get (reqKey, 0, merger);
 				Assert.IsNotNull (ary);
 				Assert.AreEqual (1, ary.Length);
 				Assert.AreEqual ("HOGE", ((EPStore)ary[0]).Message);
@@ -149,7 +151,7 @@ namespace p2pncs.tests.Net.Overlay.DHT
 		}
 
 		[SerializableTypeId (0x10000)]
-		class EPStore : IPutterEndPointStore
+		class EPStore : IPutterEndPointStore, IEquatable<EPStore>
 		{
 			[SerializableFieldId (0)]
 			EndPoint _ep = null;
@@ -169,6 +171,11 @@ namespace p2pncs.tests.Net.Overlay.DHT
 			public EndPoint EndPoint {
 				get { return _ep; }
 				set { _ep = value;}
+			}
+
+			public bool Equals (EPStore other)
+			{
+				return ((_ep == null && other._ep == null) || (_ep != null && _ep.Equals (other._ep))) && _msg == other._msg;
 			}
 		}
 	}

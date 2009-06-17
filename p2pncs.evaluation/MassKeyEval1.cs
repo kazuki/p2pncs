@@ -29,7 +29,7 @@ namespace p2pncs.Evaluation
 		public void Evaluate (EvalOptionSet opt)
 		{
 			const int KEYS = 100;
-			DateTime expiry = DateTime.Now + TimeSpan.FromHours (1);
+			TimeSpan lifeTime = TimeSpan.FromHours (1);
 			for (int method = 0; method <= 1; method ++) {
 				using (EvalEnvironment env = new EvalEnvironment (opt)) {
 					IntervalInterrupter timer = new IntervalInterrupter (TimeSpan.FromSeconds (1), "TIMER");
@@ -53,10 +53,10 @@ namespace p2pncs.Evaluation
 					Console.WriteLine ("ok");
 					for (int i = 0; i < env.Nodes.Count; i ++) {
 						if (method == 1) {
-							delivers[i] = new MassKeyDeliverer (env.Nodes[i].KeyBasedRouter,
+							delivers[i] = new MassKeyDeliverer (env.Nodes[i].DistributedHashTable,
 								env.Nodes[i].LocalDistributedHashTable as IMassKeyDelivererLocalStore, timer);
 							for (int k = 0; k < KEYS; k++) {
-								env.Nodes[i].LocalDistributedHashTable.Put (list[i * KEYS + k], 0, expiry, Convert.ToBase64String (list[i * KEYS + k].GetByteArray ()));
+								env.Nodes[i].DistributedHashTable.LocalPut (list[i * KEYS + k], lifeTime, Convert.ToBase64String (list[i * KEYS + k].GetByteArray ()));
 							}
 						} else {
 							WaitHandle[] waits = new WaitHandle[KEYS];
