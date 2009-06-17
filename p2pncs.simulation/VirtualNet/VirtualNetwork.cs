@@ -39,7 +39,7 @@ namespace p2pncs.Simulation.VirtualNet
 		List<DatagramInfo>[] _dgramRingBuffer;
 		int _dgramRingOffset = 0;
 
-		ReaderWriterLockSlim _nodeLock = new ReaderWriterLockSlim (LockRecursionPolicy.NoRecursion);
+		ReaderWriterLockWrapper _nodeLock = new ReaderWriterLockWrapper ();
 		Dictionary<EndPoint, VirtualNetworkNode> _mapping = new Dictionary<EndPoint, VirtualNetworkNode> ();
 		List<VirtualNetworkNode> _nodes = new List<VirtualNetworkNode> ();
 
@@ -94,11 +94,11 @@ namespace p2pncs.Simulation.VirtualNet
 					_dgramList = list;
 				}
 				Interlocked.Exchange (ref _dgramListIndex, -1);
-				_nodeLock.EnterReadLock ();
-				for (int i = 0; i < _invokeStartHandles.Length; i ++)
-					_invokeStartHandles[i].Set ();
-				WaitHandle.WaitAll (_invokeEndHandles);
-				_nodeLock.ExitReadLock ();
+				using (_nodeLock.EnterReadLock ()) {
+					for (int i = 0; i < _invokeStartHandles.Length; i ++)
+						_invokeStartHandles[i].Set ();
+					WaitHandle.WaitAll (_invokeEndHandles);
+				}
 				list.Clear ();
 
 				timer.Stop ();
@@ -150,29 +150,29 @@ namespace p2pncs.Simulation.VirtualNet
 		internal VirtualNetworkNode AddVirtualNode (VirtualDatagramEventSocket sock, EndPoint bindEP)
 		{
 			VirtualNetworkNode node = new VirtualNetworkNode (sock, bindEP);
-			_nodeLock.EnterWriteLock ();
-			_mapping[bindEP] = node;
-			_nodes.Add (node);
-			_nodeLock.ExitWriteLock ();
+			using (_nodeLock.EnterWriteLock ()) {
+				_mapping[bindEP] = node;
+				_nodes.Add (node);
+			}
 			return node;
 		}
 
 		internal void AddVirtualMessagingSocketToVirtualNode (VirtualDatagramEventSocket sock, VirtualMessagingSocket msock)
 		{
-			_nodeLock.EnterReadLock ();
-			VirtualNetworkNode node;
-			if (_mapping.TryGetValue (sock.BindedPublicEndPoint, out node)) {
-				node.MessagingSocket = msock;
+			using (_nodeLock.EnterReadLock ()) {
+				VirtualNetworkNode node;
+				if (_mapping.TryGetValue (sock.BindedPublicEndPoint, out node)) {
+					node.MessagingSocket = msock;
+				}
 			}
-			_nodeLock.ExitReadLock ();
 		}
 
 		internal void RemoveVirtualNode (VirtualNetworkNode node)
 		{
-			_nodeLock.EnterWriteLock ();
-			_mapping.Remove (node.BindedPublicEndPoint);
-			_nodes.Remove (node);
-			_nodeLock.ExitWriteLock ();
+			using (_nodeLock.EnterWriteLock ()) {
+				_mapping.Remove (node.BindedPublicEndPoint);
+				_nodes.Remove (node);
+			}
 		}
 
 		void MessageScheduling (DatagramInfo dgram)
@@ -228,21 +228,21 @@ namespace p2pncs.Simulation.VirtualNet
 
 		public void CloseAllSockets ()
 		{
-			_nodeLock.EnterWriteLock ();
-			_mapping.Clear ();
-			_nodes.Clear ();
-			_nodeLock.ExitWriteLock ();
+			using (_nodeLock.EnterWriteLock ()) {
+				_mapping.Clear ();
+				_nodes.Clear ();
+			}
 		}
 
 		public void CloseSockets (IList<VirtualDatagramEventSocket> list)
 		{
-			_nodeLock.EnterWriteLock ();
-			for (int i = 0; i < list.Count; i ++) {
-				VirtualNetworkNode vnode = list[i].VirtualNetworkNodeInfo;
-				_mapping.Remove (vnode.BindedPublicEndPoint);
-				_nodes.Remove (vnode);
+			using (_nodeLock.EnterWriteLock ()) {
+				for (int i = 0; i < list.Count; i ++) {
+					VirtualNetworkNode vnode = list[i].VirtualNetworkNodeInfo;
+					_mapping.Remove (vnode.BindedPublicEndPoint);
+					_nodes.Remove (vnode);
+				}
 			}
-			_nodeLock.ExitWriteLock ();
 		}
 
 		public void Close ()
