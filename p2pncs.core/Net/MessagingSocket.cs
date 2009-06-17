@@ -133,6 +133,8 @@ MessageError:
 
 		protected override InquiredAsyncResultBase CreateInquiredAsyncResult (uint id, object obj, EndPoint remoteEP, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state)
 		{
+			if (remoteEP == null)
+				throw new ArgumentNullException ();
 			if (obj == null)
 				obj = _nullObject;
 			byte[] msg = SerializeTransmitData (MessageType.Request, id, obj);

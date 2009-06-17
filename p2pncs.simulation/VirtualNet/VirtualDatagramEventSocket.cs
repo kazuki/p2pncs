@@ -75,6 +75,8 @@ namespace p2pncs.Simulation.VirtualNet
 
 		public void SendTo (byte[] buffer, EndPoint remoteEP)
 		{
+			if (remoteEP == null)
+				throw new ArgumentNullException ();
 			SendTo (buffer, 0, buffer.Length, remoteEP);
 		}
 
@@ -82,6 +84,8 @@ namespace p2pncs.Simulation.VirtualNet
 		{
 			if (_vnet == null)
 				return;
+			if (remoteEP == null)
+				throw new ArgumentNullException ();
 			if (size > MaxDatagramSize)
 				throw new System.Net.Sockets.SocketException ();
 			_vnet.AddSendQueue (_bindPubEP, remoteEP, buffer, offset, size);

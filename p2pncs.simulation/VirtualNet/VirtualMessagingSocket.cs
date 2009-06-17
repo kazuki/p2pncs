@@ -77,6 +77,8 @@ namespace p2pncs.Simulation.VirtualNet
 
 		protected override InquiredAsyncResultBase CreateInquiredAsyncResult (uint id, object obj, EndPoint remoteEP, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state)
 		{
+			if (remoteEP == null)
+				throw new ArgumentNullException ();
 			return new InquiredAsyncResult (obj, remoteEP, id, timeout, maxRetry, callback, state);
 		}
 
