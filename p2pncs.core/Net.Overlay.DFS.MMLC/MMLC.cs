@@ -300,16 +300,18 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				} catch (Exception exception) {
 					Console.WriteLine ("{0}: マージ中に例外. {1}", _isInitiator ? "I" : "A", exception.ToString ());
 				} finally {
-					if (_sock != null) {
-						try {
-							_sock.Shutdown ();
-							Console.WriteLine ("StreamSocket is shutdown");
-							_sock.Dispose ();
-						} catch {}
-					}
 					if (_callback != null) {
 						try {
 							_callback (null, new MergeDoneCallbackArgs (_state));
+						} catch {}
+					}
+					if (_sock != null) {
+						try {
+							_sock.Shutdown ();
+						} catch {}
+						Console.WriteLine ("StreamSocket is shutdown");
+						try {
+							_sock.Dispose ();
 						} catch {}
 					}
 				}
@@ -341,6 +343,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					return;
 				}
 				IAnonymousSocket sock;
+				DateTime dt = DateTime.Now;
 				try {
 					sock = _mmlc._ar.EndConnect (ar);
 				} catch {
@@ -348,7 +351,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					return;
 				}
 				Console.WriteLine ("I: 接続OK");
-				_sock = new StreamSocket (sock, null, MaxDatagramSize, _mmlc._anonStrmSockInt);
+				_sock = new StreamSocket (sock, null, MaxDatagramSize, DateTime.Now.Subtract (dt), _mmlc._anonStrmSockInt);
 				sock.InitializedEventHandlers ();
 				Console.WriteLine ("I: StreamSocket...OK");
 				MergeableFileHeader header = sock.PayloadAtEstablishing as MergeableFileHeader;
