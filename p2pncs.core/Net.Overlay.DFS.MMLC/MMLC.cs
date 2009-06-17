@@ -753,9 +753,11 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 							
 							list = _dic[info.Hash];
 							for (int i = 0; i < list.Count; i ++) {
-								if (list[i].ExpirationDate <= DateTime.Now || info.Equals (list[i])) {
+								if (list[i].ExpirationDate <= DateTime.Now) {
 									_dic2.Remove (list[i].Holder);
 									list.RemoveAt (i --);
+								} else if (info.Equals (list[i])) {
+									list.RemoveAt (i--);
 								}
 							}
 							if (list.Count == 0)
