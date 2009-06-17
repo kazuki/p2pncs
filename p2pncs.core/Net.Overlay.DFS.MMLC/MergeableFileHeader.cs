@@ -41,6 +41,10 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		[SerializableFieldId (4)]
 		Key _recordsetHash;
 
+		MergeableFileHeader ()
+		{
+		}
+
 		public MergeableFileHeader (ECKeyPair privateKey, DateTime lastManaged, IHashComputable content)
 		{
 			_lastManaged = lastManaged;
@@ -49,6 +53,17 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				_recordsetHash = new Key (new byte[algo.HashSize >> 3]);
 			}
 			Sign (privateKey);
+		}
+
+		public MergeableFileHeader CopyBasisInfo ()
+		{
+			MergeableFileHeader header = new MergeableFileHeader ();
+			header._key = this._key;
+			header._lastManaged = this._lastManaged;
+			header._content = this._content;
+			header._sign = this._sign;
+			header._recordsetHash = new Key (new byte[_recordsetHash.KeyBytes]);
+			return header;
 		}
 
 		public void Sign (ECKeyPair privateKey)

@@ -242,7 +242,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		{
 			StreamSocket sock = new StreamSocket (args.Socket, AnonymousRouter.DummyEndPoint, MaxDatagramSize, _anonStrmSockInt);
 			args.Socket.InitializedEventHandlers ();
-			MergeProcess proc = new MergeProcess (this, sock, args.State);
+			MergeProcess proc = new MergeProcess (this, sock, args.State, args.Payload as MergeableFileHeader);
 			proc.Thread.Start ();
 		}
 
@@ -254,6 +254,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>> _kvPair;
 			Thread _thrd;
 			EventHandler<MergeDoneCallbackArgs> _callback;
+			MergeableFileHeader _other_header = null;
 			object _state;
 			bool _isInitiator;
 
@@ -271,11 +272,12 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				_state = state;
 			}
 
-			public MergeProcess (MMLC mmlc, StreamSocket sock, object state)
+			public MergeProcess (MMLC mmlc, StreamSocket sock, object state, MergeableFileHeader other_header)
 			{
 				_mmlc = mmlc;
 				_sock = sock;
 				_kvPair = (KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>>)state;
+				_other_header = other_header;
 				_isInitiator = false;
 				_thrd = new Thread (Process);
 			}
@@ -298,6 +300,13 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				} catch (Exception exception) {
 					Console.WriteLine ("{0}: マージ中に例外. {1}", _isInitiator ? "I" : "A", exception.ToString ());
 				} finally {
+					if (_sock != null) {
+						try {
+							_sock.Shutdown ();
+							Console.WriteLine ("StreamSocket is shutdown");
+							_sock.Dispose ();
+						} catch {}
+					}
 					if (_callback != null) {
 						try {
 							_callback (null, new MergeDoneCallbackArgs (_state));
@@ -360,8 +369,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 								_key = null;
 								continue;
 							}
-							header.RecordsetHash = new Key (new byte[header.RecordsetHash.KeyBytes]);
-							_kvPair = new KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>> (header, new List<MergeableFileRecord> ());
+							_kvPair = new KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>> (header.CopyBasisInfo (), new List<MergeableFileRecord> ());
 							_mmlc._db.Add (_key, _kvPair);
 							_key = null;
 							break;
@@ -369,6 +377,11 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					}
 				}
 				Console.WriteLine ("I: ヘッダを受信");
+
+				if (_kvPair.Key.RecordsetHash.Equals (header.RecordsetHash)) {
+					Console.WriteLine ("I: 同じデータなのでマージ処理終了");
+					return;
+				}
 
 				byte[] buf = new byte[4];
 				Console.WriteLine ("I: 保持しているレコード一覧を送信中");
@@ -411,8 +424,13 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 			void AccepterSideProcess ()
 			{
-				byte[] buf = new byte[4];
 				Console.WriteLine ("A: START");
+				if (_other_header != null && _kvPair.Key.RecordsetHash.Equals (_other_header.RecordsetHash)) {
+					Console.WriteLine ("A: 同じデータなのでマージ処理終了");
+					return;
+				}
+
+				byte[] buf = new byte[4];
 				Console.WriteLine ("A: 保持しているレコード一覧を受信中...");
 				MergeableRecordList recordList = ReceiveMessage (ref buf) as MergeableRecordList;
 				if (recordList == null) {
