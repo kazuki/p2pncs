@@ -62,7 +62,7 @@ namespace p2pncs
 		{
 			int base_port = _config.GetValue<int> ("gw/bind/port");
 
-			_network = new VirtualNetwork (LatencyTypes.Constant (20), 5, PacketLossType.Lossless (), Environment.ProcessorCount);
+			_network = new VirtualNetwork (LatencyTypes.Constant (20), 5, PacketLossType.Constant (0.05), Environment.ProcessorCount);
 			for (int i = 0; i < NODES; i++) {
 				AddNode (base_port);
 				if (i == 10) base_port = -1;
