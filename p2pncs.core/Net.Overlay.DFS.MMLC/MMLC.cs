@@ -157,6 +157,15 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				kv.Key.RecordsetHash = kv.Key.RecordsetHash.Xor (record.Hash);
 			}
 		}
+
+		void Touch (MergeableFileHeader header)
+		{
+			lock (_rePutList) {
+				if (_rePutList.Contains (header.Key))
+					return;
+				_rePutList.Add (header.Key);
+			}
+		}
 		#endregion
 
 		#region Misc
@@ -232,7 +241,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		{
 			StreamSocket sock = new StreamSocket (args.Socket, AnonymousRouter.DummyEndPoint, MaxDatagramSize, _anonStrmSockInt);
 			args.Socket.InitializedEventHandlers ();
-			MergeProcess proc = new MergeProcess (sock, args.State);
+			MergeProcess proc = new MergeProcess (this, sock, args.State);
 			proc.Thread.Start ();
 		}
 
@@ -261,8 +270,9 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				_state = state;
 			}
 
-			public MergeProcess (StreamSocket sock, object state)
+			public MergeProcess (MMLC mmlc, StreamSocket sock, object state)
 			{
+				_mmlc = mmlc;
 				_sock = sock;
 				_kvPair = (KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>>)state;
 				_isInitiator = false;
@@ -276,11 +286,14 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			void Process ()
 			{
 				try {
+					Key beforeHash = _kvPair.Key == null ? null : _kvPair.Key.RecordsetHash;
 					if (_isInitiator) {
 						InitiatorSideProcess ();
 					} else {
 						AccepterSideProcess ();
 					}
+					if (_kvPair.Key != null && (beforeHash == null || !beforeHash.Equals (_kvPair.Key.RecordsetHash)))
+						_mmlc.Touch (_kvPair.Key);
 				} catch (Exception exception) {
 					Console.WriteLine ("{0}: マージ中に例外. {1}", _isInitiator ? "I" : "A", exception.ToString ());
 				} finally {
