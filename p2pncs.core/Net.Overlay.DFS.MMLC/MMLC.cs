@@ -299,15 +299,15 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 		sealed class MergeProcess
 		{
+			const int MAX_PARALLEL_MERGE = 5;
 			MMLC _mmlc;
 			Key _key;
-			StreamSocket _sock;
 			KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>> _kvPair;
 			Thread _thrd;
-			MergeableFileHeader _other_header = null;
 			List<EventHandler<MergeDoneCallbackArgs>> _callbacks;
 			List<object> _states;
 			bool _isInitiator, _forseFastPut = false;
+			object[] _accepterSideValues;
 
 			public MergeProcess (MMLC mmlc, Key key, bool forseFastPut, EventHandler<MergeDoneCallbackArgs> callback, object state)
 			{
@@ -331,9 +331,8 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			public MergeProcess (MMLC mmlc, StreamSocket sock, object state, MergeableFileHeader other_header)
 			{
 				_mmlc = mmlc;
-				_sock = sock;
 				_kvPair = (KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>>)state;
-				_other_header = other_header;
+				_accepterSideValues = new object[] {sock, other_header};
 				_isInitiator = false;
 				_thrd = new Thread (Process);
 			}
@@ -357,43 +356,37 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 			void Process ()
 			{
+				Key beforeHash = _kvPair.Key == null ? null : _kvPair.Key.RecordsetHash;
+				if (_isInitiator) {
+					InitiatorSideProcess ();
+				} else {
+					AccepterSideProcess ();
+				}
+				if (_kvPair.Key != null && (_forseFastPut || beforeHash == null || !beforeHash.Equals (_kvPair.Key.RecordsetHash)))
+					_mmlc.Touch (_kvPair.Key);
+			}
+
+			void InitiatorSideProcess ()
+			{
 				try {
-					Key beforeHash = _kvPair.Key == null ? null : _kvPair.Key.RecordsetHash;
-					if (_isInitiator) {
-						InitiatorSideProcess ();
-					} else {
-						AccepterSideProcess ();
-					}
-					if (_kvPair.Key != null && (_forseFastPut || beforeHash == null || !beforeHash.Equals (_kvPair.Key.RecordsetHash)))
-						_mmlc.Touch (_kvPair.Key);
+					InitiatorSideDHTLookupProcess ();
 				} catch (Exception exception) {
-					Console.WriteLine ("{0}: マージ中に例外. {1}", _isInitiator ? "I" : "A", exception.ToString ());
+					Console.WriteLine ("I: DHTルックアップ中に例外. {0}", exception.ToString ());
 				} finally {
-					if (_isInitiator) {
-						_mmlc.MergeFinished (_key != null ? _key : _kvPair.Key.Key);
-						lock (_callbacks) {
-							for (int i = 0; i < _callbacks.Count; i ++) {
-								try {
-									_callbacks[i] (null, new MergeDoneCallbackArgs (_states[i]));
-								} catch {}
-							}
-							_callbacks.Clear ();
-							_states = null;
+					_mmlc.MergeFinished (_key != null ? _key : _kvPair.Key.Key);
+					lock (_callbacks) {
+						for (int i = 0; i < _callbacks.Count; i++) {
+							try {
+								_callbacks[i] (null, new MergeDoneCallbackArgs (_states[i]));
+							} catch { }
 						}
-					}
-					if (_sock != null) {
-						try {
-							_sock.Shutdown ();
-						} catch {}
-						Console.WriteLine ("StreamSocket is shutdown");
-						try {
-							_sock.Dispose ();
-						} catch {}
+						_callbacks.Clear ();
+						_states = null;
 					}
 				}
 			}
 
-			void InitiatorSideProcess ()
+			void InitiatorSideDHTLookupProcess ()
 			{
 				Console.WriteLine ("I: START");
 				Console.WriteLine ("I: DHTに問い合わせ中...");
@@ -404,35 +397,64 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					return;
 				foreach (DHTMergeableFileValue value in dhtres.Values)
 					Console.WriteLine ("I:   {0}/{1}", value.Holder.ToString ().Substring (0, 8), value.Hash.ToString ().Substring (0, 8));
-				bool connecting = false;
-				for (int i = 0; i < dhtres.Values.Length; i++) {
+				List<WaitHandle> parallelMergeThreads = new List<WaitHandle> ();
+				HashSet<Key> mergingHashSet = new HashSet<Key> ();
+				for (int i = 0; i < dhtres.Values.Length && parallelMergeThreads.Count < MAX_PARALLEL_MERGE; i++) {
 					try {
-						if (_key == null && _kvPair.Key.RecordsetHash.Equals (dhtres.Values[i].Hash))
-							continue;
+						if (_key == null && _kvPair.Key.RecordsetHash.Equals (dhtres.Values[i].Hash)) continue;
+						if (mergingHashSet.Contains (dhtres.Values[i].Hash)) continue;
 						ar = _mmlc._ar.BeginConnect (_mmlc._uploadSide.Key, dhtres.Values[i].Holder, AnonymousConnectionType.HighThroughput,
 							_key != null ? (object)_key : (object)_kvPair.Key, null, null);
 						Console.WriteLine ("I: {0}へ接続", dhtres.Values[i].Holder.ToString ().Substring (0, 8));
-						connecting = true;
-						break;
+						mergingHashSet.Add (dhtres.Values[i].Hash);
+						ManualResetEvent done = new ManualResetEvent (false);
+						parallelMergeThreads.Add (done);
+						new Thread (InitiatorSideMergeProcess).Start (new object[] {done, ar});
 					} catch {}
 				}
-				if (!connecting) {
+				if (parallelMergeThreads.Count == 0) {
 					Console.WriteLine ("I: 接続先が見つかりません");
 					return;
 				}
-				IAnonymousSocket sock;
-				DateTime dt = DateTime.Now;
+				WaitHandle.WaitAll (parallelMergeThreads.ToArray ());
+			}
+
+			void InitiatorSideMergeProcess (object o)
+			{
+				object[] args = (object[])o;
+				ManualResetEvent done = args[0] as ManualResetEvent;
+				StreamSocket sock = null;
 				try {
-					sock = _mmlc._ar.EndConnect (ar);
-				} catch {
-					Console.WriteLine ("I: 接続失敗");
-					return;
+					IAnonymousSocket anon_sock;
+					DateTime dt = DateTime.Now;
+					try {
+						anon_sock = _mmlc._ar.EndConnect (args[1] as IAsyncResult);
+					} catch {
+						Console.WriteLine ("I: 接続失敗");
+						return;
+					}
+					Console.WriteLine ("I: 接続OK");
+					sock = new StreamSocket (anon_sock, null, MaxDatagramSize, DateTime.Now.Subtract (dt), _mmlc._anonStrmSockInt);
+					anon_sock.InitializedEventHandlers ();
+					InitiatorSideMergeProcess (sock, anon_sock.PayloadAtEstablishing as MergeableFileHeader);
+				} catch (Exception exception) {
+					Console.WriteLine ("I: マージ中に例外. {0}", exception.ToString ());
+				} finally {
+					if (sock != null) {
+						try {
+							sock.Shutdown ();
+						} catch {}
+						Console.WriteLine ("I: StreamSocket is shutdown");
+						try {
+							sock.Dispose ();
+						} catch {}
+					}
+					done.Set ();
 				}
-				Console.WriteLine ("I: 接続OK");
-				_sock = new StreamSocket (sock, null, MaxDatagramSize, DateTime.Now.Subtract (dt), _mmlc._anonStrmSockInt);
-				sock.InitializedEventHandlers ();
-				Console.WriteLine ("I: StreamSocket...OK");
-				MergeableFileHeader header = sock.PayloadAtEstablishing as MergeableFileHeader;
+			}
+
+			void InitiatorSideMergeProcess (StreamSocket sock, MergeableFileHeader header)
+			{
 				if (header == null || !(_key == null ? _kvPair.Key.Key : _key).Equals (header.Key) || !header.Verify ()) {
 					Console.WriteLine ("I: 不正なヘッダだよん");
 					return;
@@ -471,10 +493,10 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					for (int i = 0; i < _kvPair.Value.Count; i++)
 						list.Add (_kvPair.Value[i].Hash);
 				}
-				SendMessage (new MergeableRecordList (list.ToArray ()));
+				SendMessage (sock, new MergeableRecordList (list.ToArray ()));
 
 				Console.WriteLine ("I: レコード一覧を受信中...");
-				MergeableRecordList recordList = ReceiveMessage (ref buf) as MergeableRecordList;
+				MergeableRecordList recordList = ReceiveMessage (sock, ref buf) as MergeableRecordList;
 				if (recordList == null) {
 					Console.WriteLine ("I: デシリアライズ失敗");
 					return;
@@ -489,10 +511,10 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 							sendList.Add (_kvPair.Value[i]);
 					}
 				}
-				SendMessage (new MergeableRecords (sendList.ToArray ()));
+				SendMessage (sock, new MergeableRecords (sendList.ToArray ()));
 
 				Console.WriteLine ("I: レコードを受信中...");
-				MergeableRecords records = ReceiveMessage (ref buf) as MergeableRecords;
+				MergeableRecords records = ReceiveMessage (sock, ref buf) as MergeableRecords;
 				if (recordList == null) {
 					Console.WriteLine ("I: デシリアライズ失敗");
 					return;
@@ -505,15 +527,34 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 			void AccepterSideProcess ()
 			{
+				StreamSocket sock = _accepterSideValues[0] as StreamSocket;
+				MergeableFileHeader other_header = _accepterSideValues[1] as MergeableFileHeader;
+				try {
+					AccepterSideMergeProcess (sock, other_header);
+				} catch (Exception exception) {
+					Console.WriteLine ("A: マージ中に例外. {0}", exception.ToString ());
+				} finally {
+					try {
+						sock.Shutdown ();
+					} catch {}
+					Console.WriteLine ("A: StreamSocket is shutdown");
+					try {
+						sock.Dispose ();
+					} catch {}
+				}
+			}
+
+			void AccepterSideMergeProcess (StreamSocket sock, MergeableFileHeader other_header)
+			{
 				Console.WriteLine ("A: START");
-				if (_other_header != null && _kvPair.Key.RecordsetHash.Equals (_other_header.RecordsetHash)) {
+				if (other_header != null && _kvPair.Key.RecordsetHash.Equals (other_header.RecordsetHash)) {
 					Console.WriteLine ("A: 同じデータなのでマージ処理終了");
 					return;
 				}
 
 				byte[] buf = new byte[4];
 				Console.WriteLine ("A: 保持しているレコード一覧を受信中...");
-				MergeableRecordList recordList = ReceiveMessage (ref buf) as MergeableRecordList;
+				MergeableRecordList recordList = ReceiveMessage (sock, ref buf) as MergeableRecordList;
 				if (recordList == null) {
 					Console.WriteLine ("A: デシリアライズ失敗");
 					return;
@@ -529,13 +570,13 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				}
 				Key[] keys = new Key[otherSet.Count];
 				otherSet.CopyTo (keys);
-				SendMessage (new MergeableRecordList (keys));
+				SendMessage (sock, new MergeableRecordList (keys));
 
 				Console.WriteLine ("A: レコードを送信中");
-				SendMessage (new MergeableRecords (sendList.ToArray ()));
+				SendMessage (sock, new MergeableRecords (sendList.ToArray ()));
 
 				Console.WriteLine ("A: レコードを受信中...");
-				MergeableRecords records = ReceiveMessage (ref buf) as MergeableRecords;
+				MergeableRecords records = ReceiveMessage (sock, ref buf) as MergeableRecords;
 				if (recordList == null) {
 					Console.WriteLine ("A: デシリアライズ失敗");
 					return;
@@ -546,7 +587,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				Console.WriteLine ("A: マージ完了!!!");
 			}
 
-			void SendMessage (object msg)
+			void SendMessage (StreamSocket sock, object msg)
 			{
 				byte[] buf;
 				using (MemoryStream ms = new MemoryStream ()) {
@@ -562,20 +603,20 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				buf[2] = (byte)(size >>  8);
 				buf[3] = (byte)(size);
 				
-				_sock.Send (buf, 0, buf.Length);
+				sock.Send (buf, 0, buf.Length);
 			}
 
-			object ReceiveMessage (ref byte[] buf)
+			object ReceiveMessage (StreamSocket sock, ref byte[] buf)
 			{
 				int size = 4, received = 0;
 				while (received < size)
-					received += _sock.Receive (buf, received, size - received);
+					received += sock.Receive (buf, received, size - received);
 				size = (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3];
 				received = 0;
 				if (buf.Length < size)
 					buf = new byte[size];
 				while (received < size)
-					received += _sock.Receive (buf, received, size - received);
+					received += sock.Receive (buf, received, size - received);
 				return Serializer.Instance.Deserialize (buf);
 			}
 
