@@ -36,6 +36,8 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		Dictionary<Key, KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>>> _db = new Dictionary<Key,KeyValuePair<MergeableFileHeader,List<MergeableFileRecord>>> ();
 		HashSet<Key> _localChangedList = new HashSet<Key> ();
 
+		Dictionary<Key, MergeProcess> _mergingFiles = new Dictionary<Key,MergeProcess> ();
+
 		TimeSpan _rePutInterval = TimeSpan.FromMinutes (3);
 		DateTime _rePutNextTime = DateTime.Now;
 		List<Key> _rePutList = new List<Key> ();
@@ -237,8 +239,29 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			lock (_localChangedList) {
 				forseFastPut = _localChangedList.Remove (key);
 			}
-			MergeProcess proc = new MergeProcess (this, key, forseFastPut, callback, state);
-			proc.Thread.Start ();
+
+			MergeProcess proc = null;
+			lock (_mergingFiles) {
+				_mergingFiles.TryGetValue (key, out proc);
+				if (proc == null) {
+					proc = new MergeProcess (this, key, forseFastPut, callback, state);
+					_mergingFiles.Add (key, proc);
+					proc.Thread.Start ();
+					return;
+				}
+			}
+			if (!proc.AddNewCallback (callback, state)) {
+				try {
+					callback (null, new MergeDoneCallbackArgs (state));
+				} catch {}
+			}
+		}
+
+		public void MergeFinished (Key key)
+		{
+			lock (_mergingFiles) {
+				_mergingFiles.Remove (key);
+			}
 		}
 
 		void AnonymousRouter_Accepting (object sender, AcceptingEventArgs args)
@@ -281,9 +304,9 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			StreamSocket _sock;
 			KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>> _kvPair;
 			Thread _thrd;
-			EventHandler<MergeDoneCallbackArgs> _callback;
 			MergeableFileHeader _other_header = null;
-			object _state;
+			List<EventHandler<MergeDoneCallbackArgs>> _callbacks;
+			List<object> _states;
 			bool _isInitiator, _forseFastPut = false;
 
 			public MergeProcess (MMLC mmlc, Key key, bool forseFastPut, EventHandler<MergeDoneCallbackArgs> callback, object state)
@@ -297,8 +320,12 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				_forseFastPut = forseFastPut;
 				_isInitiator = true;
 				_thrd = new Thread (Process);
-				_callback = callback;
-				_state = state;
+				_callbacks = new List<EventHandler<MergeDoneCallbackArgs>> (1);
+				_states = new List<object> (1);
+				if (callback != null) {
+					_callbacks.Add (callback);
+					_states.Add (state);
+				}
 			}
 
 			public MergeProcess (MMLC mmlc, StreamSocket sock, object state, MergeableFileHeader other_header)
@@ -309,6 +336,19 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				_other_header = other_header;
 				_isInitiator = false;
 				_thrd = new Thread (Process);
+			}
+
+			public bool AddNewCallback (EventHandler<MergeDoneCallbackArgs> callback, object state)
+			{
+				if (callback == null)
+					return true;
+				lock (_callbacks) {
+					if (_states == null)
+						return false;
+					_callbacks.Add (callback);
+					_states.Add (state);
+					return true;
+				}
 			}
 
 			public Thread Thread {
@@ -329,10 +369,17 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				} catch (Exception exception) {
 					Console.WriteLine ("{0}: マージ中に例外. {1}", _isInitiator ? "I" : "A", exception.ToString ());
 				} finally {
-					if (_callback != null) {
-						try {
-							_callback (null, new MergeDoneCallbackArgs (_state));
-						} catch {}
+					if (_isInitiator) {
+						_mmlc.MergeFinished (_key != null ? _key : _kvPair.Key.Key);
+						lock (_callbacks) {
+							for (int i = 0; i < _callbacks.Count; i ++) {
+								try {
+									_callbacks[i] (null, new MergeDoneCallbackArgs (_states[i]));
+								} catch {}
+							}
+							_callbacks.Clear ();
+							_states = null;
+						}
 					}
 					if (_sock != null) {
 						try {
