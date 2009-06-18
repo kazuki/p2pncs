@@ -34,6 +34,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		// On-memory Database
 		ReaderWriterLockWrapper _dbLock = new ReaderWriterLockWrapper ();
 		Dictionary<Key, KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>>> _db = new Dictionary<Key,KeyValuePair<MergeableFileHeader,List<MergeableFileRecord>>> ();
+		HashSet<Key> _localChangedList = new HashSet<Key> ();
 
 		TimeSpan _rePutInterval = TimeSpan.FromMinutes (3);
 		DateTime _rePutNextTime = DateTime.Now;
@@ -68,6 +69,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 			_ar.AddBoundaryNodeReceivedEventHandler (typeof (DHTLookupRequest), DHTLookupRequest_Handler);
 			_ar.AddBoundaryNodeReceivedEventHandler (typeof (PublishMessage), PublishMessage_Handler);
+			_ar.AddBoundaryNodeReceivedEventHandler (typeof (FastPublishMessage), FastPublishMessage_Handler);
 		}
 
 		#region AnonymousRouter.BoundaryNode ReceivedEvent Handlers
@@ -93,6 +95,12 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				}
 				args.StartResponse (new DHTLookupResponse (list.ToArray ()));
 			}, null);
+		}
+
+		void FastPublishMessage_Handler (object sender, BoundaryNodeReceivedEventArgs args)
+		{
+			FastPublishMessage msg = args.Request as FastPublishMessage;
+			_dht.BeginPut (msg.Key, TimeSpan.FromMinutes (5), new DHTMergeableFileValue (args.RecipientKey, msg.Hash), null, null);
 		}
 		#endregion
 
@@ -157,6 +165,9 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				kv.Value.Add (record);
 				kv.Key.RecordsetHash = kv.Key.RecordsetHash.Xor (record.Hash);
 			}
+			lock (_localChangedList) {
+				_localChangedList.Add (kv.Key.Key);
+			}
 		}
 
 		void Touch (MergeableFileHeader header)
@@ -166,6 +177,8 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					return;
 				_rePutList.Add (header.Key);
 			}
+			FastPublishMessage msg = new FastPublishMessage (header.Key, header.RecordsetHash);
+			_uploadSide.MessagingSocket.BeginInquire (msg, null, null, null);
 		}
 		#endregion
 
@@ -220,7 +233,11 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 		public void StartMerge (Key key, EventHandler<MergeDoneCallbackArgs> callback, object state)
 		{
-			MergeProcess proc = new MergeProcess (this, key, callback, state);
+			bool forseFastPut = false;
+			lock (_localChangedList) {
+				forseFastPut = _localChangedList.Remove (key);
+			}
+			MergeProcess proc = new MergeProcess (this, key, forseFastPut, callback, state);
 			proc.Thread.Start ();
 		}
 
@@ -267,9 +284,9 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			EventHandler<MergeDoneCallbackArgs> _callback;
 			MergeableFileHeader _other_header = null;
 			object _state;
-			bool _isInitiator;
+			bool _isInitiator, _forseFastPut = false;
 
-			public MergeProcess (MMLC mmlc, Key key, EventHandler<MergeDoneCallbackArgs> callback, object state)
+			public MergeProcess (MMLC mmlc, Key key, bool forseFastPut, EventHandler<MergeDoneCallbackArgs> callback, object state)
 			{
 				_mmlc = mmlc;
 				_key = key;
@@ -277,6 +294,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					if (_mmlc._db.TryGetValue (key, out _kvPair))
 						_key = null;
 				}
+				_forseFastPut = forseFastPut;
 				_isInitiator = true;
 				_thrd = new Thread (Process);
 				_callback = callback;
@@ -306,7 +324,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					} else {
 						AccepterSideProcess ();
 					}
-					if (_kvPair.Key != null && (beforeHash == null || !beforeHash.Equals (_kvPair.Key.RecordsetHash)))
+					if (_kvPair.Key != null && (_forseFastPut || beforeHash == null || !beforeHash.Equals (_kvPair.Key.RecordsetHash)))
 						_mmlc.Touch (_kvPair.Key);
 				} catch (Exception exception) {
 					Console.WriteLine ("{0}: マージ中に例外. {1}", _isInitiator ? "I" : "A", exception.ToString ());
@@ -344,15 +362,15 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					try {
 						if (_key == null && _kvPair.Key.RecordsetHash.Equals (dhtres.Values[i].Hash))
 							continue;
-						Console.WriteLine ("I: {0}へ接続", dhtres.Values[i].Holder.ToString ().Substring (0, 8));
 						ar = _mmlc._ar.BeginConnect (_mmlc._uploadSide.Key, dhtres.Values[i].Holder, AnonymousConnectionType.HighThroughput,
 							_key != null ? (object)_key : (object)_kvPair.Key, null, null);
+						Console.WriteLine ("I: {0}へ接続", dhtres.Values[i].Holder.ToString ().Substring (0, 8));
 						connecting = true;
 						break;
 					} catch {}
 				}
 				if (!connecting) {
-					Console.WriteLine ("I: 接続失敗'");
+					Console.WriteLine ("I: 接続先が見つかりません");
 					return;
 				}
 				IAnonymousSocket sock;
@@ -535,7 +553,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 		#region Messages
 		[SerializableTypeId (0x402)]
-		class PublishData
+		sealed class PublishData
 		{
 			[SerializableFieldId (0)]
 			Key _key;
@@ -559,7 +577,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		}
 
 		[SerializableTypeId (0x403)]
-		class PublishMessage
+		sealed class PublishMessage
 		{
 			[SerializableFieldId (0)]
 			PublishData[] _values;
@@ -575,7 +593,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		}
 
 		[SerializableTypeId (0x404)]
-		class DHTLookupRequest
+		sealed class DHTLookupRequest
 		{
 			[SerializableFieldId (0)]
 			Key _key;
@@ -591,7 +609,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		}
 
 		[SerializableTypeId (0x405)]
-		class DHTLookupResponse
+		sealed class DHTLookupResponse
 		{
 			[SerializableFieldId (0)]
 			DHTMergeableFileValue[] _values;
@@ -607,7 +625,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		}
 
 		[SerializableTypeId (0x406)]
-		class MergeableRecordList
+		sealed class MergeableRecordList
 		{
 			[SerializableFieldId (0)]
 			Key[] _hashList;
@@ -623,7 +641,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		}
 
 		[SerializableTypeId (0x407)]
-		class MergeableRecords
+		sealed class MergeableRecords
 		{
 			[SerializableFieldId (0)]
 			MergeableFileRecord[] _records;
@@ -635,6 +653,30 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 			public MergeableFileRecord[] Records {
 				get { return _records; }
+			}
+		}
+
+		[SerializableTypeId (0x409)]
+		sealed class FastPublishMessage
+		{
+			[SerializableFieldId (0)]
+			Key _key;
+
+			[SerializableFieldId (1)]
+			Key _hash;
+
+			public FastPublishMessage (Key key, Key hash)
+			{
+				_key = key;
+				_hash = hash;
+			}
+
+			public Key Key {
+				get { return _key; }
+			}
+
+			public Key Hash {
+				get { return _hash; }
 			}
 		}
 		#endregion

@@ -188,7 +188,7 @@ namespace p2pncs.Net
 					}
 				}
 				if (seg == null) {
-					if (!_recvWaitHandle.WaitOne ())
+					if (!_recvWaitHandle.WaitOne (MaxRTO))
 						throw new SocketException ();
 					continue;
 				}
