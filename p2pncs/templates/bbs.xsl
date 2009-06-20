@@ -21,6 +21,7 @@
 				</div>
 				<div id="bbsBody">
 					<xsl:for-each select="/page/bbs/record">
+						<xsl:sort select="posted" order="ascending" />
 						<div>
 							<div class="postName">
 								<xsl:text>[</xsl:text>
