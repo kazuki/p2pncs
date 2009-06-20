@@ -49,6 +49,7 @@ namespace p2pncs.Net.Overlay.DHT
 		void Messaging_Inquired (object sender, InquiredEventArgs e)
 		{
 			Message msg = e.InquireMessage as Message;
+			_sock.StartResponse (e, "ACK");
 			_router.RoutingAlgorithm.Touch (new NodeHandle (msg.Sender, e.EndPoint));
 
 			for (int i = 0; i < msg.Entries.Length; i ++) {
