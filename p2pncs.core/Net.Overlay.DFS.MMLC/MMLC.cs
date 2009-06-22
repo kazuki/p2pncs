@@ -41,6 +41,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		TimeSpan _rePutInterval = TimeSpan.FromMinutes (3);
 		DateTime _rePutNextTime = DateTime.Now;
 		List<Key> _rePutList = new List<Key> ();
+		int _revision = 0;
 
 		IAnonymousRouter _ar;
 		ISubscribeInfo _uploadSide;
@@ -79,7 +80,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		{
 			PublishMessage msg = args.Request as PublishMessage;
 			for (int i = 0; i < msg.Values.Length; i ++)
-				_dht.LocalPut (msg.Values[i].Key, TimeSpan.FromMinutes (5), new DHTMergeableFileValue (args.RecipientKey, msg.Values[i].Hash));
+				_dht.LocalPut (msg.Values[i].Key, TimeSpan.FromMinutes (5), new DHTMergeableFileValue (args.RecipientKey, msg.Values[i].Hash, msg.Revision));
 		}
 
 		void DHTLookupRequest_Handler (object sender, BoundaryNodeReceivedEventArgs args)
@@ -102,7 +103,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		void FastPublishMessage_Handler (object sender, BoundaryNodeReceivedEventArgs args)
 		{
 			FastPublishMessage msg = args.Request as FastPublishMessage;
-			_dht.BeginPut (msg.Key, TimeSpan.FromMinutes (5), new DHTMergeableFileValue (args.RecipientKey, msg.Hash), null, null);
+			_dht.BeginPut (msg.Key, TimeSpan.FromMinutes (5), new DHTMergeableFileValue (args.RecipientKey, msg.Hash, msg.Revision), null, null);
 		}
 		#endregion
 
@@ -179,7 +180,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					return;
 				_rePutList.Add (header.Key);
 			}
-			FastPublishMessage msg = new FastPublishMessage (header.Key, header.RecordsetHash);
+			FastPublishMessage msg = new FastPublishMessage (header.Key, header.RecordsetHash, (uint)Interlocked.Increment (ref _revision));
 			_uploadSide.MessagingSocket.BeginInquire (msg, null, null, null);
 		}
 		#endregion
@@ -215,7 +216,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					}
 				}
 				_rePutList.RemoveRange (0, count);
-				_uploadSide.MessagingSocket.BeginInquire (new PublishMessage (values.ToArray ()), null, null, null);
+				_uploadSide.MessagingSocket.BeginInquire (new PublishMessage (values.ToArray (), (uint)Interlocked.Increment (ref _revision)), null, null, null);
 			}
 		}
 
@@ -670,13 +671,21 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			[SerializableFieldId (0)]
 			PublishData[] _values;
 
-			public PublishMessage (PublishData[] values)
+			[SerializableFieldId (1)]
+			uint _rev;
+
+			public PublishMessage (PublishData[] values, uint rev)
 			{
 				_values = values;
+				_rev = rev;
 			}
 
 			public PublishData[] Values {
 				get { return _values; }
+			}
+
+			public uint Revision {
+				get { return _rev; }
 			}
 		}
 
@@ -753,10 +762,14 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			[SerializableFieldId (1)]
 			Key _hash;
 
-			public FastPublishMessage (Key key, Key hash)
+			[SerializableFieldId (2)]
+			uint _rev;
+
+			public FastPublishMessage (Key key, Key hash, uint rev)
 			{
 				_key = key;
 				_hash = hash;
+				_rev = rev;
 			}
 
 			public Key Key {
@@ -765,6 +778,10 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 			public Key Hash {
 				get { return _hash; }
+			}
+
+			public uint Revision {
+				get { return _rev; }
 			}
 		}
 		#endregion
@@ -779,10 +796,14 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			[SerializableFieldId (1)]
 			Key _hash;
 
-			public DHTMergeableFileValue (Key holder, Key hash)
+			[SerializableFieldId (2)]
+			uint _rev;
+
+			public DHTMergeableFileValue (Key holder, Key hash, uint rev)
 			{
 				_holder = holder;
 				_hash = hash;
+				_rev = rev;
 			}
 
 			public Key Holder {
@@ -791,6 +812,10 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 			public Key Hash {
 				get { return _hash; }
+			}
+
+			public uint Revision {
+				get { return _rev; }
 			}
 
 			public override int GetHashCode ()
@@ -809,34 +834,34 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 			sealed class ValueMerger : ILocalHashTableValueMerger, IMassKeyDelivererValueGetter
 			{
+				static TimeSpan _minRePutInterval = TimeSpan.FromSeconds (30);
 				public static ValueMerger Instance = new ValueMerger ();
 				ValueMerger () { }
 
 				#region ILocalHashTableValueMerger Members
 
-				public object Merge (object value, object new_value, DateTime expirationDate)
+				public object Merge (object value, object new_value, TimeSpan lifeTime)
 				{
 					StoreValue store_value = value as StoreValue;
 					if (store_value == null)
 						store_value = new StoreValue ();
-					lock (store_value) {
-						store_value.Merge (new_value as DHTMergeableFileValue, expirationDate);
-					}
+					store_value.Merge (new_value as DHTMergeableFileValue, lifeTime, _minRePutInterval);
 					return store_value;
 				}
 
 				public object[] GetEntries (object value, int max_num)
 				{
-					lock (value) {
-						return (value as StoreValue).GetEntries (max_num);
-					}
+					return (value as StoreValue).GetEntries (max_num);
 				}
 
 				public void ExpirationCheck (object value)
 				{
-					lock (value) {
-						(value as StoreValue).ExpirationCheck ();
-					}
+					(value as StoreValue).ExpirationCheck ();
+				}
+
+				public int GetCount (object value)
+				{
+					return (value as StoreValue).Count;
 				}
 
 				#endregion
@@ -868,16 +893,16 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					{
 					}
 
-					public void Merge (DHTMergeableFileValue new_value, DateTime expirationDate)
+					public void Merge (DHTMergeableFileValue new_value, TimeSpan lifeTime, TimeSpan minRePutInterval)
 					{
 						HolderInfo info;
 						List<HolderInfo> list;
 
 						if (_dic2.TryGetValue (new_value.Holder, out info)) {
-							if (info.ExpirationDate >= expirationDate)
+							if (info.Revision >= new_value.Revision)
 								return;
 
-							info.Extend (expirationDate);
+							info.Extend (lifeTime, minRePutInterval);
 							if (info.Hash.Equals (new_value.Hash))
 								return;
 							
@@ -893,8 +918,9 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 							if (list.Count == 0)
 								_dic.Remove (info.Hash);
 							info.Hash = new_value.Hash;
+							info.UnmarkSend ();
 						} else {
-							info = new HolderInfo (new_value, expirationDate);
+							info = new HolderInfo (new_value, lifeTime);
 							_dic2.Add (info.Holder, info);
 						}
 
@@ -913,7 +939,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 						foreach (List<HolderInfo> list in _dic.Values) {
 							HolderInfo[] tmp = list.ToArray ().RandomSelection (num);
 							for (int i = 0; i < tmp.Length; i ++)
-								result.Add (tmp[i].Value);
+								result.Add (tmp[i].Entry);
 						}
 						return result.ToArray().RandomSelection (max_num);
 					}
@@ -924,7 +950,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 						foreach (KeyValuePair<Key,List<HolderInfo>> pair in _dic) {
 							List<HolderInfo> list = pair.Value;
 							for (int i = 0; i < list.Count; i++) {
-								if (list[i].ExpirationDate <= DateTime.Now) {
+								if (list[i].IsExpired ()) {
 									_dic2.Remove (list[i].Holder);
 									list.RemoveAt (i--);
 								}
@@ -950,14 +976,13 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 								}
 								if (list[i].SendFlag) continue;
 								result.Add (list[i]);
-								list[i].SendFlag = true;
 								q ++;
 							}
 						}
 						HolderInfo[] array = result.ToArray ().RandomSelection (max_num);
 						DHTEntry[] entries = new DHTEntry [array.Length];
 						for (int i = 0; i < entries.Length; i ++)
-							entries[i] = new DHTEntry (key, typeId, array[i].Value, array[i].ExpirationDate);
+							entries[i] = new DHTEntry (key, typeId, array[i].GetValueToSend (), array[i].LifeTime);
 						return entries;
 					}
 
@@ -965,61 +990,37 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					{
 						HolderInfo info;
 						if (_dic2.TryGetValue (mark_value.Holder, out info))
-							info.SendFlag = false;
+							info.UnmarkSend ();
+					}
+
+					public int Count {
+						get { return _dic2.Count; }
 					}
 				}
 
-				class HolderInfo : IEquatable<HolderInfo>
+				class HolderInfo : LocalHashTableValueMerger<DHTMergeableFileValue>.HolderInfo, IEquatable<HolderInfo>
 				{
-					DHTMergeableFileValue _value;
-					DateTime _expiration;
-					bool _sendFlag;
-
-					public HolderInfo (DHTMergeableFileValue value, DateTime expiration)
+					public HolderInfo (DHTMergeableFileValue value, TimeSpan lifeTime)
+						: base (value, lifeTime)
 					{
-						_value = value;
-						_expiration = expiration;
-						_sendFlag = false;
 					}
 
 					public Key Holder {
-						get { return _value.Holder; }
+						get { return (_entry as DHTMergeableFileValue).Holder; }
 					}
 
 					public Key Hash {
-						get { return _value.Hash; }
-						set { _value._hash = value;}
+						get { return (_entry as DHTMergeableFileValue).Hash; }
+						set { (_entry as DHTMergeableFileValue)._hash = value; }
 					}
 
-					public DHTMergeableFileValue Value {
-						get { return _value; }
-					}
-
-					public DateTime ExpirationDate {
-						get { return _expiration; }
-					}
-
-					public bool SendFlag {
-						get { return _sendFlag; }
-						set { _sendFlag = value;}
-					}
-
-					public void Extend (DateTime new_expiration)
-					{
-						if (_expiration < new_expiration) {
-							_expiration = new_expiration;
-							_sendFlag = false;
-						}
-					}
-
-					public override int GetHashCode ()
-					{
-						return _value.GetHashCode ();
+					public uint Revision {
+						get { return (_entry as DHTMergeableFileValue).Revision; }
 					}
 
 					public bool Equals (HolderInfo other)
 					{
-						return _value.Equals (other._value);
+						return _entry.Equals (other._entry);
 					}
 				}
 			}

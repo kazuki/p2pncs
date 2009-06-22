@@ -22,12 +22,14 @@ namespace p2pncs.Net.Overlay.DHT
 {
 	public class LocalHashTableValueMerger<T> : ILocalHashTableValueMerger, IMassKeyDelivererValueGetter where T : IEquatable<T>
 	{
-		public object Merge (object value, object new_value, DateTime expirationDate)
+		public TimeSpan MinRePutInterval = TimeSpan.FromSeconds (30);
+
+		public object Merge (object value, object new_value, TimeSpan lifeTime)
 		{
-			List<Pack> list = value as List<Pack>;
+			List<HolderInfo> list = value as List<HolderInfo>;
 			IEquatable<T> entry = new_value as IEquatable<T>;
 			if (list == null)
-				list = new List<Pack> ();
+				list = new List<HolderInfo> ();
 			bool found = false;
 			for (int i = 0; i < list.Count; i++) {
 				if (list[i].ExpirationDate <= DateTime.Now) {
@@ -35,14 +37,14 @@ namespace p2pncs.Net.Overlay.DHT
 					continue;
 				}
 				if (entry.Equals (list[i].Entry)) {
-					list[i].Extend (expirationDate);
+					list[i].Extend (lifeTime, MinRePutInterval);
 					found = true;
 					break;
 				}
 			}
 			if (!found) {
-				list.Add (new Pack (entry, expirationDate));
-				list.Sort (delegate (Pack x, Pack y) {
+				list.Add (new HolderInfo (entry, lifeTime));
+				list.Sort (delegate (HolderInfo x, HolderInfo y) {
 					return y.ExpirationDate.CompareTo (x.ExpirationDate);
 				});
 			}
@@ -51,7 +53,7 @@ namespace p2pncs.Net.Overlay.DHT
 
 		public object[] GetEntries (object value, int max_num)
 		{
-			List<Pack> list = value as List<Pack>;
+			List<HolderInfo> list = value as List<HolderInfo>;
 			if (list == null || list.Count == 0)
 				return new object[0];
 			object[] result = new object[Math.Min (list.Count, max_num)];
@@ -62,23 +64,23 @@ namespace p2pncs.Net.Overlay.DHT
 
 		public void ExpirationCheck (object value)
 		{
-			List<Pack> list = value as List<Pack>;
+			List<HolderInfo> list = value as List<HolderInfo>;
 			for (int i = 0; i < list.Count; i++) {
-				if (list[i].ExpirationDate <= DateTime.Now)
+				if (list[i].IsExpired ())
 					list.RemoveAt (i--);
 			}
 		}
 
 		public DHTEntry[] GetSendEntries (Key key, int typeId, object value, int max_num)
 		{
-			List<Pack> list = value as List<Pack>;
+			List<HolderInfo> list = value as List<HolderInfo>;
 			if (list == null || list.Count == 0)
 				return new DHTEntry[0];
 			DHTEntry[] result = new DHTEntry[Math.Min (list.Count, max_num)];
 			int count = 0;
 			for (int i = 0; i < list.Count && count < result.Length; i ++) {
 				if (list[i].SendFlag) continue;
-				result[count++] = new DHTEntry (key, typeId, list[i].GetValueToSend (), list[i].ExpirationDate);
+				result[count++] = new DHTEntry (key, typeId, list[i].GetValueToSend (), list[i].LifeTime);
 			}
 			if (result.Length != count)
 				Array.Resize<DHTEntry> (ref result, count);
@@ -87,7 +89,7 @@ namespace p2pncs.Net.Overlay.DHT
 
 		public void UnmarkSendFlag (object value, object mark_value)
 		{
-			List<Pack> list = value as List<Pack>;
+			List<HolderInfo> list = value as List<HolderInfo>;
 			if (list == null || list.Count == 0)
 				return;
 			for (int i = 0; i < list.Count; i ++)
@@ -97,46 +99,76 @@ namespace p2pncs.Net.Overlay.DHT
 				}
 		}
 
-		class Pack : IEquatable<Pack>
+		public int GetCount (object value)
 		{
-			public IEquatable<T> Entry;
-			public DateTime ExpirationDate;
-			public bool SendFlag;
+			return (value as List<HolderInfo>).Count;
+		}
 
-			public Pack (IEquatable<T> entry, DateTime expiration)
+		public class HolderInfo : IEquatable<HolderInfo>
+		{
+			protected IEquatable<T> _entry;
+			protected TimeSpan _lifeTime;
+			protected DateTime _expiration;
+			protected bool _sendFlag;
+
+			public HolderInfo (IEquatable<T> entry, TimeSpan lifetime)
 			{
-				Entry = entry;
-				ExpirationDate = expiration;
-				SendFlag = false;
+				_entry = entry;
+				_lifeTime = lifetime;
+				_expiration = DateTime.Now + lifetime;
+				_sendFlag = false;
 			}
 
-			public void Extend (DateTime new_expiration)
+			public void Extend (TimeSpan lifetime, TimeSpan minRePutInterval)
 			{
-				if (ExpirationDate < new_expiration) {
-					ExpirationDate = new_expiration;
-					SendFlag = false;
-				}
+				if ((_expiration - _lifeTime) + minRePutInterval <= DateTime.Now)
+					_sendFlag = false;
+				_lifeTime = lifetime;
+				_expiration = DateTime.Now + lifetime;
+			}
+
+			public bool IsExpired ()
+			{
+				if (_expiration <= DateTime.Now)
+					return true;
+				return false;
 			}
 
 			public IEquatable<T> GetValueToSend ()
 			{
-				SendFlag = true;
-				return Entry;
+				_sendFlag = true;
+				return _entry;
 			}
 
 			public void UnmarkSend ()
 			{
-				SendFlag = false;
+				_sendFlag = false;
+			}
+
+			public IEquatable<T> Entry {
+				get { return _entry; }
+			}
+
+			public TimeSpan LifeTime {
+				get { return _lifeTime; }
+			}
+
+			public bool SendFlag {
+				get { return _sendFlag; }
+			}
+
+			public DateTime ExpirationDate {
+				get { return _expiration; }
 			}
 
 			public override int GetHashCode ()
 			{
-				return Entry.GetHashCode ();
+				return _entry.GetHashCode ();
 			}
 
-			public bool Equals (Pack other)
+			public bool Equals (HolderInfo other)
 			{
-				return Entry.Equals (other.Entry);
+				return _entry.Equals (other._entry);
 			}
 		}
 	}

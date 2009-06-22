@@ -21,7 +21,7 @@ namespace p2pncs.Net.Overlay.DHT
 {
 	public interface ILocalHashTable : IDisposable
 	{
-		void Put (Key key, int typeId, DateTime expires, object value, ILocalHashTableValueMerger merger);
+		void Put (Key key, int typeId, TimeSpan lifetime, object value, ILocalHashTableValueMerger merger);
 
 		object[] Get (Key key, int typeId, ILocalHashTableValueMerger merger);
 

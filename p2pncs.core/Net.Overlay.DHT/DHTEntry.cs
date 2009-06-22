@@ -32,14 +32,14 @@ namespace p2pncs.Net.Overlay.DHT
 		object _value;
 
 		[SerializableFieldId (3)]
-		DateTime _expiry;
+		TimeSpan _lifetime;
 
-		public DHTEntry (Key key, int typeId, object value, DateTime expiry)
+		public DHTEntry (Key key, int typeId, object value, TimeSpan lifetime)
 		{
 			_key = key;
 			_typeId = typeId;
 			_value = value;
-			_expiry = expiry;
+			_lifetime = lifetime;
 		}
 
 		public Key Key {
@@ -54,8 +54,8 @@ namespace p2pncs.Net.Overlay.DHT
 			get { return _value; }
 		}
 
-		public DateTime ExpirationDate {
-			get { return _expiry; }
+		public TimeSpan LifeTime {
+			get { return _lifetime; }
 		}
 	}
 }

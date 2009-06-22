@@ -63,7 +63,7 @@ namespace p2pncs.Net.Overlay.DHT
 
 			int typeId;
 			if (_typeMap.TryGetValue (value.GetType (), out typeId)) {
-				_lht.Put (key, typeId, DateTime.Now + lifeTime, value, _mergerMap[typeId]);
+				_lht.Put (key, typeId, lifeTime, value, _mergerMap[typeId]);
 			}
 		}
 
@@ -105,7 +105,7 @@ namespace p2pncs.Net.Overlay.DHT
 			int typeId;
 			if (!_typeMap.TryGetValue (value.GetType (), out typeId))
 				throw new ArgumentException ();
-			_lht.Put (key, typeId, DateTime.Now + lifeTime, value, _mergerMap[typeId]);
+			_lht.Put (key, typeId, lifeTime, value, _mergerMap[typeId]);
 		}
 
 		public IKeyBasedRouter KeyBasedRouter {

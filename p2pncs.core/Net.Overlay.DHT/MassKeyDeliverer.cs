@@ -57,7 +57,7 @@ namespace p2pncs.Net.Overlay.DHT
 				IPutterEndPointStore epStore = entry.Value as IPutterEndPointStore;
 				if (epStore != null && epStore.EndPoint == null)
 					epStore.EndPoint = e.EndPoint;
-				_dht.LocalPut (entry.Key, entry.ExpirationDate - DateTime.Now, entry.Value);
+				_dht.LocalPut (entry.Key, entry.LifeTime, entry.Value);
 			}
 		}
 

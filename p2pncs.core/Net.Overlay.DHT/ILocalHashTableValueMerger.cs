@@ -21,10 +21,12 @@ namespace p2pncs.Net.Overlay.DHT
 {
 	public interface ILocalHashTableValueMerger
 	{
-		object Merge (object value, object new_value, DateTime expirationDate);
+		object Merge (object value, object new_value, TimeSpan lifetime);
 
 		object[] GetEntries (object value, int max_num);
 
 		void ExpirationCheck (object value);
+
+		int GetCount (object value);
 	}
 }
