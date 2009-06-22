@@ -51,6 +51,7 @@ namespace p2pncs.Evaluation
 			_msgInt2.Start ();
 			_anonInt.Start ();
 			_kbrInt.Start ();
+			_dhtInt.Start ();
 			if (opt.ChurnInterval > 0)
 				_churnInt = new IntervalInterrupter (TimeSpan.FromMilliseconds (opt.ChurnInterval), "Churn Interrupter");
 		}
