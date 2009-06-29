@@ -32,6 +32,10 @@ namespace p2pncs.Security.Cryptography
 			return new SHA256Managed ();
 		}
 
+		public static int HashByteSize {
+			get { return 32; }
+		}
+
 		public static ECDomainNames GetDefaultDomainName (int compressedPublicKeyBytes)
 		{
 			switch (compressedPublicKeyBytes - 1) {

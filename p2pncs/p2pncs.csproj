@@ -46,6 +46,7 @@
     <Compile Include="Program.cs" />
     <Compile Include="AssemblyInfo.cs" />
     <Compile Include="SimpleBBSHeader.cs" />
+    <Compile Include="SimpleBBSParser.cs" />
     <Compile Include="SimpleBBSRecord.cs" />
     <Compile Include="TestLogger.cs" />
     <Compile Include="WebApp.cs" />

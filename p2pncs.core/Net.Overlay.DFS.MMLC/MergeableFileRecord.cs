@@ -38,6 +38,13 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			_content = content;
 		}
 
+		public MergeableFileRecord (IHashComputable content, DateTime lastManaged, Key hash)
+		{
+			_content = content;
+			_lastManaged = lastManaged;
+			_hash = hash;
+		}
+
 		public void UpdateHash ()
 		{
 			using (HashAlgorithm algo = DefaultAlgorithm.CreateHashAlgorithm ()) {
@@ -50,6 +57,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 		public IHashComputable Content {
 			get { return _content; }
+			internal set { _content = value; }
 		}
 
 		public DateTime LastManagedTime {

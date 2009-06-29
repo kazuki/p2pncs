@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Threading;
 using Kazuki.Net.HttpServer;
@@ -56,6 +57,7 @@ namespace p2pncs
 				Program.LoadConfig (_config, out tmpKey, out tmpPubKey, out tmpName);
 			}
 			_churnInt = new IntervalInterrupter (TimeSpan.FromSeconds (500.0 / NODES), "Churn Timer");
+			Directory.CreateDirectory ("db");
 		}
 
 		public void Run ()
@@ -144,17 +146,10 @@ namespace p2pncs
 			public void Prepare (Interrupters ints, IDatagramEventSocket bindedDgramSock, int base_port, IPEndPoint ep)
 			{
 				_name = _name + " (" + ep.ToString () + ")";
-				_node = new Node (ints, bindedDgramSock);
+				_node = new Node (ints, bindedDgramSock, string.Format ("db{0}{1}.sqlite", Path.DirectorySeparatorChar, _idx));
 				_app = new WebApp (_node, _imPublicKey, _imPrivateKey, _name, ints);
 				if (base_port >= 0)
 					_server = HttpServer.CreateEmbedHttpServer (_app, null, true, true, false, base_port + _idx, 16);
-				if (_idx == 0) {
-					ECKeyPair bbsPrivate = ECKeyPair.CreatePrivate (DefaultAlgorithm.ECDomainName, Convert.FromBase64String ("u8capbI/9NXcJJJkGtdt8LtpBWDeMhcQ0sGNvNO9nmA="));
-					Key bbsPublic = Key.Create (bbsPrivate);
-					MergeableFileHeader header = new MergeableFileHeader (bbsPrivate, DateTime.Now, new SimpleBBSHeader ("てすとびーびーえす"));
-					_node.MMLC.CreateNew (header);
-					_node.MMLC.AppendRecord (header.Key, new MergeableFileRecord (new SimpleBBSRecord ("名無し", "ほげ", DateTime.Now)));
-				}
 			}
 
 			public void WaitOne ()

@@ -64,6 +64,7 @@ namespace p2pncs
 			_imPubKey = imPubKey;
 			_name = name;
 			_ints = ints;
+			node.MMLC.Register (SimpleBBSParser.Instance);
 			_imSubscribe = node.AnonymousRouter.SubscribeRecipient (imPubKey, imPrivateKey);
 			ints.WebAppInt.AddInterruption (CheckUpdate);
 			_imSubscribe.Accepting += delegate (object sender, AcceptingEventArgs e) {

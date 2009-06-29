@@ -17,6 +17,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Data;
+using System.Data.Common;
 using System.IO;
 using System.Threading;
 using openCrypto.EllipticCurve;
@@ -31,9 +33,12 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 	/// <summary>Mergeable and Manageable DFS Providing low consistency using DHT</summary>
 	public class MMLC : IDisposable
 	{
-		// On-memory Database
-		ReaderWriterLockWrapper _dbLock = new ReaderWriterLockWrapper ();
-		Dictionary<Key, KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>>> _db = new Dictionary<Key,KeyValuePair<MergeableFileHeader,List<MergeableFileRecord>>> ();
+		// SQLite Database
+		string _db_connection_string;
+		DbProviderFactory _db_factory = Mono.Data.Sqlite.SqliteFactory.Instance;
+		ReaderWriterLockWrapper _dbParserMapLock = new ReaderWriterLockWrapper ();
+		Dictionary<int, IMergeableFileDatabaseParser> _dbParserMap1 = new Dictionary<int,IMergeableFileDatabaseParser> ();
+		Dictionary<Type, IMergeableFileDatabaseParser> _dbParserMap2 = new Dictionary<Type, IMergeableFileDatabaseParser> ();
 		HashSet<Key> _localChangedList = new HashSet<Key> ();
 
 		Dictionary<Key, MergeProcess> _mergingFiles = new Dictionary<Key,MergeProcess> ();
@@ -53,13 +58,24 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 		const int MaxDatagramSize = 500;
 
-		public MMLC (IAnonymousRouter ar, IDistributedHashTable dht, IMassKeyDelivererLocalStore mkdStore, IntervalInterrupter anonStrmSockInt, IntervalInterrupter reputInt)
+		public MMLC (IAnonymousRouter ar, IDistributedHashTable dht, IMassKeyDelivererLocalStore mkdStore, string db_path, IntervalInterrupter anonStrmSockInt, IntervalInterrupter reputInt)
 		{
 			_ar = ar;
 			_mkd = mkdStore;
 			_anonStrmSockInt = anonStrmSockInt;
 			_int = reputInt;
 			_dht = dht;
+
+			_db_connection_string = string.Format ("Data Source={0},DateTimeFormat=Ticks,Pooling=True", db_path);
+			using (IDbConnection connection = CreateDBConnection ())
+			using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.Serializable)) {
+				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS MMLC_Keys (id INTEGER PRIMARY KEY, key TEXT, type INTEGER, content_type INTEGER);");
+				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS MMLC_MergeableHeaders (id INTEGER PRIMARY KEY REFERENCES MMLC_Keys(id), lastManaged INTEGER, sign BLOB, recordsetHash TEXT);");
+				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS MMLC_MergeableRecords (id INTEGER PRIMARY KEY, hash TEXT, header_id INTEGER REFERENCES MMLC_MergeableHeaders(id), lastManaged INTEGER);");
+				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE UNIQUE INDEX IF NOT EXISTS MMLC_Keys_Index ON MMLC_Keys(key);");
+				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE UNIQUE INDEX IF NOT EXISTS MMLC_MergeableRecords_Index ON MMLC_MergeableRecords (header_id, hash);");
+				transaction.Commit ();
+			}
 
 			ECKeyPair uploadPrivateKey = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 			Key uploadSideKey = Key.Create (uploadPrivateKey);
@@ -74,6 +90,170 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			_ar.AddBoundaryNodeReceivedEventHandler (typeof (PublishMessage), PublishMessage_Handler);
 			_ar.AddBoundaryNodeReceivedEventHandler (typeof (FastPublishMessage), FastPublishMessage_Handler);
 		}
+
+		public void Register (IMergeableFileDatabaseParser parser)
+		{
+			using (_dbParserMapLock.EnterWriteLock ()) {
+				_dbParserMap1.Add (parser.TypeId, parser);
+				_dbParserMap2.Add (parser.HeaderContentType, parser);
+			}
+			using (IDbConnection connection = CreateDBConnection ())
+			using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.Serializable)) {
+				parser.Init (transaction);
+				transaction.Commit ();
+			}
+		}
+
+		#region SQL Helpers
+		IDbConnection CreateDBConnection ()
+		{
+			IDbConnection connection = _db_factory.CreateConnection ();
+			connection.ConnectionString = _db_connection_string;
+			connection.Open ();
+			return connection;
+		}
+
+		IMergeableFileDatabaseParser GetMergeableParser (int typeId)
+		{
+			IMergeableFileDatabaseParser parser;
+			using (_dbParserMapLock.EnterReadLock ()) {
+				if (_dbParserMap1.TryGetValue (typeId, out parser))
+					return parser;
+				return null;
+			}
+		}
+
+		IMergeableFileDatabaseParser GetMergeableParser (Type type)
+		{
+			IMergeableFileDatabaseParser parser;
+			using (_dbParserMapLock.EnterReadLock ()) {
+				if (_dbParserMap2.TryGetValue (type, out parser))
+					return parser;
+				return null;
+			}
+		}
+
+		void Insert (IDbTransaction transaction, MergeableFileHeader header, IMergeableFileDatabaseParser parser)
+		{
+			long header_id;
+			Insert (transaction, header, ref parser, out header_id);
+		}
+
+		void Insert (IDbTransaction transaction, MergeableFileHeader header, ref IMergeableFileDatabaseParser parser, out long header_id)
+		{
+			if (parser == null) {
+				if ((parser = GetMergeableParser (header.Content.GetType ())) == null)
+					throw new ArgumentException ();
+			}
+
+			DatabaseUtility.ExecuteNonQuery (transaction,
+				"INSERT INTO MMLC_Keys (key, type, content_type) VALUES (?, 2, ?);",
+				header.Key.ToBase64String (), parser.TypeId);
+			header_id = DatabaseUtility.GetLastInsertRowId (transaction);
+			DatabaseUtility.ExecuteNonQuery (transaction,
+				"INSERT INTO MMLC_MergeableHeaders (id, lastManaged, sign, recordsetHash) VALUES (?, ?, ?, ?);",
+				header_id, header.LastManagedTime, header.Signature, header.RecordsetHash.ToBase64String ());
+			parser.Insert (transaction, header_id, header);
+		}
+
+		void Insert (IDbTransaction transaction, MergeableFileRecord record, IMergeableFileDatabaseParser parser, long header_id)
+		{
+			DatabaseUtility.ExecuteNonQuery (transaction,
+				"INSERT INTO MMLC_MergeableRecords (hash, header_id, lastManaged) VALUES (?, ?, ?);",
+				record.Hash.ToBase64String (), header_id, record.LastManagedTime);
+			long id = DatabaseUtility.GetLastInsertRowId (transaction);
+			parser.Insert (transaction, id, record);
+		}
+
+		bool Update (IDbTransaction transaction, MergeableFileHeader header, out IMergeableFileDatabaseParser parser, out long header_id)
+		{
+			MergeableFileHeader current = SelectHeader (transaction, header.Key, out parser, out header_id) as MergeableFileHeader;
+			if (current == null)
+				return false;
+			return Update (transaction, header, parser, header_id, current);
+		}
+
+		bool Update (IDbTransaction transaction, MergeableFileHeader new_header, IMergeableFileDatabaseParser parser, long header_id, MergeableFileHeader current_header)
+		{
+			if (current_header.LastManagedTime == new_header.LastManagedTime) {
+				DatabaseUtility.ExecuteNonQuery (transaction, "UPDATE MMLC_MergeableHeaders SET recordsetHash=? WHERE id=?",
+					new_header.RecordsetHash.ToBase64String (), header_id);
+			} else {
+				DatabaseUtility.ExecuteNonQuery (transaction, "UPDATE MMLC_MergeableHeaders SET lastManaged=?, sign=?, recordsetHash=? WHERE id=?",
+					new_header.LastManagedTime, new_header.Signature, new_header.RecordsetHash.ToBase64String (), header_id);
+				parser.Update (transaction, header_id, new_header);
+			}
+			return true;
+		}
+
+		object SelectHeader (IDbTransaction transaction, Key key)
+		{
+			IMergeableFileDatabaseParser parser;
+			long header_id;
+			return SelectHeader (transaction, key, out parser, out header_id);
+		}
+
+		object SelectHeader (IDbTransaction transaction, Key key, out IMergeableFileDatabaseParser parser, out long header_id)
+		{
+			header_id = 0;
+			parser = null;
+
+			using (IDataReader reader1 = DatabaseUtility.ExecuteReader (transaction, "SELECT id,type,content_type FROM MMLC_Keys WHERE key=?", key.ToBase64String ())) {
+				if (!reader1.Read ())
+					return null;
+
+				header_id = reader1.GetInt64 (0);
+				int type = reader1.GetInt32 (1);
+				if (type == 2) {
+					parser = GetMergeableParser (reader1.GetInt32 (2));
+					if (parser == null)
+						return null;
+					string sql = string.Format ("SELECT t1.lastManaged, t1.sign, t1.recordsetHash, {0} FROM MMLC_MergeableHeaders as t1,{1} as {2} WHERE t1.id=? AND t1.id={2}.id", parser.ParseHeaderFields, parser.HeaderTableName, parser.TableAlias);
+					using (IDataReader reader2 = DatabaseUtility.ExecuteReader (transaction, sql, header_id)) {
+						if (!reader2.Read ())
+							return null;
+						try {
+							MergeableFileHeader header = new MergeableFileHeader (
+								key, reader2.GetDateTime (0), null,
+								(byte[])reader2.GetValue (1),
+								Key.FromBase64 (reader2.GetString (2)));
+							header.Content = parser.ParseHeader (reader2, 3);
+							return header;
+						} catch {
+							return null;
+						}
+					}
+				}
+				return null;
+			}
+		}
+
+		List<MergeableFileRecord> SelectRecords (IMergeableFileDatabaseParser parser, long header_id)
+		{
+			using (IDbConnection connection = CreateDBConnection ())
+			using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.ReadCommitted)) {
+				return SelectRecords (transaction, parser, header_id);
+			}
+		}
+
+		List<MergeableFileRecord> SelectRecords (IDbTransaction transaction, IMergeableFileDatabaseParser parser, long header_id)
+		{
+			string sql = string.Format ("SELECT t1.hash, t1.lastManaged, {0} FROM MMLC_MergeableRecords as t1,{1} as {2} WHERE t1.header_id=? AND t1.id={2}.id", parser.ParseRecordFields, parser.RecordTableName, parser.TableAlias);
+			List<MergeableFileRecord> list = new List<MergeableFileRecord> ();
+			using (IDataReader reader = DatabaseUtility.ExecuteReader (transaction, sql, header_id)) {
+				while (reader.Read ()) {
+					try {
+						MergeableFileRecord record = new MergeableFileRecord (null,
+							reader.GetDateTime (1),
+							Key.FromBase64 (reader.GetString (0)));
+						record.Content = parser.ParseRecord (reader, 2);
+						list.Add (record);
+					} catch {}
+				}
+			}
+			return list;
+		}
+		#endregion
 
 		#region AnonymousRouter.BoundaryNode ReceivedEvent Handlers
 		void PublishMessage_Handler (object sender, BoundaryNodeReceivedEventArgs args)
@@ -118,17 +298,26 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 		public void CreateNew (MergeableFileHeader header)
 		{
-			using (_dbLock.EnterWriteLock ()) {
-				_db.Add (header.Key, new KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>> (header, new List<MergeableFileRecord> ()));
+			using (IDbConnection connection = CreateDBConnection ())
+			using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.Serializable)) {
+				Insert (transaction, header, null);
+				transaction.Commit ();
 			}
 		}
 
 		public MergeableFileHeader[] GetHeaderList ()
 		{
 			List<MergeableFileHeader> headers = new List<MergeableFileHeader> ();
-			using (_dbLock.EnterReadLock ()) {
-				foreach (KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>> value in _db.Values) {
-					headers.Add (value.Key);
+			using (IDbConnection connection = CreateDBConnection ())
+			using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.ReadCommitted)) {
+				using (IDataReader reader1 = DatabaseUtility.ExecuteReader (transaction, "SELECT key FROM MMLC_Keys WHERE type=2")) {
+					while (reader1.Read ()) {
+						try {
+							MergeableFileHeader header = SelectHeader (transaction, Key.FromBase64 (reader1.GetString (0))) as MergeableFileHeader;
+							if (header != null)
+								headers.Add (header);
+						} catch {}
+					}
 				}
 			}
 			return headers.ToArray ();
@@ -136,14 +325,15 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 		public List<MergeableFileRecord> GetRecords (Key key, out MergeableFileHeader header)
 		{
-			KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>> kv;
-			using (_dbLock.EnterReadLock ()) {
-				if (!_db.TryGetValue (key, out kv)) {
-					header = null;
+			List<MergeableFileRecord> recordset = new List<MergeableFileRecord> ();
+			using (IDbConnection connection = CreateDBConnection ())
+			using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.ReadCommitted)) {
+				IMergeableFileDatabaseParser parser;
+				long header_id;
+				header = SelectHeader (transaction, key, out parser, out header_id) as MergeableFileHeader;
+				if (header == null)
 					return null;
-				}
-				header = kv.Key;
-				return new List<MergeableFileRecord> (kv.Value);
+				return SelectRecords (transaction, parser, header_id);
 			}
 		}
 
@@ -152,24 +342,28 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			if (key == null || record == null || record.Content == null)
 				throw new ArgumentNullException ();
 
-			KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>> kv;
-			using (_dbLock.EnterReadLock ()) {
-				if (!_db.TryGetValue (key, out kv))
+			using (IDbConnection connection = CreateDBConnection ())
+			using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.Serializable)) {
+				IMergeableFileDatabaseParser parser;
+				long header_id;
+				MergeableFileHeader current = SelectHeader (transaction, key, out parser, out header_id) as MergeableFileHeader;
+				if (current == null)
 					throw new KeyNotFoundException ();
-			}
-			lock (kv.Value) {
-				record.LastManagedTime = kv.Key.LastManagedTime;
+
+				record.LastManagedTime = current.LastManagedTime;
 				record.UpdateHash ();
-				bool exists = kv.Value.Exists (delegate (MergeableFileRecord item) {
-					return Key.Equals (record.Hash, item.Hash);
-				});
-				if (exists)
-					throw new ArgumentException ();
-				kv.Value.Add (record);
-				kv.Key.RecordsetHash = kv.Key.RecordsetHash.Xor (record.Hash);
+				try {
+					Insert (transaction, record, parser, header_id);
+					current.RecordsetHash = current.RecordsetHash.Xor (record.Hash);
+					Update (transaction, current, parser, header_id, current); // Update RecordsetHash Field
+					transaction.Commit ();
+				} catch {
+					// Rollback
+					return;
+				}
 			}
 			lock (_localChangedList) {
-				_localChangedList.Add (kv.Key.Key);
+				_localChangedList.Add (key);
 			}
 		}
 
@@ -193,11 +387,9 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					if (_rePutNextTime > DateTime.Now)
 						return;
 
-					using (_dbLock.EnterReadLock ()) {
-						foreach (KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>> value in _db.Values) {
-							_rePutList.Add (value.Key.Key);
-						}
-					}
+					MergeableFileHeader[] headers = GetHeaderList ();
+					for (int i = 0; i < headers.Length; i ++)
+						_rePutList.Add (headers[i].Key);
 					_rePutNextTime = DateTime.Now + _rePutInterval;
 					if (_rePutList.Count == 0)
 						return;
@@ -206,12 +398,13 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				int num = Math.Min (10, _rePutList.Count);
 				List<PublishData> values = new List<PublishData> ();
 				int count = 0;
-				using (_dbLock.EnterReadLock ()) {
+				using (IDbConnection connection = CreateDBConnection ())
+				using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.ReadCommitted)) {
 					for (int i = 0; i < _rePutList.Count && count < num; i++) {
-						KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>> value;
-						if (!_db.TryGetValue (_rePutList[i], out value))
+						MergeableFileHeader header = SelectHeader (transaction, _rePutList[i]) as MergeableFileHeader;
+						if (header == null)
 							continue;
-						values.Add (new PublishData (_rePutList[i], value.Key.RecordsetHash));
+						values.Add (new PublishData (_rePutList[i], header.RecordsetHash));
 						count++;
 					}
 				}
@@ -228,7 +421,6 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				_ar.UnsubscribeRecipient (_uploadSide.Key);
 			} catch { }
 			_int.RemoveInterruption (RePut);
-			_dbLock.Dispose ();
 		}
 		#endregion
 
@@ -279,22 +471,29 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				key = other_header.Key;
 			}
 
-			KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>> kvPair;
-			using (_dbLock.EnterReadLock ()) {
-				if (!_db.TryGetValue (key, out kvPair)) {
-					args.Reject ();
-					return;
-				}
+			MergeableFileHeader header;
+			long header_id;
+			IMergeableFileDatabaseParser parser;
+			using (IDbConnection connection = CreateDBConnection ())
+			using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.ReadCommitted)) {
+				header = SelectHeader (transaction, key, out parser, out header_id) as MergeableFileHeader;
 			}
-
-			args.Accept (kvPair.Key, kvPair);
+			if (header == null) {
+				args.Reject ();
+				return;
+			}
+			args.Accept (header, new object[] {header, parser, header_id});
 		}
 
 		void AnonymousRouter_Accepted (object sender, AcceptedEventArgs args)
 		{
+			object[] set = (object[])args.State;
+			MergeableFileHeader header = (MergeableFileHeader)set[0];
+			IMergeableFileDatabaseParser parser = (IMergeableFileDatabaseParser)set[1];
+			long header_id = (long)set[2];
 			StreamSocket sock = new StreamSocket (args.Socket, AnonymousRouter.DummyEndPoint, MaxDatagramSize, _anonStrmSockInt);
 			args.Socket.InitializedEventHandlers ();
-			MergeProcess proc = new MergeProcess (this, sock, args.State, args.Payload as MergeableFileHeader);
+			MergeProcess proc = new MergeProcess (this, sock, args.Payload as MergeableFileHeader, header, parser, header_id);
 			proc.Thread.Start ();
 		}
 
@@ -303,7 +502,11 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			const int MAX_PARALLEL_MERGE = 5;
 			MMLC _mmlc;
 			Key _key;
-			KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>> _kvPair;
+			
+			MergeableFileHeader _cur_header;
+			IMergeableFileDatabaseParser _parser;
+			long _header_id;
+
 			Thread _thrd;
 			List<EventHandler<MergeDoneCallbackArgs>> _callbacks;
 			List<object> _states;
@@ -314,10 +517,13 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			{
 				_mmlc = mmlc;
 				_key = key;
-				using (_mmlc._dbLock.EnterReadLock ()) {
-					if (_mmlc._db.TryGetValue (key, out _kvPair))
-						_key = null;
+
+				using (IDbConnection connection = mmlc.CreateDBConnection ())
+				using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.ReadCommitted)) {
+					_cur_header = mmlc.SelectHeader (transaction, key, out _parser, out _header_id) as MergeableFileHeader;
 				}
+				if (_cur_header != null)
+					_key = null;
 				_forseFastPut = forseFastPut;
 				_isInitiator = true;
 				_thrd = new Thread (Process);
@@ -329,10 +535,12 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				}
 			}
 
-			public MergeProcess (MMLC mmlc, StreamSocket sock, object state, MergeableFileHeader other_header)
+			public MergeProcess (MMLC mmlc, StreamSocket sock, MergeableFileHeader other_header, MergeableFileHeader cur_header, IMergeableFileDatabaseParser parser, long header_id)
 			{
 				_mmlc = mmlc;
-				_kvPair = (KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>>)state;
+				_cur_header = cur_header;
+				_parser = parser;
+				_header_id = header_id;
 				_accepterSideValues = new object[] {sock, other_header};
 				_isInitiator = false;
 				_thrd = new Thread (Process);
@@ -357,14 +565,14 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 			void Process ()
 			{
-				Key beforeHash = _kvPair.Key == null ? null : _kvPair.Key.RecordsetHash;
+				Key beforeHash = _cur_header == null ? null : _cur_header.RecordsetHash;
 				if (_isInitiator) {
 					InitiatorSideProcess ();
 				} else {
 					AccepterSideProcess ();
 				}
-				if (_kvPair.Key != null && (_forseFastPut || beforeHash == null || !beforeHash.Equals (_kvPair.Key.RecordsetHash)))
-					_mmlc.Touch (_kvPair.Key);
+				if (_cur_header != null && (_forseFastPut || beforeHash == null || !beforeHash.Equals (_cur_header.RecordsetHash)))
+					_mmlc.Touch (_cur_header);
 			}
 
 			void InitiatorSideProcess ()
@@ -374,7 +582,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				} catch (Exception exception) {
 					Console.WriteLine ("I: DHTルックアップ中に例外. {0}", exception.ToString ());
 				} finally {
-					_mmlc.MergeFinished (_key != null ? _key : _kvPair.Key.Key);
+					_mmlc.MergeFinished (_key != null ? _key : _cur_header.Key);
 					lock (_callbacks) {
 						for (int i = 0; i < _callbacks.Count; i++) {
 							try {
@@ -391,7 +599,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			{
 				Console.WriteLine ("I: START");
 				Console.WriteLine ("I: DHTに問い合わせ中...");
-				IAsyncResult ar = _mmlc._uploadSide.MessagingSocket.BeginInquire (new DHTLookupRequest (_key != null ? _key : _kvPair.Key.Key), null, null, null);
+				IAsyncResult ar = _mmlc._uploadSide.MessagingSocket.BeginInquire (new DHTLookupRequest (_key != null ? _key : _cur_header.Key), null, null, null);
 				DHTLookupResponse dhtres = _mmlc._uploadSide.MessagingSocket.EndInquire (ar) as DHTLookupResponse;
 				Console.WriteLine ("I: DHTから応答受信. 結果={0}件", dhtres == null || dhtres.Values == null ? 0 : dhtres.Values.Length);
 				if (dhtres == null || dhtres.Values == null || dhtres.Values.Length == 0)
@@ -402,10 +610,10 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				HashSet<Key> mergingHashSet = new HashSet<Key> ();
 				for (int i = 0; i < dhtres.Values.Length && parallelMergeThreads.Count < MAX_PARALLEL_MERGE; i++) {
 					try {
-						if (_key == null && _kvPair.Key.RecordsetHash.Equals (dhtres.Values[i].Hash)) continue;
+						if (_key == null && _cur_header.RecordsetHash.Equals (dhtres.Values[i].Hash)) continue;
 						if (mergingHashSet.Contains (dhtres.Values[i].Hash)) continue;
 						ar = _mmlc._ar.BeginConnect (_mmlc._uploadSide.Key, dhtres.Values[i].Holder, AnonymousConnectionType.HighThroughput,
-							_key != null ? (object)_key : (object)_kvPair.Key, null, null);
+							_key != null ? (object)_key : (object)_cur_header, null, null);
 						Console.WriteLine ("I: {0}へ接続", dhtres.Values[i].Holder.ToString ().Substring (0, 8));
 						mergingHashSet.Add (dhtres.Values[i].Hash);
 						ManualResetEvent done = new ManualResetEvent (false);
@@ -456,44 +664,46 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 			void InitiatorSideMergeProcess (StreamSocket sock, MergeableFileHeader header)
 			{
-				if (header == null || !(_key == null ? _kvPair.Key.Key : _key).Equals (header.Key) || !header.Verify ()) {
+				if (header == null || !(_key == null ? _cur_header.Key : _key).Equals (header.Key) || !header.Verify ()) {
 					Console.WriteLine ("I: 不正なヘッダだよん");
 					return;
 				}
 				while (true) {
-					if (_key == null) {
-						// ヘッダを更新する必要があるか
-						// 管理更新に対応していないので、現時点では何もしない...
-						break;
-					} else {
-						// ヘッダがないので受信したヘッダを利用
-						using (_mmlc._dbLock.EnterWriteLock ()) {
-							if (_mmlc._db.TryGetValue (_key, out _kvPair)) {
+					using (IDbConnection connection = _mmlc.CreateDBConnection ())
+					using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.Serializable)) {
+						if (_key == null) {
+							// ヘッダを更新する必要があるか
+							// 管理更新に対応していないので、現時点では何もしない...
+							break;
+						} else {
+							// ヘッダがないので受信したヘッダを利用
+							_cur_header = _mmlc.SelectHeader (transaction, _key, out _parser, out _header_id) as MergeableFileHeader;
+							if (_cur_header != null) {
 								// なんかヘッダが入っているので、更新する必要があるかチェック
 								_key = null;
 								continue;
 							}
-							_kvPair = new KeyValuePair<MergeableFileHeader, List<MergeableFileRecord>> (header.CopyBasisInfo (), new List<MergeableFileRecord> ());
-							_mmlc._db.Add (_key, _kvPair);
+							_cur_header = header.CopyBasisInfo ();
+							_mmlc.Insert (transaction, _cur_header, ref _parser, out _header_id);
 							_key = null;
+							transaction.Commit ();
 							break;
 						}
 					}
 				}
 				Console.WriteLine ("I: ヘッダを受信");
 
-				if (_kvPair.Key.RecordsetHash.Equals (header.RecordsetHash)) {
+				if (_cur_header.RecordsetHash.Equals (header.RecordsetHash)) {
 					Console.WriteLine ("I: 同じデータなのでマージ処理終了");
 					return;
 				}
 
 				byte[] buf = new byte[4];
 				Console.WriteLine ("I: 保持しているレコード一覧を送信中");
+				List<MergeableFileRecord> db_records = _mmlc.SelectRecords (_parser, _header_id);
 				List<Key> list = new List<Key> ();
-				lock (_kvPair.Value) {
-					for (int i = 0; i < _kvPair.Value.Count; i++)
-						list.Add (_kvPair.Value[i].Hash);
-				}
+				for (int i = 0; i < db_records.Count; i++)
+					list.Add (db_records[i].Hash);
 				SendMessage (sock, new MergeableRecordList (list.ToArray ()));
 
 				Console.WriteLine ("I: レコード一覧を受信中...");
@@ -506,11 +716,9 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				Console.WriteLine ("I: レコードを送信中");
 				HashSet<Key> sendSet = new HashSet<Key> (recordList.HashList);
 				List<MergeableFileRecord> sendList = new List<MergeableFileRecord> ();
-				lock (_kvPair.Value) {
-					for (int i = 0; i < _kvPair.Value.Count; i++) {
-						if (sendSet.Contains (_kvPair.Value[i].Hash))
-							sendList.Add (_kvPair.Value[i]);
-					}
+				for (int i = 0; i < db_records.Count; i++) {
+					if (sendSet.Contains (db_records[i].Hash))
+						sendList.Add (db_records[i]);
 				}
 				SendMessage (sock, new MergeableRecords (sendList.ToArray ()));
 
@@ -548,7 +756,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			void AccepterSideMergeProcess (StreamSocket sock, MergeableFileHeader other_header)
 			{
 				Console.WriteLine ("A: START");
-				if (other_header != null && _kvPair.Key.RecordsetHash.Equals (other_header.RecordsetHash)) {
+				if (other_header != null && _cur_header.RecordsetHash.Equals (other_header.RecordsetHash)) {
 					Console.WriteLine ("A: 同じデータなのでマージ処理終了");
 					return;
 				}
@@ -564,11 +772,10 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				HashSet<Key> otherSet = new HashSet<Key> (recordList.HashList);
 				List<MergeableFileRecord> sendList = new List<MergeableFileRecord> ();
 				Console.WriteLine ("A: 保持しているレコード一覧を送信中");
-				lock (_kvPair.Value) {
-					for (int i = 0; i < _kvPair.Value.Count; i++)
-						if (!otherSet.Remove (_kvPair.Value[i].Hash))
-							sendList.Add (_kvPair.Value[i]);
-				}
+				List<MergeableFileRecord> db_records = _mmlc.SelectRecords (_parser, _header_id);
+				for (int i = 0; i < db_records.Count; i++)
+					if (!otherSet.Remove (db_records[i].Hash))
+						sendList.Add (db_records[i]);
 				Key[] keys = new Key[otherSet.Count];
 				otherSet.CopyTo (keys);
 				SendMessage (sock, new MergeableRecordList (keys));
@@ -623,18 +830,23 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 			void Merge (MergeableRecords records)
 			{
-				lock (_kvPair.Value) {
-					Key hash = _kvPair.Key.RecordsetHash;
-					HashSet<Key> set = new HashSet<Key> ();
-					for (int i = 0; i < _kvPair.Value.Count; i++)
-						set.Add (_kvPair.Value[i].Hash);
-					for (int i = 0; i < records.Records.Length; i++) {
-						if (set.Add (records.Records[i].Hash)) {
-							_kvPair.Value.Add (records.Records[i]);
-							hash = hash.Xor (records.Records[i].Hash);
-						}
+				using (IDbConnection connection = _mmlc.CreateDBConnection ())
+				using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.Serializable)) {
+					_cur_header = _mmlc.SelectHeader (transaction, _cur_header.Key, out _parser, out _header_id) as MergeableFileHeader;
+					if (_cur_header == null) {
+						// えー
+						throw new Exception ();
 					}
-					_kvPair.Key.RecordsetHash = hash;
+					Key hash = _cur_header.RecordsetHash;
+					for (int i = 0; i < records.Records.Length; i ++) {
+						try {
+							_mmlc.Insert (transaction, records.Records[i], _parser, _header_id);
+							hash = hash.Xor (records.Records[i].Hash);
+						} catch {}
+					}
+					_cur_header.RecordsetHash = hash;
+					_mmlc.Update (transaction, _cur_header, _parser, _header_id, _cur_header);
+					transaction.Commit ();
 				}
 			}
 		}

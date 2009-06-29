@@ -45,7 +45,7 @@ namespace p2pncs
 
 		ECKeyPair _kbrPrivateKey;
 
-		public Node (Interrupters ints, IDatagramEventSocket bindedDgramSock)
+		public Node (Interrupters ints, IDatagramEventSocket bindedDgramSock, string db_path)
 		{
 			_ints = ints;
 			_dgramSock = bindedDgramSock;
@@ -60,7 +60,7 @@ namespace p2pncs
 			_anonymous = new AnonymousRouter (_dht, _kbrPrivateKey, ints.AnonymousInt);
 			ints.KBRStabilizeInt.AddInterruption (Stabilize);
 			_mkd = new MassKeyDeliverer (_dht, mkdLocalStore, ints.MassKeyDeliverTimerInt);
-			_mmlc = new MMLC (_anonymous, _dht, mkdLocalStore, ints.StreamSocketTimeoutInt, ints.DFSRePutTimerInt);
+			_mmlc = new MMLC (_anonymous, _dht, mkdLocalStore, db_path, ints.StreamSocketTimeoutInt, ints.DFSRePutTimerInt);
 		}
 
 		void Stabilize ()

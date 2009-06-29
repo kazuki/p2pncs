@@ -41,29 +41,28 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		[SerializableFieldId (4)]
 		Key _recordsetHash;
 
-		MergeableFileHeader ()
-		{
-		}
-
 		public MergeableFileHeader (ECKeyPair privateKey, DateTime lastManaged, IHashComputable content)
 		{
 			_lastManaged = lastManaged;
 			_content = content;
-			using (HashAlgorithm algo = DefaultAlgorithm.CreateHashAlgorithm ()) {
-				_recordsetHash = new Key (new byte[algo.HashSize >> 3]);
-			}
+			_recordsetHash = new Key (new byte[DefaultAlgorithm.HashByteSize]);
 			Sign (privateKey);
+		}
+
+		public MergeableFileHeader (Key key, DateTime lastManaged, IHashComputable content, byte[] sign, Key recordsetHash)
+		{
+			_key = key;
+			_lastManaged = lastManaged;
+			_content = content;
+			_sign = sign;
+			_recordsetHash = recordsetHash;
+			if (_recordsetHash.KeyBytes != DefaultAlgorithm.HashByteSize)
+				throw new FormatException ();
 		}
 
 		public MergeableFileHeader CopyBasisInfo ()
 		{
-			MergeableFileHeader header = new MergeableFileHeader ();
-			header._key = this._key;
-			header._lastManaged = this._lastManaged;
-			header._content = this._content;
-			header._sign = this._sign;
-			header._recordsetHash = new Key (new byte[_recordsetHash.KeyBytes]);
-			return header;
+			return new MergeableFileHeader (_key, _lastManaged, _content, _sign, new Key (new byte[DefaultAlgorithm.HashByteSize]));
 		}
 
 		public void Sign (ECKeyPair privateKey)
@@ -103,8 +102,13 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			get { return _lastManaged; }
 		}
 
+		public byte[] Signature {
+			get { return _sign; }
+		}
+
 		public IHashComputable Content {
 			get { return _content; }
+			internal set { _content = value; }
 		}
 
 		public Key RecordsetHash {

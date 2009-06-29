@@ -170,6 +170,11 @@ namespace p2pncs.Net.Overlay
 			return (byte[])_data.Clone ();
 		}
 
+		public string ToBase64String ()
+		{
+			return Convert.ToBase64String (_data);
+		}
+
 		public static bool Equals (Key keyA, Key keyB)
 		{
 			if (keyA == keyB)
@@ -276,6 +281,10 @@ namespace p2pncs.Net.Overlay
 		#endregion
 
 		#region Parse
+		public static Key FromBase64 (string base64)
+		{
+			return new Key (Convert.FromBase64String (base64));
+		}
 		public static Key Parse (string text)
 		{
 			return Parse (text, 16);
