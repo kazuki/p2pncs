@@ -23,11 +23,13 @@ namespace p2pncs.Net.Overlay.Anonymous
 	{
 		Key _key;
 		object _req;
+		bool _needResponse;
 
-		public BoundaryNodeReceivedEventArgs (Key key, object request)
+		public BoundaryNodeReceivedEventArgs (Key key, object request, bool needRes)
 		{
 			_key = key;
 			_req = request;
+			_needResponse = needRes;
 		}
 
 		public Key RecipientKey {
@@ -38,6 +40,12 @@ namespace p2pncs.Net.Overlay.Anonymous
 			get { return _req; }
 		}
 
+		public bool NeedsResponse {
+			get { return _needResponse; }
+		}
+
 		public abstract void StartResponse (object response);
+
+		public abstract void SendMessage (object msg);
 	}
 }

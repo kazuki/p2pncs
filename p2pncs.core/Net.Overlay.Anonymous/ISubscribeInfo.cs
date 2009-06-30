@@ -29,6 +29,18 @@ namespace p2pncs.Net.Overlay.Anonymous
 		SubscribeRouteStatus Status { get; }
 		IAnonymousRouter AnonymousRouter { get; }
 
+		/// <remarks>
+		/// IMessagingSocketインターフェイスを持つが、動作は通常のIMessagingSocketと異なり、
+		/// BeginInquireで送信したメッセージは、IAnonymousRouter.AddBoundaryNodeReceivedEventHandlerで
+		/// 登録したハンドラによって処理される。
+		/// また、Sendで送信したメッセージは始点・終点間での再送処理は行われないが、
+		/// 中継ノード間では行われ、利用する経路数は強制的に1になる。
+		/// こちらも同様にIAnonymousRouter.AddBoundaryNodeReceivedEventHandlerで登録したハンドラによって
+		/// 処理される。(但し、BoundaryNodeReceivedEventArgs.NeedsResponse = falseとなっている)
+		/// 
+		/// BoundaryNodeReceivedEventArgs.Send によって送信された始点へのメッセージは、
+		/// 通常通りIMessagingSocket.AddReceivedHandlerによって登録されたハンドラで処理される。
+		/// </remarks>
 		IMessagingSocket MessagingSocket { get; }
 	}
 }

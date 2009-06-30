@@ -1040,10 +1040,24 @@ namespace p2pncs.Net.Overlay.Anonymous
 					_info = info;
 				}
 
+				protected override uint CreateMessageID ()
+				{
+					while (true) {
+						uint id = base.CreateMessageID ();
+						if (id != 0)
+							return id;
+					}
+				}
+
 				public void Received (InsideMessage msg)
 				{
 					if (!IsActive)
 						return;
+					if (msg.ID == 0) {
+						InvokeReceived (this, new ReceivedEventArgs (msg.Payload, null));
+						return;
+					}
+
 					InquiredAsyncResultBase ar = RemoveFromRetryList (msg.ID, DummyEndPoint);
 					if (ar == null)
 						return;
@@ -1053,12 +1067,12 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 				public override void Send (object obj, EndPoint remoteEP)
 				{
-					throw new NotImplementedException ();
+					_info.SendMessage (new InsideMessage (0, obj), 1, true);
 				}
 
 				protected override void StartResponse_Internal (InquiredResponseState state, object response)
 				{
-					_info.SendMessage (new InsideMessage (state.ID, response), _info._numOfRoutes, true);
+					throw new NotSupportedException ();
 				}
 
 				public override int MaxMessageSize {
@@ -1243,9 +1257,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 			{
 				TerminalPointInfo _info;
 				IMessagingSocket _sock;
+				bool _responsed = false;
 				uint _id;
 
-				public ReceivedEventArgs (TerminalPointInfo info, IMessagingSocket sock, InsideMessage msg) : base (info.RecipientKey, msg.Payload)
+				public ReceivedEventArgs (TerminalPointInfo info, IMessagingSocket sock, InsideMessage msg) : base (info.RecipientKey, msg.Payload, msg.ID != 0)
 				{
 					_info = info;
 					_sock = sock;
@@ -1254,13 +1269,21 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 				public override void StartResponse (object response)
 				{
+					if (_id == 0)
+						throw new NotSupportedException ();
+
 					TerminalPointInfo info = _info;
 					lock (this) {
-						if (_info == null)
+						if (_responsed)
 							return;
-						_info = null;
+						_responsed = true;
 					}
 					info.SendMessage (_sock, new InsideMessage (_id, response), true);
+				}
+
+				public override void SendMessage (object msg)
+				{
+					_info.SendMessage (_sock, new InsideMessage (0, msg), true);
 				}
 			}
 		}
