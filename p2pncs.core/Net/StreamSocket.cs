@@ -28,7 +28,7 @@ namespace p2pncs.Net
 	public class StreamSocket : IStreamSocket
 	{
 		const int HeaderSize = 1/*type*/ + 4/*seq*/ + 2/*size*/;
-		const int MaxSegments = 16;
+		const int MaxSegments = 32;
 		const int MaxRetries = 8;
 		static readonly TimeSpan TimeoutRTO = TimeSpan.FromSeconds (16);
 		static readonly TimeSpan MaxRTO = TimeSpan.FromSeconds (8);
@@ -38,7 +38,7 @@ namespace p2pncs.Net
 		EndPoint _remoteEP;
 		Packet[] _sendBuffer = new Packet[MaxSegments];
 		int _sendBufferFilled = 0;
-		uint _sendSequence = 0, _recvNextSequence = 0;
+		uint _sendIndex = 0, _sendSequence = 0, _recvNextSequence = 0;
 		DateTime _lastReceived = DateTime.Now;
 		List<ReceiveSegment> _recvBuffer = new List<ReceiveSegment> ();
 		AutoResetEvent _sendWaitHandle = new AutoResetEvent (true);
@@ -119,14 +119,33 @@ namespace p2pncs.Net
 				case 1: /* ACK */
 					uint seq = ((uint)e.Buffer[1] << 24) | ((uint)e.Buffer[2] << 16) | ((uint)e.Buffer[3] << 8) | ((uint)e.Buffer[4]);
 					lock (_lock) {
+						uint lowest_sendidx = uint.MaxValue, acked_sendidx = 0;
+						int lowest_idx = int.MaxValue, acked_idx = -1;
+						for (int i = 0; i < _sendBuffer.Length; i ++) {
+							if (_sendBuffer[i].State == PacketState.AckWaiting && _sendBuffer[i].Sequence < seq) {
+								if (lowest_sendidx > _sendBuffer[i].RetransmitIndex) {
+									lowest_sendidx = _sendBuffer[i].RetransmitIndex;
+									lowest_idx = i;
+								}
+							}
+						}
 						for (int i = 0; i < _sendBuffer.Length; i ++) {
 							if (_sendBuffer[i].State == PacketState.AckWaiting && _sendBuffer[i].Sequence == seq) {
 								if (_sendBuffer[i].Retries == 0)
 									Update_RTO ((float)(DateTime.Now - _sendBuffer[i].Start).TotalMilliseconds);
+								acked_idx = i;
+								acked_sendidx = _sendBuffer[i].RetransmitIndex;
 								_sendBuffer[i].Reset ();
 								_sendBufferFilled--;
 								_sendWaitHandle.Set ();
 								break;
+							}
+						}
+						if (lowest_idx != int.MaxValue && acked_idx >= 0 && acked_sendidx - lowest_sendidx >= 3) {
+							Packet p = _sendBuffer[lowest_idx];
+							if (p.RTO - p.RTO_Interval + TimeSpan.FromMilliseconds (_rto) <= DateTime.Now) {
+								p.RTO = DateTime.Now;
+								p.RetransmitIndex = acked_sendidx;
 							}
 						}
 					}
@@ -150,9 +169,10 @@ namespace p2pncs.Net
 						if (_sendBuffer[i].State != PacketState.Empty)
 							continue;
 						_sendBufferFilled ++;
-						_sendBuffer[i].Setup (buffer, offset, copy_size, _sendSequence, TimeSpan.FromMilliseconds (_rto), PacketState.AckWaiting);
+						_sendBuffer[i].Setup (buffer, offset, copy_size, _sendSequence, _sendIndex, TimeSpan.FromMilliseconds (_rto), PacketState.AckWaiting);
 						_sock.SendTo (_sendBuffer[i].Data, 0, _sendBuffer[i].Filled, _remoteEP);
 						_sendSequence += (uint)copy_size;
+						_sendIndex ++;
 						offset += copy_size;
 						size -= copy_size;
 						break;
@@ -259,6 +279,8 @@ namespace p2pncs.Net
 			public TimeSpan RTO_Interval;
 			public int Retries;
 			public PacketState State;
+			public uint Index;
+			public uint RetransmitIndex;
 
 			public Packet (int max_segment_size)
 			{
@@ -268,10 +290,10 @@ namespace p2pncs.Net
 
 			public void Reset ()
 			{
-				Setup (null, 0, 0, 0, TimeSpan.Zero, PacketState.Empty);
+				Setup (null, 0, 0, 0, 0, TimeSpan.Zero, PacketState.Empty);
 			}
 
-			public void Setup (byte[] src, int offset, int size, uint sequence, TimeSpan rto_interval, PacketState state)
+			public void Setup (byte[] src, int offset, int size, uint sequence, uint index, TimeSpan rto_interval, PacketState state)
 			{
 				if (src != null) {
 					Data[1] = (byte)(sequence >> 24);
@@ -286,6 +308,8 @@ namespace p2pncs.Net
 					Filled = 0;
 				}
 				Sequence = sequence;
+				Index = index;
+				RetransmitIndex = index;
 				RTO = DateTime.Now + rto_interval;
 				RTO_Interval = rto_interval;
 				Retries = 0;
