@@ -465,16 +465,6 @@ namespace p2pncs
 			
 			try {
 				while (true) {
-					DateTime dt = DateTime.Now;
-					while (DateTime.Now.Subtract (dt) < timeout) {
-						if (sock.CheckAvailableBytes () > 0)
-							break;
-						Thread.Sleep (50);
-					}
-					if (sock.CheckAvailableBytes () == 0) {
-						Console.WriteLine ("ThroughputTest: Timeout");
-						return;
-					}
 					if (in_header) {
 						received += sock.Receive (buffer, received, HeaderSize - received);
 						if (received == HeaderSize) {
