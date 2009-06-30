@@ -30,7 +30,8 @@ namespace p2pncs.Net
 		const int HeaderSize = 1/*type*/ + 4/*seq*/ + 2/*size*/;
 		const int MaxSegments = 16;
 		const int MaxRetries = 8;
-		static readonly TimeSpan MaxRTO = TimeSpan.FromSeconds (16);
+		static readonly TimeSpan TimeoutRTO = TimeSpan.FromSeconds (16);
+		static readonly TimeSpan MaxRTO = TimeSpan.FromSeconds (8);
 		bool _active = true, _shutdown = false;
 		IDatagramEventSocket _sock;
 		int _mss;
@@ -38,6 +39,7 @@ namespace p2pncs.Net
 		Packet[] _sendBuffer = new Packet[MaxSegments];
 		int _sendBufferFilled = 0;
 		uint _sendSequence = 0, _recvNextSequence = 0;
+		DateTime _lastReceived = DateTime.Now;
 		List<ReceiveSegment> _recvBuffer = new List<ReceiveSegment> ();
 		AutoResetEvent _sendWaitHandle = new AutoResetEvent (true);
 		AutoResetEvent _recvWaitHandle = new AutoResetEvent (false);
@@ -79,9 +81,6 @@ namespace p2pncs.Net
 
 		void CheckTimeout ()
 		{
-			if (!_active)
-				return;
-
 			lock (_lock) {
 				for (int i = 0; i < _sendBuffer.Length; i++) {
 					if (_sendBuffer[i].State == PacketState.AckWaiting && _sendBuffer[i].RTO <= DateTime.Now) {
@@ -89,7 +88,7 @@ namespace p2pncs.Net
 							Dispose ();
 							return;
 						}
-						_sendBuffer[i].RTO_Interval += _sendBuffer[i].RTO_Interval;
+						_sendBuffer[i].RTO_Interval = TimeSpan.FromMilliseconds (_sendBuffer[i].RTO_Interval.TotalMilliseconds * 1.3);
 						if (_sendBuffer[i].RTO_Interval > MaxRTO)
 							_sendBuffer[i].RTO_Interval = MaxRTO;
 						_sendBuffer[i].RTO = DateTime.Now + _sendBuffer[i].RTO_Interval;
@@ -104,9 +103,6 @@ namespace p2pncs.Net
 
 		void Socket_Received (object sender, DatagramReceiveEventArgs e)
 		{
-			if (!_active)
-				return;
-
 			switch (e.Buffer[0]) {
 				case 0: /* Packet */
 					byte[] buf = new byte[5];
@@ -115,6 +111,7 @@ namespace p2pncs.Net
 					uint rseq = ((uint)buf[1] << 24) | ((uint)buf[2] << 16) | ((uint)buf[3] << 8) | ((uint)buf[4]);
 					_sock.SendTo (buf, _remoteEP);
 					lock (_recvBuffer) {
+						_lastReceived = DateTime.Now;
 						_recvBuffer.Add (new ReceiveSegment (rseq, e.Buffer.CopyRange (HeaderSize, e.Size - HeaderSize)));
 						_recvWaitHandle.Set ();
 					}
@@ -188,7 +185,7 @@ namespace p2pncs.Net
 					}
 				}
 				if (seg == null) {
-					if (!_recvWaitHandle.WaitOne (MaxRTO))
+					if (!_recvWaitHandle.WaitOne (TimeSpan.FromSeconds (1)) && DateTime.Now.Subtract (_lastReceived) >= TimeoutRTO)
 						throw new SocketException ();
 					continue;
 				}
@@ -226,13 +223,28 @@ namespace p2pncs.Net
 
 		public void Dispose ()
 		{
-			_active = false;
-			_sendWaitHandle.Set ();
-			_shutdownWaitHandle.Set ();
-			_sendWaitHandle.Close ();
-			_shutdownWaitHandle.Close ();
-			_timeoutCheckInt.RemoveInterruption (CheckTimeout);
-			_sock.Dispose ();
+			if (_active) {
+				_active = false;
+				_time_wait_start = DateTime.Now;
+				_timeoutCheckInt.AddInterruption (TimeWait);
+				Console.WriteLine ("[StreamSocket] ENTER TO TIME_WAIT");
+			}
+		}
+
+		DateTime _time_wait_start;
+		TimeSpan _time_wait = TimeSpan.FromSeconds (30);
+		void TimeWait ()
+		{
+			if (DateTime.Now.Subtract (_time_wait_start) >= _time_wait) {
+				_sendWaitHandle.Set ();
+				_shutdownWaitHandle.Set ();
+				_sendWaitHandle.Close ();
+				_shutdownWaitHandle.Close ();
+				_timeoutCheckInt.RemoveInterruption (CheckTimeout);
+				_timeoutCheckInt.RemoveInterruption (TimeWait);
+				_sock.Dispose ();
+				Console.WriteLine ("[StreamSocket] DISPOSEED");
+			}
 		}
 
 		#endregion
