@@ -745,8 +745,8 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				} else {
 					AccepterSideProcess ();
 				}
-				//if (_cur_header != null && (_forseFastPut || beforeHash == null || !beforeHash.Equals (_cur_header.RecordsetHash)))
-				_mmlc.Touch (_cur_header);
+				if (_cur_header != null)// && (_forseFastPut || beforeHash == null || !beforeHash.Equals (_cur_header.RecordsetHash)))
+					_mmlc.Touch (_cur_header);
 			}
 
 			void InitiatorSideProcess ()
