@@ -48,7 +48,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 		const int DefaultSharedInfoSize = 64;
 
 		/// <summary>多重暗号化されたメッセージのメッセージ長 (常にここで指定したサイズになる)</summary>
-		const int PayloadFixedSize = 896;
+		int PayloadFixedSize = 896;
+		static int RoutedMessageOverhead;
 
 		public static int DefaultRelayNodes = 3;
 		public static int DefaultSubscribeRoutes = 2;
@@ -109,6 +110,12 @@ namespace p2pncs.Net.Overlay.Anonymous
 		DuplicationChecker<DupCheckLabel> _terminalDupChecker = new DuplicationChecker<long> (DefaultDuplicationCheckerBufferSize);
 		DuplicationChecker<DupCheckLabel> _interterminalDupChecker = new DuplicationChecker<long> (DefaultDuplicationCheckerBufferSize);
 
+		static AnonymousRouter ()
+		{
+			int payloadSize = 1000;
+			RoutedMessageOverhead = DefaultSerializer.Serialize (new RoutedMessage (int.MaxValue, new byte[payloadSize])).Length - payloadSize;
+		}
+
 		public AnonymousRouter (IDistributedHashTable dht, ECKeyPair privateNodeKey, IntervalInterrupter interrupter)
 		{
 			_kbr = dht.KeyBasedRouter;
@@ -116,6 +123,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 			_dht = dht;
 			_privateNodeKey = privateNodeKey;
 			_interrupter = interrupter;
+
+			PayloadFixedSize = dht.KeyBasedRouter.MessagingSocket.MaxMessageSize - RoutedMessageOverhead;
+			if (PayloadFixedSize % DefaultSymmetricBlockBytes != 0)
+				PayloadFixedSize -= PayloadFixedSize % DefaultSymmetricBlockBytes;
 
 			dht.RegisterTypeID (typeof (DHTEntry), 1, DHTEntry.Merger);
 			_sock.AddInquiryDuplicationCheckType (typeof (EstablishRouteMessage));
@@ -282,7 +293,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			_sock.StartResponse (e, AckMessage);
 
 			EstablishRouteMessage msg = (EstablishRouteMessage)e.InquireMessage;
-			EstablishRoutePayload payload = MultipleCipherHelper.DecryptEstablishPayload (msg.Payload, _privateNodeKey, _kbr.SelftNodeId.KeyBytes);
+			EstablishRoutePayload payload = MultipleCipherHelper.DecryptEstablishPayload (msg.Payload, _privateNodeKey, _kbr.SelftNodeId.KeyBytes, PayloadFixedSize);
 			RouteLabel label = GenerateRouteLabel ();
 			AnonymousEndPoint prev = new AnonymousEndPoint (e.EndPoint, msg.Label), next = null;
 			RouteInfo routeInfo;
@@ -879,7 +890,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 							}
 
 							SymmetricKey[] relayKeys = new SymmetricKey[relays.Length];
-							byte[] payload = MultipleCipherHelper.CreateEstablishPayload (relays, relayKeys, _key, _privateKey.DomainName);
+							byte[] payload = MultipleCipherHelper.CreateEstablishPayload (relays, relayKeys, _key, _privateKey.DomainName, _router.PayloadFixedSize);
 
 							RouteLabel label = GenerateRouteLabel ();
 							AnonymousEndPoint ep = new AnonymousEndPoint (relays[0].EndPoint, label);
@@ -1126,7 +1137,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 				if (_relayKeys != null)
 					throw new Exception ();
 				_relayKeys = new SymmetricKey[_relayNodes.Length];
-				return MultipleCipherHelper.CreateEstablishPayload (_relayNodes, _relayKeys, recipientId, domain);
+				return MultipleCipherHelper.CreateEstablishPayload (_relayNodes, _relayKeys, recipientId, domain,
+					(_subscribe.AnonymousRouter as AnonymousRouter).PayloadFixedSize);
 			}
 
 			public void Established (EstablishedRouteMessage msg)
@@ -1139,7 +1151,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			public void SendMessage (IMessagingSocket sock, object msg, bool useInquiry)
 			{
 				_nextPingTime = DateTime.Now + MCR_AliveCheckScheduleInterval;
-				byte[] payload = MultipleCipherHelper.CreateRoutedPayload (_relayKeys, msg);
+				byte[] payload = MultipleCipherHelper.CreateRoutedPayload (_relayKeys, msg, (_subscribe.AnonymousRouter as AnonymousRouter).PayloadFixedSize);
 				RoutedMessage rmsg = new RoutedMessage (_routeInfo.Next.Label, payload);
 				if (useInquiry) {
 					sock.BeginInquire (rmsg, _routeInfo.Next.EndPoint, Messaging_Timeout, Messaging_MaxRetry, SendMessage_Callback, sock);
@@ -1207,7 +1219,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			public void SendMessage (IMessagingSocket sock, object msg, bool useInquery)
 			{
 				if (!_active) return;
-				byte[] payload = MultipleCipherHelper.CreateRoutedPayload (_routeInfo.Key, msg);
+				byte[] payload = MultipleCipherHelper.CreateRoutedPayload (_routeInfo.Key, msg, _router.PayloadFixedSize);
 				RoutedMessage rmsg = new RoutedMessage (_routeInfo.Previous.Label, payload);
 				if (useInquery) {
 					sock.BeginInquire (rmsg, _routeInfo.Previous.EndPoint, Messaging_Timeout, Messaging_MaxRetry, SendMessage_Callback, sock);
@@ -1771,7 +1783,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 				public int MaxDatagramSize {
 					/// TODO: 正しい値を返すようにする
-					get { return PayloadFixedSize; }
+					get { return 500; }
 				}
 
 				public long ReceivedBytes {
@@ -1830,9 +1842,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 				return new SymmetricKey (DefaultSymmetricAlgorithmType, iv, key, DefaultCipherMode, padding, enableIVShuffle);
 			}
 
-			public static byte[] CreateEstablishPayload (NodeHandle[] relayNodes, SymmetricKey[] relayKeys, Key recipientId, ECDomainNames domain)
+			public static byte[] CreateEstablishPayload (NodeHandle[] relayNodes, SymmetricKey[] relayKeys, Key recipientId, ECDomainNames domain, int fixedPayloadSize)
 			{
-				byte[] payload = new byte[PayloadFixedSize];
+				byte[] payload = new byte[fixedPayloadSize];
 				byte[] iv = new byte[DefaultSymmetricBlockBytes];
 				byte[] key = new byte[DefaultSymmetricKeyBytes];
 				int payload_size = 0;
@@ -1871,7 +1883,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				return payload;
 			}
 
-			public static EstablishRoutePayload DecryptEstablishPayload (byte[] payload, ECKeyPair privateNodeKey, int pubKeyLen)
+			public static EstablishRoutePayload DecryptEstablishPayload (byte[] payload, ECKeyPair privateNodeKey, int pubKeyLen, int fixedPayloadSize)
 			{
 				ECKeyPair ephemeralKey = ECKeyPairExtensions.CreatePublic (Copy (payload, 0, pubKeyLen));
 				SymmetricKey sk = ComputeSharedKey (privateNodeKey, ephemeralKey, null, PaddingMode.None, false);
@@ -1889,7 +1901,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 						Buffer.BlockCopy (decrypted, 3, payload, 0, payload.Length);
 						return new EstablishRoutePayload (sk, payload);
 					case 1:
-						payload = new byte[PayloadFixedSize];
+						payload = new byte[fixedPayloadSize];
 						EndPoint nextHop;
 						RNG.Instance.GetBytes (payload);
 						using (MemoryStream ms = new MemoryStream (decrypted, 1, decrypted.Length - 1)) {
@@ -1902,29 +1914,29 @@ namespace p2pncs.Net.Overlay.Anonymous
 				}
 			}
 
-			public static byte[] CreateRoutedPayload (SymmetricKey key, object msg)
+			public static byte[] CreateRoutedPayload (SymmetricKey key, object msg, int fixedPayloadSize)
 			{
-				return CreateRoutedPayload (key, DefaultSerializer.Serialize (msg));
+				return CreateRoutedPayload (key, DefaultSerializer.Serialize (msg), fixedPayloadSize);
 			}
 
-			public static byte[] CreateRoutedPayload (SymmetricKey[] keys, object msg)
+			public static byte[] CreateRoutedPayload (SymmetricKey[] keys, object msg, int fixedPayloadSize)
 			{
-				return CreateRoutedPayload (keys, DefaultSerializer.Serialize (msg));
+				return CreateRoutedPayload (keys, DefaultSerializer.Serialize (msg), fixedPayloadSize);
 			}
 
-			static byte[] CreateRoutedPayload (SymmetricKey[] keys, byte[] data)
+			static byte[] CreateRoutedPayload (SymmetricKey[] keys, byte[] data, int fixedPayloadSize)
 			{
-				byte[] payload = CreateRoutedPayload (keys[keys.Length - 1], data);
+				byte[] payload = CreateRoutedPayload (keys[keys.Length - 1], data, fixedPayloadSize);
 				for (int i = keys.Length - 2; i >= 0; i --)
 					payload = keys[i].Encrypt (payload, 0, payload.Length);
 				return payload;
 			}
 
-			static byte[] CreateRoutedPayload (SymmetricKey key, byte[] data)
+			static byte[] CreateRoutedPayload (SymmetricKey key, byte[] data, int fixedPayloadSize)
 			{
 				int header_size = key.IV.Length; // 簡易IVシャッフル
 				int payload_size = data.Length + header_size;
-				byte[] payload = new byte[PayloadFixedSize];
+				byte[] payload = new byte[fixedPayloadSize];
 
 				RNG.Instance.GetBytes (payload);
 				payload[0] = (byte)((data.Length >> 8) & 0xff);
