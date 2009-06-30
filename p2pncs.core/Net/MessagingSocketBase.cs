@@ -253,7 +253,7 @@ namespace p2pncs.Net
 		#endregion
 
 		#region Misc
-		protected MsgLabel CreateMessageID ()
+		protected virtual MsgLabel CreateMessageID ()
 		{
 			return BitConverter.ToUInt32 (openCrypto.RNG.GetRNGBytes (4), 0);
 		}
