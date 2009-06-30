@@ -20,10 +20,13 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.IO;
+using System.Net;
+using System.Net.Sockets;
 using System.Threading;
 using openCrypto.EllipticCurve;
 using p2pncs.Net.Overlay.Anonymous;
 using p2pncs.Net.Overlay.DHT;
+using p2pncs.Security.Captcha;
 using p2pncs.Security.Cryptography;
 using p2pncs.Threading;
 using p2pncs.Utility;
@@ -56,6 +59,10 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		IntervalInterrupter _int; // Re-put Interval Timer
 		IntervalInterrupter _anonStrmSockInt;
 
+		// CAPTCHA
+		delegate void CaptchaSegmentReceived (CaptchaChallengeSegment seg);
+		Dictionary<int, CaptchaSegmentReceived> _captcha_local = new Dictionary<int,CaptchaSegmentReceived> ();
+
 		const int MaxDatagramSize = 500;
 
 		public MMLC (IAnonymousRouter ar, IDistributedHashTable dht, IMassKeyDelivererLocalStore mkdStore, string db_path, IntervalInterrupter anonStrmSockInt, IntervalInterrupter reputInt)
@@ -70,8 +77,8 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			using (IDbConnection connection = CreateDBConnection ())
 			using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.Serializable)) {
 				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS MMLC_Keys (id INTEGER PRIMARY KEY, key TEXT, type INTEGER, content_type INTEGER);");
-				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS MMLC_MergeableHeaders (id INTEGER PRIMARY KEY REFERENCES MMLC_Keys(id), lastManaged INTEGER, sign BLOB, recordsetHash TEXT);");
-				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS MMLC_MergeableRecords (id INTEGER PRIMARY KEY, hash TEXT, header_id INTEGER REFERENCES MMLC_MergeableHeaders(id), lastManaged INTEGER);");
+				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS MMLC_MergeableHeaders (id INTEGER PRIMARY KEY REFERENCES MMLC_Keys(id), lastManaged INTEGER, authServers TEXT, sign BLOB, recordsetHash TEXT);");
+				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS MMLC_MergeableRecords (id INTEGER PRIMARY KEY, hash TEXT, header_id INTEGER REFERENCES MMLC_MergeableHeaders(id), lastManaged INTEGER, sign BLOB, auth_idx INTEGER, auth BLOB);");
 				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE UNIQUE INDEX IF NOT EXISTS MMLC_Keys_Index ON MMLC_Keys(key);");
 				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE UNIQUE INDEX IF NOT EXISTS MMLC_MergeableRecords_Index ON MMLC_MergeableRecords (header_id, hash);");
 				transaction.Commit ();
@@ -82,6 +89,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			_uploadSide = _ar.SubscribeRecipient (uploadSideKey, uploadPrivateKey);
 			_uploadSide.Accepting += new AcceptingEventHandler (AnonymousRouter_Accepting);
 			_uploadSide.Accepted += new AcceptedEventHandler (AnonymousRouter_Accepted);
+			_uploadSide.MessagingSocket.AddReceivedHandler (typeof (CaptchaChallengeSegment), CaptchaChallengeSegment_Received);
 
 			dht.RegisterTypeID (typeof (DHTMergeableFileValue), 2, DHTMergeableFileValue.Merger);
 			_int.AddInterruption (RePut);
@@ -89,6 +97,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			_ar.AddBoundaryNodeReceivedEventHandler (typeof (DHTLookupRequest), DHTLookupRequest_Handler);
 			_ar.AddBoundaryNodeReceivedEventHandler (typeof (PublishMessage), PublishMessage_Handler);
 			_ar.AddBoundaryNodeReceivedEventHandler (typeof (FastPublishMessage), FastPublishMessage_Handler);
+			_ar.AddBoundaryNodeReceivedEventHandler (typeof (CaptchaContainer), CaptchaContainer_Handler);
 		}
 
 		public void Register (IMergeableFileDatabaseParser parser)
@@ -151,16 +160,17 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				header.Key.ToBase64String (), parser.TypeId);
 			header_id = DatabaseUtility.GetLastInsertRowId (transaction);
 			DatabaseUtility.ExecuteNonQuery (transaction,
-				"INSERT INTO MMLC_MergeableHeaders (id, lastManaged, sign, recordsetHash) VALUES (?, ?, ?, ?);",
-				header_id, header.LastManagedTime, header.Signature, header.RecordsetHash.ToBase64String ());
+				"INSERT INTO MMLC_MergeableHeaders (id, lastManaged, authServers, sign, recordsetHash) VALUES (?, ?, ?, ?, ?);",
+				header_id, header.LastManagedTime, AuthServerInfo.ToParsableString (header.AuthServers),
+				header.Signature, header.RecordsetHash.ToBase64String ());
 			parser.Insert (transaction, header_id, header);
 		}
 
 		void Insert (IDbTransaction transaction, MergeableFileRecord record, IMergeableFileDatabaseParser parser, long header_id)
 		{
 			DatabaseUtility.ExecuteNonQuery (transaction,
-				"INSERT INTO MMLC_MergeableRecords (hash, header_id, lastManaged) VALUES (?, ?, ?);",
-				record.Hash.ToBase64String (), header_id, record.LastManagedTime);
+				"INSERT INTO MMLC_MergeableRecords (hash, header_id, lastManaged, sign, auth_idx, auth) VALUES (?, ?, ?, ?, ?, ?);",
+				record.Hash.ToBase64String (), header_id, record.LastManagedTime, record.Signature, record.AuthorityIndex, record.Authentication);
 			long id = DatabaseUtility.GetLastInsertRowId (transaction);
 			parser.Insert (transaction, id, record);
 		}
@@ -179,8 +189,9 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				DatabaseUtility.ExecuteNonQuery (transaction, "UPDATE MMLC_MergeableHeaders SET recordsetHash=? WHERE id=?",
 					new_header.RecordsetHash.ToBase64String (), header_id);
 			} else {
-				DatabaseUtility.ExecuteNonQuery (transaction, "UPDATE MMLC_MergeableHeaders SET lastManaged=?, sign=?, recordsetHash=? WHERE id=?",
-					new_header.LastManagedTime, new_header.Signature, new_header.RecordsetHash.ToBase64String (), header_id);
+				DatabaseUtility.ExecuteNonQuery (transaction, "UPDATE MMLC_MergeableHeaders SET lastManaged=?, authServers=?, sign=?, recordsetHash=? WHERE id=?",
+					new_header.LastManagedTime, AuthServerInfo.ToParsableString (new_header.AuthServers),
+					new_header.Signature, new_header.RecordsetHash.ToBase64String (), header_id);
 				parser.Update (transaction, header_id, new_header);
 			}
 			return true;
@@ -208,16 +219,17 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					parser = GetMergeableParser (reader1.GetInt32 (2));
 					if (parser == null)
 						return null;
-					string sql = string.Format ("SELECT t1.lastManaged, t1.sign, t1.recordsetHash, {0} FROM MMLC_MergeableHeaders as t1,{1} as {2} WHERE t1.id=? AND t1.id={2}.id", parser.ParseHeaderFields, parser.HeaderTableName, parser.TableAlias);
+					string sql = string.Format ("SELECT t1.lastManaged, t1.authServers, t1.sign, t1.recordsetHash, {0} FROM MMLC_MergeableHeaders as t1,{1} as {2} WHERE t1.id=? AND t1.id={2}.id", parser.ParseHeaderFields, parser.HeaderTableName, parser.TableAlias);
 					using (IDataReader reader2 = DatabaseUtility.ExecuteReader (transaction, sql, header_id)) {
 						if (!reader2.Read ())
 							return null;
 						try {
 							MergeableFileHeader header = new MergeableFileHeader (
 								key, reader2.GetDateTime (0), null,
-								(byte[])reader2.GetValue (1),
-								Key.FromBase64 (reader2.GetString (2)));
-							header.Content = parser.ParseHeader (reader2, 3);
+								AuthServerInfo.ParseArray (reader2.GetString (1)),
+								(byte[])reader2.GetValue (2),
+								Key.FromBase64 (reader2.GetString (3)));
+							header.Content = parser.ParseHeader (reader2, 4);
 							return header;
 						} catch {
 							return null;
@@ -238,15 +250,16 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 		List<MergeableFileRecord> SelectRecords (IDbTransaction transaction, IMergeableFileDatabaseParser parser, long header_id)
 		{
-			string sql = string.Format ("SELECT t1.hash, t1.lastManaged, {0} FROM MMLC_MergeableRecords as t1,{1} as {2} WHERE t1.header_id=? AND t1.id={2}.id", parser.ParseRecordFields, parser.RecordTableName, parser.TableAlias);
+			string sql = string.Format ("SELECT t1.hash, t1.lastManaged, t1.sign, t1.auth_idx, t1.auth, {0} FROM MMLC_MergeableRecords as t1,{1} as {2} WHERE t1.header_id=? AND t1.id={2}.id", parser.ParseRecordFields, parser.RecordTableName, parser.TableAlias);
 			List<MergeableFileRecord> list = new List<MergeableFileRecord> ();
 			using (IDataReader reader = DatabaseUtility.ExecuteReader (transaction, sql, header_id)) {
 				while (reader.Read ()) {
 					try {
-						MergeableFileRecord record = new MergeableFileRecord (null,
-							reader.GetDateTime (1),
-							Key.FromBase64 (reader.GetString (0)));
-						record.Content = parser.ParseRecord (reader, 2);
+						byte[] sign = (reader.IsDBNull (2) ? null : (byte[])reader.GetValue (2));
+						byte[] auth = (reader.IsDBNull (4) ? null : (byte[])reader.GetValue (4));
+						MergeableFileRecord record = new MergeableFileRecord (null, reader.GetDateTime (1),
+							Key.FromBase64 (reader.GetString (0)), sign, (byte)reader.GetByte (3), auth);
+						record.Content = parser.ParseRecord (reader, 5);
 						list.Add (record);
 					} catch {}
 				}
@@ -285,14 +298,75 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			FastPublishMessage msg = args.Request as FastPublishMessage;
 			_dht.BeginPut (msg.Key, TimeSpan.FromMinutes (5), new DHTMergeableFileValue (args.RecipientKey, msg.Hash, msg.Revision), null, null);
 		}
+
+		void CaptchaContainer_Handler (object sender, BoundaryNodeReceivedEventArgs args)
+		{
+			new Thread (CaptchaContainer_Thread).Start (args);
+		}
+
+		void CaptchaChallengeSegment_Received (object sender, ReceivedEventArgs args)
+		{
+			CaptchaChallengeSegment seg = (CaptchaChallengeSegment)args.Message;
+			CaptchaSegmentReceived func;
+
+			lock (_captcha_local) {
+				if (!_captcha_local.TryGetValue (seg.ID, out func))
+					return;
+			}
+
+			Console.WriteLine ("RECEIVED SEGMENT {0}/{1}", seg.SegmentIndex + 1, seg.NumberOfSegments);
+			func (seg);
+		}
+
+		void CaptchaContainer_Thread (object o)
+		{
+			BoundaryNodeReceivedEventArgs args = (BoundaryNodeReceivedEventArgs)o;
+			CaptchaContainer container = (CaptchaContainer)args.Request;
+			if (!(container.EndPoint is IPEndPoint))
+				return;
+			byte[] buffer;
+			using (Socket sock = new Socket (AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)) {
+				sock.SendTimeout = 2000;
+				sock.ReceiveTimeout = 2000;
+				try {
+					sock.Connect (container.EndPoint);
+				} catch {
+					return;
+				}
+				sock.Send (new byte[] {(byte)(container.Encrypted.Length >> 8), (byte)(container.Encrypted.Length)});
+				sock.Send (container.Encrypted);
+				buffer = new byte[2];
+				sock.Receive (buffer, 0, 2, SocketFlags.None);
+				int size = (buffer[0] << 8) | buffer[1];
+				buffer = new byte[size];
+				int recv = 0;
+				while (recv < size) {
+					int ret = sock.Receive (buffer, recv, size - recv, SocketFlags.None);
+					recv += ret;
+				}
+			}
+
+			int maxSegmentSize = 800;
+			int div = buffer.Length / maxSegmentSize;
+			int rem = buffer.Length % maxSegmentSize;
+			byte total = (byte)(div + (rem == 0 ? 0 : 1));
+			for (int i = 0; i < div; i ++) {
+				CaptchaChallengeSegment seg = new CaptchaChallengeSegment ((byte)i, total, buffer.CopyRange (i * maxSegmentSize, maxSegmentSize), container.ID);
+				args.SendMessage (seg);
+			}
+			if (rem != 0) {
+				CaptchaChallengeSegment seg = new CaptchaChallengeSegment ((byte)div, total, buffer.CopyRange (div * maxSegmentSize, rem), container.ID);
+				args.SendMessage (seg);
+			}
+		}
 		#endregion
 
 		#region Manipulating MergeableFile/MergeabileFileRecord
-		public void CreateNew (IHashComputable headerContent)
+		public void CreateNew (IHashComputable headerContent, AuthServerInfo[] authServers)
 		{
 			ECKeyPair privateKey = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 			Key publicKey = Key.Create (privateKey);
-			MergeableFileHeader header = new MergeableFileHeader (privateKey, DateTime.Now, headerContent);
+			MergeableFileHeader header = new MergeableFileHeader (privateKey, DateTime.Now, headerContent, authServers);
 			CreateNew (header);
 		}
 
@@ -302,6 +376,14 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.Serializable)) {
 				Insert (transaction, header, null);
 				transaction.Commit ();
+			}
+		}
+
+		public MergeableFileHeader GetMergeableFileHeader (Key key)
+		{
+			using (IDbConnection connection = CreateDBConnection ())
+			using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.ReadCommitted)) {
+				return SelectHeader (transaction, key) as MergeableFileHeader;
 			}
 		}
 
@@ -364,6 +446,98 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			}
 			lock (_localChangedList) {
 				_localChangedList.Add (key);
+			}
+		}
+
+		public CaptchaChallengeData GetCaptchaChallengeData (AuthServerInfo info, byte[] hash)
+		{
+			SymmetricKey key = new SymmetricKey (SymmetricAlgorithmType.Camellia, openCrypto.RNG.GetRNGBytes (16), openCrypto.RNG.GetRNGBytes (16),
+				openCrypto.CipherModePlus.CTR, System.Security.Cryptography.PaddingMode.ISO10126, false);
+			
+			object lock_obj = new object ();
+			byte[][] segments = null;
+			int total_size = 0;
+			ManualResetEvent done = new ManualResetEvent (false);
+			CaptchaSegmentReceived func = delegate (CaptchaChallengeSegment seg) {
+				lock (lock_obj) {
+					if (segments == null)
+						segments = new byte[seg.NumberOfSegments][];
+					segments[seg.SegmentIndex] = seg.Segment;
+					total_size = 0;
+					for (int i = 0; i < segments.Length; i ++) {
+						if (segments[i] == null)
+							return;
+						total_size += segments[i].Length;
+					}
+					done.Set ();
+				}
+			};
+
+			int id;
+			lock (_captcha_local) {
+				while (true) {
+					id = BitConverter.ToInt32 (openCrypto.RNG.GetRNGBytes (4), 0);
+					if (!_captcha_local.ContainsKey (id))
+						break;
+				}
+				_captcha_local.Add (id, func);
+			}
+			try {
+				CaptchaContainer container = new CaptchaContainer (info.EndPoint, id, info.PublicKey, new CaptchaChallengeRequest (hash, key.IV, key.Key));
+				_uploadSide.MessagingSocket.Send (container, null);
+				if (!done.WaitOne (1000 * 16)) {
+					// timeout...
+					return null;
+				}
+
+				byte[] encrypted = new byte[total_size];
+				for (int i = 0, q = 0; i < segments.Length; i ++) {
+					Buffer.BlockCopy (segments[i], 0, encrypted, q, segments[i].Length);
+					q += segments[i].Length;
+				}
+
+				return Serializer.Instance.Deserialize (key.Decrypt (encrypted, 0, encrypted.Length)) as CaptchaChallengeData;
+			} finally {
+				lock (_captcha_local) {
+					_captcha_local.Remove (id);
+				}
+			}
+		}
+
+		public byte[] VerifyCaptchaChallenge (AuthServerInfo info, byte[] hash, byte[] token, byte[] answer)
+		{
+			SymmetricKey key = new SymmetricKey (SymmetricAlgorithmType.Camellia, openCrypto.RNG.GetRNGBytes (16), openCrypto.RNG.GetRNGBytes (16),
+				openCrypto.CipherModePlus.CTR, System.Security.Cryptography.PaddingMode.ISO10126, false);
+			ManualResetEvent done = new ManualResetEvent (false);
+			CaptchaVerifyResult result = null;
+			CaptchaSegmentReceived func = delegate (CaptchaChallengeSegment seg) {
+				result = Serializer.Instance.Deserialize (key.Decrypt (seg.Segment, 0, seg.Segment.Length)) as CaptchaVerifyResult;
+				done.Set ();
+			};
+
+			int id;
+			lock (_captcha_local) {
+				while (true) {
+					id = BitConverter.ToInt32 (openCrypto.RNG.GetRNGBytes (4), 0);
+					if (!_captcha_local.ContainsKey (id))
+						break;
+				}
+				_captcha_local.Add (id, func);
+			}
+			try {
+				CaptchaContainer container = new CaptchaContainer (info.EndPoint, id, info.PublicKey, new CaptchaAnswer (hash, token, answer, key.IV, key.Key));
+				_uploadSide.MessagingSocket.Send (container, null);
+				if (!done.WaitOne (1000 * 16)) {
+					// timeout...
+					return null;
+				}
+				if (result == null)
+					return null;
+				return result.Signature;
+			} finally {
+				lock (_captcha_local) {
+					_captcha_local.Remove (id);
+				}
 			}
 		}
 
@@ -571,8 +745,8 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				} else {
 					AccepterSideProcess ();
 				}
-				if (_cur_header != null && (_forseFastPut || beforeHash == null || !beforeHash.Equals (_cur_header.RecordsetHash)))
-					_mmlc.Touch (_cur_header);
+				//if (_cur_header != null && (_forseFastPut || beforeHash == null || !beforeHash.Equals (_cur_header.RecordsetHash)))
+				_mmlc.Touch (_cur_header);
 			}
 
 			void InitiatorSideProcess ()
@@ -649,6 +823,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				} catch (Exception exception) {
 					Console.WriteLine ("I: マージ中に例外. {0}", exception.ToString ());
 				} finally {
+					done.Set ();
 					if (sock != null) {
 						try {
 							sock.Shutdown ();
@@ -658,7 +833,6 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 							sock.Dispose ();
 						} catch {}
 					}
-					done.Set ();
 				}
 			}
 

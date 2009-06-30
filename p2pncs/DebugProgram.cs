@@ -19,12 +19,15 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
+using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Threading;
 using Kazuki.Net.HttpServer;
 using openCrypto.EllipticCurve;
 using p2pncs.Net;
 using p2pncs.Net.Overlay;
 using p2pncs.Net.Overlay.DFS.MMLC;
+using p2pncs.Security.Captcha;
 using p2pncs.Security.Cryptography;
 using p2pncs.Simulation;
 using p2pncs.Simulation.VirtualNet;
@@ -46,6 +49,7 @@ namespace p2pncs
 		IPEndPoint[] _init_nodes;
 		int _nodeIdx = -1;
 		Random _rnd = new Random ();
+		AuthNode _authNode;
 
 		public DebugProgram ()
 		{
@@ -65,6 +69,14 @@ namespace p2pncs
 			int base_port = _config.GetValue<int> ("gw/bind/port");
 
 			_network = new VirtualNetwork (LatencyTypes.Constant (20), 5, PacketLossType.Constant (0.05), Environment.ProcessorCount);
+
+			{
+				const ushort port = 51423;
+				_authNode = new AuthNode (_ints, port);
+				AuthServerInfo info = new AuthServerInfo (_authNode.PublicKey, new IPEndPoint (IPAddress.Loopback, port));
+				Console.WriteLine ("AuthServerInfo: {0}", info.ToParsableString ());
+			}
+
 			for (int i = 0; i < NODES; i++) {
 				AddNode (base_port);
 				if (i == 10) base_port = -1;
@@ -116,6 +128,7 @@ namespace p2pncs
 			_churnInt.Dispose ();
 			_ints.Dispose ();
 			_network.Close ();
+			_authNode.Dispose ();
 			lock (_list) {
 				for (int i = 0; i < _list.Count; i++) {
 					try {
@@ -170,6 +183,104 @@ namespace p2pncs
 					_server = null;
 					_app = null;
 					_node = null;
+				}
+			}
+		}
+		class AuthNode : IDisposable
+		{
+			ECKeyPair _private;
+			Key _pubKey;
+			ICaptchaAuthority _captcha;
+			Socket _listener;
+
+			public AuthNode (Interrupters ints, int port)
+			{
+				_private = ECKeyPair.CreatePrivate (DefaultAlgorithm.ECDomainName,
+						Convert.FromBase64String ("u8capbI/9NXcJJJkGtdt8LtpBWDeMhcQ0sGNvNO9nmA="));
+				_pubKey = Key.Create (_private);
+				_captcha = new SimpleCaptcha (new openCrypto.EllipticCurve.Signature.ECDSA (_private));
+				_listener = new Socket (AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+				_listener.Bind (new IPEndPoint (IPAddress.Loopback, port));
+				_listener.Listen (8);
+				new Thread (AcceptThread).Start ();
+			}
+
+			void AcceptThread ()
+			{
+				while (_listener != null) {
+					try {
+						Socket client = _listener.Accept ();
+						new Thread (Process).Start (client);
+					} catch {}
+				}
+			}
+
+			void Process (object o)
+			{
+				Socket client = (Socket)o;
+				try {
+					client.SendTimeout = 2000;
+					client.ReceiveTimeout = 2000;
+
+					byte[] buf = new byte[2];
+					client.Receive (buf, 0, 2, SocketFlags.None);
+					int size = (buf[0] << 8) | buf[1];
+					buf = new byte[size];
+					int recv = 0;
+					while (recv < size) {
+						int ret = client.Receive (buf, recv, size - recv, SocketFlags.None);
+						recv += ret;
+					}
+					object obj_req = CaptchaContainer.Decrypt (_private, buf);
+					object response = null;
+					byte[] req_iv, req_key;
+					if (obj_req is CaptchaChallengeRequest) {
+						CaptchaChallengeRequest req = (CaptchaChallengeRequest)obj_req;
+						req_iv = req.IV;
+						req_key = req.Key;
+						response = _captcha.GetChallenge (req.Hash);
+						CaptchaChallengeData data = _captcha.GetChallenge (req.Hash);
+					} else if (obj_req is CaptchaAnswer) {
+						CaptchaAnswer ans = (CaptchaAnswer)obj_req;
+						req_iv = ans.IV;
+						req_key = ans.Key;
+						response = new CaptchaVerifyResult (_captcha.Verify (ans.Hash, ans.Token, ans.Answer));
+					} else {
+						client.Send (new byte[2]);
+						client.Shutdown (SocketShutdown.Send);
+						return;
+					}
+
+					byte[] plain = Serializer.Instance.Serialize (response);
+					SymmetricKey key = new SymmetricKey (SymmetricAlgorithmType.Camellia, req_iv, req_key, openCrypto.CipherModePlus.CTR, PaddingMode.ISO10126, false);
+					byte[] encrypted = key.Encrypt (plain, 0, plain.Length);
+
+					buf[0] = (byte)(encrypted.Length >> 8);
+					buf[1] = (byte)(encrypted.Length);
+					client.Send (buf, 0, 2, SocketFlags.None);
+					int sent = 0;
+					while (sent < encrypted.Length) {
+						int ret = client.Send (encrypted, sent, encrypted.Length - sent, SocketFlags.None);
+						sent += ret;
+					}
+					client.Shutdown (SocketShutdown.Send);
+				} catch {
+				} finally {
+					try {
+						client.Close ();
+					} catch {}
+				}
+			}
+
+			public Key PublicKey {
+				get { return _pubKey; }
+			}
+
+			public void Dispose ()
+			{
+				if (_listener != null) {
+					_listener.Close ();
+					_listener = null;
 				}
 			}
 		}

@@ -9,7 +9,10 @@
 					<xsl:text>p2pncs::bbs::</xsl:text>
 					<xsl:value-of select="/page/bbs/title" />
 				</title>
+				<link type="text/css" rel="stylesheet" href="/css/ui-lightness/jquery-ui-1.7.2.custom.css" />
 				<script type="text/javascript" charset="utf-8" src="/js/jquery-1.3.2.min.js" />
+				<script type="text/javascript" charset="utf-8" src="/js/jquery-ui-1.7.2.custom.min.js" />
+				<script type="text/javascript" charset="utf-8" src="/js/jquery-simple-dom.js" />
 				<script type="text/javascript" charset="utf-8" src="/js/bbs.js" />
 				<link type="text/css" rel="stylesheet" href="/css/bbs.css" />
 			</head>
@@ -50,6 +53,9 @@
 						<xsl:text>名前: </xsl:text>
 						<input type="text" id="postName" />
 						<button id="postButton">投稿</button>
+						<input type="hidden" id="postToken" value="" />
+						<input type="hidden" id="postAnswer" value="" />
+						<input type="hidden" id="postPrev" value="" />
 					</div>
 					<div>
 						<textarea cols="50" rows="8" id="postBody"></textarea>

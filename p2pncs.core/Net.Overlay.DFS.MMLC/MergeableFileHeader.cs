@@ -17,6 +17,7 @@
 
 using System;
 using System.Security.Cryptography;
+using System.Text;
 using openCrypto.EllipticCurve;
 using openCrypto.EllipticCurve.Signature;
 using p2pncs.Security.Cryptography;
@@ -36,24 +37,29 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		IHashComputable _content;
 
 		[SerializableFieldId (3)]
-		byte[] _sign;
+		AuthServerInfo[] _authServers;
 
 		[SerializableFieldId (4)]
+		byte[] _sign;
+
+		[SerializableFieldId (5)]
 		Key _recordsetHash;
 
-		public MergeableFileHeader (ECKeyPair privateKey, DateTime lastManaged, IHashComputable content)
+		public MergeableFileHeader (ECKeyPair privateKey, DateTime lastManaged, IHashComputable content, AuthServerInfo[] authServers)
 		{
 			_lastManaged = lastManaged;
 			_content = content;
+			_authServers = authServers;
 			_recordsetHash = new Key (new byte[DefaultAlgorithm.HashByteSize]);
 			Sign (privateKey);
 		}
 
-		public MergeableFileHeader (Key key, DateTime lastManaged, IHashComputable content, byte[] sign, Key recordsetHash)
+		public MergeableFileHeader (Key key, DateTime lastManaged, IHashComputable content, AuthServerInfo[] authServers, byte[] sign, Key recordsetHash)
 		{
 			_key = key;
 			_lastManaged = lastManaged;
 			_content = content;
+			_authServers = authServers;
 			_sign = sign;
 			_recordsetHash = recordsetHash;
 			if (_recordsetHash.KeyBytes != DefaultAlgorithm.HashByteSize)
@@ -62,7 +68,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 		public MergeableFileHeader CopyBasisInfo ()
 		{
-			return new MergeableFileHeader (_key, _lastManaged, _content, _sign, new Key (new byte[DefaultAlgorithm.HashByteSize]));
+			return new MergeableFileHeader (_key, _lastManaged, _content, _authServers, _sign, new Key (new byte[DefaultAlgorithm.HashByteSize]));
 		}
 
 		public void Sign (ECKeyPair privateKey)
@@ -89,6 +95,10 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				hash.TransformBlock (tmp, 0, tmp.Length, null, 0);
 				if (_content != null)
 					_content.ComputeHash (hash);
+				if (_authServers != null) {
+					tmp = Encoding.ASCII.GetBytes (AuthServerInfo.ToParsableString (_authServers));
+					hash.TransformBlock (tmp, 0, tmp.Length, null, 0);
+				}
 				hash.TransformFinalBlock (new byte[0], 0, 0);
 				return hash.Hash;
 			}
@@ -109,6 +119,10 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		public IHashComputable Content {
 			get { return _content; }
 			internal set { _content = value; }
+		}
+
+		public AuthServerInfo[] AuthServers {
+			get { return _authServers; }
 		}
 
 		public Key RecordsetHash {

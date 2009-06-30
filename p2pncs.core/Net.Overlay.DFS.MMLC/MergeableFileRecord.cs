@@ -31,18 +31,27 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		DateTime _lastManaged;
 
 		[SerializableFieldId (2)]
+		byte[] _sign;
+
+		[SerializableFieldId (3)]
 		Key _hash;
 
-		public MergeableFileRecord (IHashComputable content)
-		{
-			_content = content;
-		}
+		[SerializableFieldId (4)]
+		byte _auth_idx;
 
-		public MergeableFileRecord (IHashComputable content, DateTime lastManaged, Key hash)
+		[SerializableFieldId (5)]
+		byte[] _auth;
+
+		public MergeableFileRecord (IHashComputable content, DateTime lastManaged, Key hash, byte[] sign, byte auth_idx, byte[] auth)
 		{
 			_content = content;
 			_lastManaged = lastManaged;
 			_hash = hash;
+			_sign = sign;
+			_auth_idx = auth_idx;
+			_auth = auth;
+			if (hash == null)
+				UpdateHash ();
 		}
 
 		public void UpdateHash ()
@@ -50,7 +59,12 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			using (HashAlgorithm algo = DefaultAlgorithm.CreateHashAlgorithm ()) {
 				_content.ComputeHash (algo);
 				byte[] tmp = BitConverter.GetBytes (_lastManaged.ToUniversalTime ().Ticks);
-				algo.TransformFinalBlock (tmp, 0, tmp.Length);
+				if (_sign == null) {
+					algo.TransformFinalBlock (tmp, 0, tmp.Length);
+				} else {
+					algo.TransformBlock (tmp, 0, tmp.Length, null, 0);
+					algo.TransformFinalBlock (_sign, 0, _sign.Length);
+				}
 				_hash = new Key (algo.Hash);
 			}
 		}
@@ -67,6 +81,20 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 		public Key Hash {
 			get { return _hash; }
+		}
+
+		public byte[] Signature {
+			get { return _sign; }
+		}
+
+		public byte AuthorityIndex {
+			get { return _auth_idx; }
+			set { _auth_idx = value;}
+		}
+
+		public byte[] Authentication {
+			get { return _auth; }
+			set { _auth = value;}
 		}
 	}
 }

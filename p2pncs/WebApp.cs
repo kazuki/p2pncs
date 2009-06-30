@@ -28,6 +28,7 @@ using p2pncs.Net;
 using p2pncs.Net.Overlay;
 using p2pncs.Net.Overlay.Anonymous;
 using p2pncs.Net.Overlay.DFS.MMLC;
+using p2pncs.Security.Captcha;
 using p2pncs.Security.Cryptography;
 using p2pncs.Utility;
 
@@ -173,19 +174,46 @@ namespace p2pncs
 				throw new HttpException (HttpStatusCode.NotFound);
 			}
 
+			MergeableFileHeader header;
 			if (req.HttpMethod == HttpMethod.POST) {
 				// posting...
+				res[HttpHeaderNames.ContentType] = "text/xml; charset=UTF-8";
 				string name = Helpers.GetQueryValue (req, "name").Trim ();
 				string body = Helpers.GetQueryValue (req, "body").Trim ();
+				string token = Helpers.GetQueryValue (req, "token").Trim ();
+				string answer = Helpers.GetQueryValue (req, "answer").Trim ();
+				string prev = Helpers.GetQueryValue (req, "prev").Trim ();
 				if (body.Length > 0) {
-					MergeableFileRecord record = new MergeableFileRecord (new SimpleBBSRecord (name, body, DateTime.Now));
+					header = _node.MMLC.GetMergeableFileHeader (key);
+					if (header == null)
+						return "<result status=\"ERROR\" />";
+					MergeableFileRecord record;
 					try {
-						_node.MMLC.AppendRecord (key, record);
+						if (token.Length > 0 && answer.Length > 0 && prev.Length > 0) {
+							record = (MergeableFileRecord)Serializer.Instance.Deserialize (Convert.FromBase64String (prev));
+							Console.WriteLine ("Token: {0}", token);
+							Console.WriteLine ("Answer: {0}", answer);
+							Console.WriteLine ("Prev: {0}", prev);
+							byte[] sign = _node.MMLC.VerifyCaptchaChallenge (header.AuthServers[0], record.Hash.GetByteArray (),
+								Convert.FromBase64String (token), Encoding.ASCII.GetBytes (answer));
+							if (sign != null) {
+								record.AuthorityIndex = 0;
+								record.Authentication = sign;
+								_node.MMLC.AppendRecord (key, record);
+								return "<result status=\"OK\" />";
+							}
+						}
+
+						record = new MergeableFileRecord (new SimpleBBSRecord (name, body, DateTime.Now), header.LastManagedTime, null, null, 0, null);
+						CaptchaChallengeData captchaData = _node.MMLC.GetCaptchaChallengeData (header.AuthServers[0], record.Hash.GetByteArray ());
+						return string.Format ("<result status=\"CAPTCHA\"><img>{0}</img><token>{1}</token><prev>{2}</prev></result>",
+							Convert.ToBase64String (captchaData.Data), Convert.ToBase64String (captchaData.Token),
+							Convert.ToBase64String (Serializer.Instance.Serialize (record)));
 					} catch {
-						return "ERROR";
+						return "<result status=\"ERROR\" />";
 					}
 				}
-				return "OK";
+				return "<result status=\"EMPTY\" />";
 			}
 
 			if (!callByCallback) {
@@ -195,7 +223,6 @@ namespace p2pncs
 				return info;
 			}
 
-			MergeableFileHeader header;
 			List<MergeableFileRecord> records = _node.MMLC.GetRecords (key, out header);
 			if (records == null)
 				throw new HttpException (HttpStatusCode.NotFound);
@@ -378,7 +405,7 @@ namespace p2pncs
 					string title = Helpers.GetQueryValue (req, "title").Trim ();
 					if (title.Length == 0)
 						return "タイトルに何か文字を入力してください";
-					_node.MMLC.CreateNew (new SimpleBBSHeader (title));
+					_node.MMLC.CreateNew (new SimpleBBSHeader (title), AuthServerInfo.ParseArray ("A/fRkcaUdXFlw0GAmlwfuFzo20SRCEGkkr6rWG0jko9M;i;127.0.0.1:51423"));
 					return OK;
 				}
 				default:
