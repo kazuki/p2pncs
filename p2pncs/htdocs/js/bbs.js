@@ -8,7 +8,7 @@ $(function() {
 		var bbsKey = $("#postKey").val();
 		var postUrl = "/bbs/" + bbsKey + "?name=" + postName + "&body=" + postBody
 			+ "&token=" + postToken + "&answer=" + postAnswer + "&prev=" + postPrev;
-		var dlg = $.create("div", {title: "投稿中..."}, ["投稿中..."]).appendTo("body").dialog({
+		var dlg = $.create("div", {title: "投稿中..."}, ["認証サーバへの問い合わせ中..."]).appendTo("body").dialog({
 			autoOpen: true,
 			modal: true,
 			width: "auto",
