@@ -204,7 +204,7 @@ namespace p2pncs
 							}
 						}
 
-						record = new MergeableFileRecord (new SimpleBBSRecord (name, body, DateTime.Now), header.LastManagedTime, null, null, 0, null);
+						record = new MergeableFileRecord (new SimpleBBSRecord (name, body, DateTime.UtcNow), header.LastManagedTime, null, null, 0, null);
 						CaptchaChallengeData captchaData = _node.MMLC.GetCaptchaChallengeData (header.AuthServers[0], record.Hash.GetByteArray ());
 						return string.Format ("<result status=\"CAPTCHA\"><img>{0}</img><token>{1}</token><prev>{2}</prev></result>",
 							Convert.ToBase64String (captchaData.Data), Convert.ToBase64String (captchaData.Token),
