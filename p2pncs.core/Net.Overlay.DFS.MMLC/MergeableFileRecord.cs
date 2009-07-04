@@ -44,6 +44,8 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 		public MergeableFileRecord (IHashComputable content, DateTime lastManaged, Key hash, byte[] sign, byte auth_idx, byte[] auth)
 		{
+			if (lastManaged.Kind != DateTimeKind.Utc)
+				throw new ArgumentException ();
 			_content = content;
 			_lastManaged = lastManaged;
 			_hash = hash;
@@ -76,7 +78,11 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 		public DateTime LastManagedTime {
 			get { return _lastManaged; }
-			set { _lastManaged = value;}
+			set {
+				if (value.Kind != DateTimeKind.Utc)
+					throw new ArgumentException (); 
+				_lastManaged = value;
+			}
 		}
 
 		public Key Hash {

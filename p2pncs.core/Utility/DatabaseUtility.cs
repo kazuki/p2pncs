@@ -15,6 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+using System;
 using System.Data;
 
 namespace p2pncs.Utility
@@ -69,6 +70,18 @@ namespace p2pncs.Utility
 		public static long GetLastInsertRowId (IDbTransaction transaction)
 		{
 			return (long)ExecuteScalar (transaction, "SELECT last_insert_rowid()");
+		}
+
+		public static DateTime GetUtcDateTime (this IDataReader reader, int i)
+		{
+			DateTime dt = reader.GetDateTime (i);
+			switch (dt.Kind) {
+				case DateTimeKind.Utc:
+					return dt;
+				case DateTimeKind.Local:
+					return dt.ToUniversalTime ();
+			}
+			return new DateTime (dt.Ticks, DateTimeKind.Utc);
 		}
 	}
 }

@@ -47,6 +47,8 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 		public MergeableFileHeader (ECKeyPair privateKey, DateTime lastManaged, IHashComputable content, AuthServerInfo[] authServers)
 		{
+			if (lastManaged.Kind != DateTimeKind.Utc)
+				throw new ArgumentException ();
 			_lastManaged = lastManaged;
 			_content = content;
 			_authServers = authServers;
@@ -56,6 +58,8 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 		public MergeableFileHeader (Key key, DateTime lastManaged, IHashComputable content, AuthServerInfo[] authServers, byte[] sign, Key recordsetHash)
 		{
+			if (lastManaged.Kind != DateTimeKind.Utc)
+				throw new ArgumentException ();
 			_key = key;
 			_lastManaged = lastManaged;
 			_content = content;
