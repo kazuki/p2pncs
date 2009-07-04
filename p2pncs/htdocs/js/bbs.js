@@ -1,5 +1,6 @@
 $(function() {
-	$("#postButton").click(function() {
+	var post_ajax = function () {
+		var dlg = $("#dlgPost");
 		var postName = encodeURIComponent ($("#postName").val());
 		var postBody = encodeURIComponent ($("#postBody").val());
 		var postToken = encodeURIComponent ($("#postToken").val());
@@ -8,15 +9,7 @@ $(function() {
 		var bbsKey = $("#postKey").val();
 		var postUrl = "/bbs/" + bbsKey + "?name=" + postName + "&body=" + postBody
 			+ "&token=" + postToken + "&answer=" + postAnswer + "&prev=" + postPrev;
-		var dlg = $.create("div", {title: "投稿中..."}, ["認証サーバへの問い合わせ中..."]).appendTo("body").dialog({
-			autoOpen: true,
-			modal: true,
-			width: "auto",
-			height: "auto",
-			minHeight: 0,
-			minWidth: 0,
-			beforeclose: function () { return false; }
-		});
+		dlg.dialog("option", "set_default") (dlg);
 		$.ajax({
 			dataType: "xml",
 			cache: false,
@@ -25,7 +18,7 @@ $(function() {
 			error: function () {
 				dlg.children().remove().add("p").text("CAPTCHA認証サーバへの問い合わせがタイムアウトしました");
 				dlg.dialog("option", "buttons", {
-					"OK": function() { $(this).dialog("destroy").remove(); }
+					"OK": function() { $(this).dialog("option", "close2") ($(this)); }
 				});
 			},
 			success: function (data) {
@@ -43,8 +36,10 @@ $(function() {
 					dlg.dialog("option", "buttons", {
 						"送信": function() {
 							$("#postAnswer").val ($("#captchaAnswer").val());
-							dlg.dialog("destroy").remove();
-							$("#postButton").click ();
+							post_ajax ();
+						},
+						"キャンセル": function() {
+							$(this).dialog ("option", "close2") ($(this));
 						}
 					});
 					return;
@@ -52,20 +47,47 @@ $(function() {
 					dlg.empty().add("p").text("投稿処理成功!");
 					dlg.dialog("option", "buttons", {
 						"OK": function() {
-							$(this).dialog("destroy").remove();
+							$(this).dialog("option", "close2") ($(this));
 							$("#postBody").val("");
 							window.location.reload ();
 						}
 					});
 					return;
 				case "EMPTY":
-					dlg.dialog("destroy").remove();
+					dlg.dialog("option", "close2") ($(this));
+					return;
 				default:
 					dlg.empty().add("p").text("よくわかんないけど、エラーだよん");
 					dlg.dialog("option", "buttons", {
-						"OK": function() { $(this).dialog("destroy").remove(); }
+						"OK": function() { $(this).dialog("option", "close2") ($(this)); }
 					});
+					return;
 				}
-			}});
+			}
+		});
+	};
+	$("#postButton").click(function() {
+		var dlg = $.create("div", {title: "投稿中...", "id": "dlgPost"}, []).appendTo("body").dialog({
+			autoOpen: true,
+			modal: true,
+			width: "auto",
+			height: "auto",
+			minHeight: 0,
+			minWidth: 0,
+			set_default: function (dialog) { dialog.empty().add("p").text("認証サーバへの問い合わせ中...");},
+			beforeclose: function () { return false; },
+			reset_hidden_fields: function () {
+				$("#postToken").val("");
+				$("#postAnswer").val("");
+				$("#postPrev").val("");
+			},
+			close2: function (dlg) {
+				dlg.dialog("option", "reset_hidden_fields") ();
+				dlg.dialog("destroy").remove();
+				alert ("OK");
+			}
+		});
+		dlg.dialog("option", "reset_hidden_fields") ();
+		post_ajax ();
 	});
 });

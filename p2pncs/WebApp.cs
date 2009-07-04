@@ -258,6 +258,8 @@ namespace p2pncs
 		void ProcessBBS_Callback (object sender, MergeDoneCallbackArgs args)
 		{
 			ManualResetEvent done = args.State as ManualResetEvent;
+			if (done.SafeWaitHandle.IsClosed)
+				return;
 			done.Set ();
 		}
 
