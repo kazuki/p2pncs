@@ -1,4 +1,6 @@
 $(function() {
+	var _chat_max_log = 50;
+	var _chat_max_elements = _chat_max_log * 2 - 1;
 	var _rev = 0;
 	var _joinDialogs = [];
 	var _roomDialogs = [];
@@ -130,6 +132,8 @@ $(function() {
 					},
 					update_logs: function (this2, posts) {
 						var content = $(this2).children("div.chat-content");
+						if (posts.length > _chat_max_log)
+							posts = posts.slice(posts.length - _chat_max_log, posts.length);
 						$(posts).each (function () {
 							if (content.children().size() > 0)
 								$.create("hr",{},[]).appendTo(content);
@@ -138,6 +142,8 @@ $(function() {
 							]).appendTo(content);
 						});
 						$(content).scrollTop ($(content).get(0).scrollHeight);
+						if (content.children().size() > _chat_max_elements)
+							content.children().slice (0, content.children().size() - _chat_max_elements).remove ();
 					},
 					beforeclose: function () {
 						var msg;

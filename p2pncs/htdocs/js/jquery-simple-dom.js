@@ -27,9 +27,9 @@
  *      </div>
  *    </div>
 */
-jQuery.extend({
+$.extend({
 	createText: function(txt) {
-		return jQuery(document.createTextNode(txt));
+		return $(document.createTextNode(txt));
 	},
 	create: function() {
 		function isString (obj) {
@@ -37,28 +37,42 @@ jQuery.extend({
 		}
 		var ret = [];
 		var args = arguments;
-		if (!jQuery.isArray(args))
-			args = jQuery.makeArray(args);
-		if (args.length == 1 && jQuery.isArray(args[0]))
+		if (!$.isArray(args))
+			args = $.makeArray(args);
+		if (args.length == 1 && $.isArray(args[0]))
 			args = args[0];
 		if (args.length == 0)
 			return ret;
 		if (args.length == 1 || isString(args[1])) {
-			ret.push (jQuery.createText(args[0]));
+			ret.push ($.createText(args[0]));
 			if (args.length > 1) {
-				var tmp = jQuery.create (args.slice(1));
+				var tmp = $.create (args.slice(1));
 				for (var i = 0; i < tmp.length; i ++)
 					ret.push (tmp[i]);
 			}
 		} else {
-			var element = jQuery (document.createElement (args[0]));
-			for (var attr in args[1])
-				element.attr (attr, args[1][attr]);
+			var element = $(document.createElement (args[0]));
+			for (var attr in args[1]) {
+				if (attr == "toggle" && $.isArray(args[1][attr])) {
+					fs = args[1][attr];
+					switch (fs.length) {
+					case 1: element.toggle (fs[0]); break;
+					case 2: element.toggle (fs[0], fs[1]); break;
+					case 3: element.toggle (fs[0], fs[1], fs[2]); break;
+					case 4: element.toggle (fs[0], fs[1], fs[2], fs[3]); break;
+					default: throw "Not supported";
+					}
+				} else if ($.isFunction (args[1][attr])) {
+					element.bind (attr, args[1][attr]);
+				} else {
+					element.attr (attr, args[1][attr]);
+				}
+			}
 			ret.push (element);
 			var idx = 3;
 			if (args.length > 2) {
-				if (jQuery.isArray(args[2])) {
-					var tmp = jQuery.create(args[2]);
+				if ($.isArray(args[2])) {
+					var tmp = $.create(args[2]);
 					for (var i = 0; i < tmp.length; i ++)
 						element.append (tmp[i]);
 				} else {
@@ -66,7 +80,7 @@ jQuery.extend({
 				}
 			}
 			if (args.length >= idx) {
-				tmp = jQuery.create(args.slice(idx));
+				tmp = $.create(args.slice(idx));
 				for (var i = 0; i < tmp.length; i ++)
 					ret.push (tmp[i]);
 			}
