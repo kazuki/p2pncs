@@ -84,7 +84,6 @@ $(function() {
 			close2: function (dlg) {
 				dlg.dialog("option", "reset_hidden_fields") ();
 				dlg.dialog("destroy").remove();
-				alert ("OK");
 			}
 		});
 		dlg.dialog("option", "reset_hidden_fields") ();
