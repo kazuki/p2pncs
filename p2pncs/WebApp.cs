@@ -511,8 +511,9 @@ namespace p2pncs
 
 			res[HttpHeaderNames.ContentType] = MIMEDatabase.GetMIMEType (Path.GetExtension (path));
 			bool supportGzip = req.Headers.ContainsKey (HttpHeaderNames.AcceptEncoding) && req.Headers[HttpHeaderNames.AcceptEncoding].Contains("gzip");
-			if (supportGzip && File.Exists (path + ".gz")) {
-				path = path + ".gz";
+			string gzip_path = path + ".gz";
+			if (supportGzip && File.Exists (gzip_path) && File.GetLastWriteTimeUtc (gzip_path) >= lastModified) {
+				path = gzip_path;
 				res[HttpHeaderNames.ContentEncoding] = "gzip";
 			}
 			using (FileStream strm = new FileStream (path, FileMode.Open, FileAccess.Read, FileShare.Read)) {
