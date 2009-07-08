@@ -50,6 +50,7 @@
     <Compile Include="SimpleBBSRecord.cs" />
     <Compile Include="TestLogger.cs" />
     <Compile Include="WebApp.cs" />
+    <Compile Include="XmlHelper.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\CompactBinarySerializer\CompactBinarySerializer.csproj">

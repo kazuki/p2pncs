@@ -1,0 +1,10 @@
+input.validation-error, textarea.validation-error {
+  background-color: #faa;
+}
+input.validation-hidden {
+  display: none;
+}
+div.validation-all-error {
+  background-color: #faa;
+  border: 1px solid black;
+}

@@ -16,6 +16,7 @@
  */
 
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Text;
 
@@ -123,11 +124,13 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		{
 			if (text.Length == 0)
 				return null;
-			string[] items = text.Split (',');
-			AuthServerInfo[] list = new AuthServerInfo[items.Length];
-			for (int i = 0; i < items.Length; i ++)
-				list[i] = AuthServerInfo.Parse (items[i]);
-			return list;
+			string[] items = text.Split (',', '\n', '\r', ' ');
+			List<AuthServerInfo> list = new List<AuthServerInfo> ();
+			for (int i = 0; i < items.Length; i ++) {
+				if (items[i].Length == 0) continue;
+				list.Add (AuthServerInfo.Parse (items[i]));
+			}
+			return list.ToArray ();
 		}
 
 		[SerializableTypeId (0x40b)]

@@ -1,64 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
 <xsl:stylesheet version="1.0" xmlns="http://www.w3.org/1999/xhtml" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-	<xsl:output method="xml" encoding="utf-8" doctype-public="-//W3C//DTD XHTML 1.1//EN" doctype-system="http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd" />
+	<xsl:import href="base.xsl" />
 
-	<xsl:template match="/">
-		<html>
-			<head>
-				<title>p2pncs</title>
-				<link type="text/css" rel="stylesheet" href="/css/ui-lightness/jquery-ui-1.7.2.custom.css" />
-				<link type="text/css" rel="stylesheet" href="/css/main.css" />
-				<script type="text/javascript" charset="utf-8" src="/js/jquery-1.3.2.min.js" />
-				<script type="text/javascript" charset="utf-8" src="/js/jquery-ui-1.7.2.custom.min.js" />
-				<script type="text/javascript" charset="utf-8" src="/js/jquery-simple-dom.js" />
-				<script type="text/javascript" charset="utf-8" src="/js/main.js" />
-			</head>
-			<body>
-				<div id="container">
-					<div id="header">
-						<h1>p2pncs:</h1>
-					</div>
-					<div id="sidearea">
-						<div id="navigation" class="ui-accordion ui-widget ui-helper-reset">
-							<h3 class="ui-accordion-header ui-state-active ui-helper-reset">
-								<span class="ui-icon ui-icon-triangle-1-s" />
-								<a href="#">Network <span id="mainStatus" /></a>
-							</h3>
-							<div class="ui-accordion-content ui-helper-reset ui-widget-content ui-accordion-content-active">
-								<ul class="no-indent">
-									<li><a id="connect_dialog" href="#">初期ノードに接続</a></li>
-									<li><a id="throughput_test_dialog" href="#">スループット測定</a></li>
-									<li><a id="exit_dialog" href="#">プログラムを終了</a></li>
-								</ul>
-							</div>
-							<h3 class="ui-accordion-header ui-state-active ui-helper-reset">
-								<span class="ui-icon ui-icon-triangle-1-s" />
-								<a href="#">Chat</a>
-							</h3>
-							<div class="ui-accordion-content ui-helper-reset ui-widget-content ui-accordion-content-active">
-								<ul class="no-indent">
-									<li><a id="create_room_dialog" href="#">部屋を作成</a></li>
-									<li><a id="join_dialog" href="#">部屋に接続</a></li>
-								</ul>
-							</div>
-							<h3 class="ui-accordion-header ui-state-active ui-helper-reset">
-								<span class="ui-icon ui-icon-triangle-1-s" />
-								<a href="#">BBS</a>
-							</h3>
-							<div class="ui-accordion-content ui-helper-reset ui-widget-content ui-accordion-content-active">
-								<ul class="no-indent">
-									<li><a id="create_bbs_dialog" href="#">掲示板を作成</a></li>
-									<li><a href="/bbs" target="_blank">掲示板の一覧を表示</a></li>
-								</ul>
-							</div>
-						</div>
-					</div>
-					<div id="content">
-						<h1>Welcome...</h1>
-						<div>こんにちは<xsl:value-of select="/page/name" />さん。<br/>あなたのIDは<xsl:value-of select="/page/key" />です。</div>
-					</div>
-				</div>
-			</body>
-		</html>
+	<xsl:template name="_title">p2pncs</xsl:template>
+	<xsl:template name="_css">
+		<link type="text/css" rel="stylesheet" href="/css/main.css" />
+	</xsl:template>
+ 
+	<xsl:template match="/page">
+		<h1>
+			<xsl:text>p2pncs(RinGOch) </xsl:text>
+			<xsl:value-of select="@ver" />
+		</h1>
+		<p>左のメニューから行いたい操作を選んでください。</p>
+		<h2>メニューの詳細</h2>
+		<ul>
+			<li>
+				<xsl:text>ネットワーク</xsl:text>
+				<dl>
+					<dt>初期ノードに接続</dt>
+					<dd>
+						<p>P2Pネットワークに参加するために、既に参加しているノードの情報を入力して、ネットワークへ参加します。</p>
+						<p>起動したら最初に1度だけ実行してください。</p>
+					</dd>
+					<dt>終了</dt>
+					<dd><p>プログラムを終了します。</p></dd>
+				</dl>
+			</li>
+			<li>
+				<xsl:text>BBS</xsl:text>
+				<dl>
+					<dt>新規作成</dt>
+					<dd><p>掲示板を新規作成します。</p></dd>
+					<dt>開く</dt>
+					<dd><p>BBSのIDを指定して掲示板を開きます。</p></dd>
+					<dt>一覧</dt>
+					<dd><p>キャッシュされた掲示板の一覧を表示します。</p></dd>
+				</dl>
+			</li>
+		</ul>
 	</xsl:template>
 </xsl:stylesheet>

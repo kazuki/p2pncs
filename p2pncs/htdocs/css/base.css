@@ -1,0 +1,33 @@
+body,textarea {
+  font-size: small;
+}
+
+h1 { font-size: x-large; }
+h2 { font-size: large; }
+h3 { font-size: medium; }
+
+#menu {
+  float: left;
+  width: 200px;
+}
+
+#menu ul {
+  padding-left: 20px;
+}
+
+#menu li {
+  line-height: 150%;
+}
+
+#contents {
+  margin-left: 200px;
+}
+
+#footer {
+  clear: both;
+}
+
+td.header {
+  vertical-align: top;
+  white-space: nowrap;
+}

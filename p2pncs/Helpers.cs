@@ -16,6 +16,7 @@
  */
 
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Text;
 using Kazuki.Net.HttpServer;
@@ -55,6 +56,14 @@ namespace p2pncs
 			if (req.QueryData.TryGetValue (name, out value))
 				return HttpUtility.UrlDecode (value, Encoding.UTF8);
 			return string.Empty;
+		}
+
+		public static string GetValueSafe (Dictionary<string, string> dic, string name)
+		{
+			string value;
+			if (!dic.TryGetValue (name, out value) || value == null)
+				value = string.Empty;
+			return value;
 		}
 	}
 }

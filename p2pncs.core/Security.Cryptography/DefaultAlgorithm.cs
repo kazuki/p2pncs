@@ -27,6 +27,14 @@ namespace p2pncs.Security.Cryptography
 			get { return ECDomainNames.secp256r1; }
 		}
 
+		public static int ECDomainBits {
+			get { return 256; }
+		}
+
+		public static int ECDomainBytes {
+			get { return 32; }
+		}
+
 		public static HashAlgorithm CreateHashAlgorithm ()
 		{
 			return new SHA256Managed ();

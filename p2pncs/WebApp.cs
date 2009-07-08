@@ -31,7 +31,7 @@ using p2pncs.Net.Overlay.Anonymous;
 using p2pncs.Net.Overlay.DFS.MMLC;
 using p2pncs.Security.Captcha;
 using p2pncs.Security.Cryptography;
-using p2pncs.Utility;
+using EndPoint = System.Net.EndPoint;
 
 namespace p2pncs
 {
@@ -45,6 +45,7 @@ namespace p2pncs
 		const int RetryBufferSize = 512;
 		const int DuplicationCheckBufferSize = 512;
 		const int MaxStreamSocketSegmentSize = 500;
+		const int MaxRequestBodySize = 33554432; // 32MB
 
 		Node _node;
 		ManualResetEvent _exitWaitHandle = new ManualResetEvent (false);
@@ -112,18 +113,21 @@ namespace p2pncs
 
 		public object Process (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
 		{
-			if (req.Url.AbsolutePath == "/") {
+			string absPath = req.Url.AbsolutePath;
+			if (absPath == "/")
 				return ProcessMainPage (server, req, res);
-			} else if (req.Url.AbsolutePath == "/api") {
-				if (req.HttpMethod == HttpMethod.POST)
-					return ProcessAPI_POST (server, req, res);
-				return ProcessAPI_GET (server, req, res);
-			} else if (req.Url.AbsolutePath == "/bbs" || req.Url.AbsolutePath == "/bbs/") {
-				return ProcessBBSList (server, req, res);
-			} else if (req.Url.AbsolutePath.StartsWith ("/bbs/")) {
+			if (absPath == "/net/init")
+				return ProcessNetInitPage (server, req, res);
+			if (absPath == "/net/exit")
+				return ProcessNetExitPage (server, req, res);
+			if (absPath == "/bbs" || absPath == "/bbs/")
+				return ProcessBbsListPage (server, req, res);
+			if (absPath == "/bbs/new")
+				return ProcessBbsNewPage (server, req, res);
+			if (absPath == "/bbs/open")
+				return ProcessBbsOpenPage (server, req, res);
+			if (absPath.StartsWith ("/bbs/"))
 				return ProcessBBS (server, req, res, false);
-			}
-
 			return ProcessStaticFile (server, req, res);
 		}
 
@@ -144,10 +148,133 @@ namespace p2pncs
 			node = doc.CreateElement ("key");
 			node.AppendChild (doc.CreateTextNode (Convert.ToBase64String (_imPubKey.GetByteArray())));
 			rootNode.AppendChild (node);
+			rootNode.SetAttribute ("ver", System.Reflection.Assembly.GetCallingAssembly ().GetName ().Version.ToString ());
 			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "main.xsl"));
 		}
 
-		object ProcessBBSList (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
+		object ProcessNetInitPage (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
+		{
+			XmlDocument doc = CreateEmptyDocument ();
+			if (req.HttpMethod == HttpMethod.POST && req.HasContentBody ()) {
+				Dictionary<string, string> dic = HttpUtility.ParseUrlEncodedStringToDictionary (Encoding.ASCII.GetString (req.GetContentBody (MaxRequestBodySize)), Encoding.UTF8);
+				if (dic.ContainsKey ("nodes")) {
+					string[] lines = dic["nodes"].Replace ("\r\n", "\n").Replace ('\r', '\n').Split ('\n');
+					List<EndPoint> list = new List<EndPoint> ();
+					List<string> raw_list = new List<string> ();
+					for (int i = 0; i < lines.Length; i ++) {
+						EndPoint ep = Helpers.Parse (lines[i]);
+						if (ep != null) {
+							list.Add (ep);
+							raw_list.Add (lines[i]);
+						}
+					}
+					if (list.Count > 0) {
+						_node.KeyBasedRouter.Join (list.ToArray ());
+						XmlNode root = doc.DocumentElement.AppendChild (doc.CreateElement ("connected"));
+						for (int i = 0; i < list.Count; i ++) {
+							XmlElement element = doc.CreateElement ("endpoint");
+							element.AppendChild (doc.CreateTextNode (raw_list[i].ToString ()));
+							root.AppendChild (element);
+						}
+					}
+				}
+			}
+			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "net_init.xsl"));
+		}
+
+		object ProcessNetExitPage (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
+		{
+			XmlDocument doc = CreateEmptyDocument ();
+			if (req.HttpMethod == HttpMethod.POST) {
+				doc.DocumentElement.SetAttribute ("exit", "exit");
+				ThreadPool.QueueUserWorkItem (delegate (object o) {
+					Thread.Sleep (500);
+					_exitWaitHandle.Set ();
+				});
+			}
+			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "net_exit.xsl"));
+		}
+
+		object ProcessBbsNewPage (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
+		{
+			XmlDocument doc = CreateEmptyDocument ();
+			if (req.HttpMethod == HttpMethod.POST) {
+				Dictionary<string, string> dic = HttpUtility.ParseUrlEncodedStringToDictionary (Encoding.ASCII.GetString (req.GetContentBody (MaxRequestBodySize)), Encoding.UTF8);
+				XmlNode validationRoot = doc.DocumentElement.AppendChild (doc.CreateElement ("validation"));
+				string title = Helpers.GetValueSafe (dic, "title");
+				string auth = Helpers.GetValueSafe (dic, "auth");
+				string fpname = Helpers.GetValueSafe (dic, "fpname");
+				string fpbody = Helpers.GetValueSafe (dic, "fpbody");
+				string state = Helpers.GetValueSafe (dic, "state");
+				bool reedit = Helpers.GetValueSafe (dic, "re-edit").Length > 0;
+				bool title_status = title.Length != 0 && title.Length <= 64;
+				bool auth_status = true;
+				bool all_status = true;
+				try {
+					AuthServerInfo.ParseArray (auth);
+				} catch {
+					auth_status = false;
+				}
+				if (title_status && auth_status && !reedit) {
+					SimpleBBSHeader header2 = new SimpleBBSHeader (title);
+					AuthServerInfo[] auth_servers = AuthServerInfo.ParseArray (auth);
+					if (state == "confirm") {
+						MergeableFileHeader header = _node.MMLC.CreateNew (header2, auth_servers);
+						doc.DocumentElement.AppendChild (doc.CreateElement ("created", new string[][] { new[] { "key", header.Key.ToString () } }, null));
+						state = "success";
+					} else {
+						state = "confirm";
+						MergeableFileHeader header = new MergeableFileHeader (ECKeyPair.Create (DefaultAlgorithm.ECDomainName), DateTime.UtcNow, header2, auth_servers);
+						if (Serializer.Instance.Serialize (header).Length > 512) {
+							all_status = false;
+							state = "";
+						}
+					}
+				} else {
+					state = string.Empty;
+				}
+
+				if (!all_status) {
+					validationRoot.AppendChild (doc.CreateElement ("all", null, new[]{
+						doc.CreateTextNode ("ヘッダサイズが512バイトを超えました. タイトルや認証サーバの情報量を減らしてください")
+					}));
+				}
+				validationRoot.AppendChild (doc.CreateElement ("data", new string[][] { new[] { "name", "title" }, new[] { "status", title_status ? "ok" : "error" } }, new[] {
+					doc.CreateElement ("value", null, new[]{doc.CreateTextNode (title)}),
+					title_status ? null : doc.CreateElement ("msg", null, new[]{doc.CreateTextNode ("タイトルは1文字～64文字に収まらなければいけません")})
+				}));
+				validationRoot.AppendChild (doc.CreateElement ("data", new string[][] { new[] { "name", "auth" }, new[] { "status", auth_status ? "ok" : "error" } }, new[] {
+					doc.CreateElement ("value", null, new[]{doc.CreateTextNode (auth)}),
+					auth_status ? null : doc.CreateElement ("msg", null, new[]{doc.CreateTextNode ("認識できません。入力ミスがないか確認してください")})
+				}));
+				validationRoot.AppendChild (doc.CreateElement ("data", new string[][] { new[] { "name", "fpname" } }, new[] {
+					doc.CreateElement ("value", null, new[]{doc.CreateTextNode (fpname)})
+				}));
+				validationRoot.AppendChild (doc.CreateElement ("data", new string[][] { new[] { "name", "fpbody" } }, new[] {
+					doc.CreateElement ("value", null, new[]{doc.CreateTextNode (fpbody)})
+				}));
+				validationRoot.AppendChild (doc.CreateElement ("data", new string[][] { new[] { "name", "state" } }, new[] {
+					doc.CreateElement ("value", null, new[]{doc.CreateTextNode (state)})
+				}));
+			}
+			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "bbs_new.xsl"));
+		}
+
+		object ProcessBbsOpenPage (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
+		{
+			if (req.HttpMethod == HttpMethod.POST && req.HasContentBody ()) {
+				Dictionary<string, string> dic = HttpUtility.ParseUrlEncodedStringToDictionary (Encoding.ASCII.GetString (req.GetContentBody (MaxRequestBodySize)), Encoding.UTF8);
+				string key;
+				if (dic.TryGetValue ("bbsid", out key)) {
+					res[HttpHeaderNames.Location] = "/bbs/" + key;
+					throw new HttpException (req.HttpVersion == HttpVersion.Http10 ? HttpStatusCode.Found : HttpStatusCode.SeeOther);
+				}
+			}
+			XmlDocument doc = CreateEmptyDocument ();
+			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "bbs_open.xsl"));
+		}
+
+		object ProcessBbsListPage (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
 		{
 			XmlDocument doc = CreateEmptyDocument ();
 			XmlElement rootNode = doc.DocumentElement;
@@ -161,7 +288,7 @@ namespace p2pncs
 				title.AppendChild (doc.CreateTextNode (simpleBBS.Title));
 				e1.AppendChild (title);
 				rootNode.AppendChild (e1);
-			}			
+			}
 			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "bbs_list.xsl"));
 		}
 

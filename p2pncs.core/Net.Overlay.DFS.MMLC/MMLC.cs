@@ -380,7 +380,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		#endregion
 
 		#region Manipulating MergeableFile/MergeabileFileRecord
-		public void CreateNew (IHashComputable headerContent, AuthServerInfo[] authServers)
+		public MergeableFileHeader CreateNew (IHashComputable headerContent, AuthServerInfo[] authServers)
 		{
 			ECKeyPair privateKey = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 			Key publicKey = Key.Create (privateKey);
@@ -392,6 +392,8 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				Insert (transaction, header, null);
 				transaction.Commit ();
 			}
+
+			return header;
 		}
 
 		public MergeableFileHeader GetMergeableFileHeader (Key key)
