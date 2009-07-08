@@ -23,6 +23,7 @@ using System.Text;
 using System.Threading;
 using System.Xml;
 using Kazuki.Net.HttpServer;
+using Kazuki.Net.HttpServer.TemplateEngines;
 using openCrypto.EllipticCurve;
 using p2pncs.Net;
 using p2pncs.Net.Overlay;
@@ -47,7 +48,7 @@ namespace p2pncs
 
 		Node _node;
 		ManualResetEvent _exitWaitHandle = new ManualResetEvent (false);
-		XslTemplate _xslCache = new XslTemplate ();
+		XslTemplateEngine _xslTemplate = new XslTemplateEngine ();
 		int _roomId = 1;
 		Dictionary<int, ChatRoomInfo> _rooms = new Dictionary<int, ChatRoomInfo> ();
 		Dictionary<Key, int> _joinRooms = new Dictionary<Key, int> ();
@@ -143,7 +144,7 @@ namespace p2pncs
 			node = doc.CreateElement ("key");
 			node.AppendChild (doc.CreateTextNode (Convert.ToBase64String (_imPubKey.GetByteArray())));
 			rootNode.AppendChild (node);
-			return _xslCache.Process (req, res, doc, Path.Combine (DefaultTemplatePath, "main.xsl"));
+			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "main.xsl"));
 		}
 
 		object ProcessBBSList (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
@@ -161,7 +162,7 @@ namespace p2pncs
 				e1.AppendChild (title);
 				rootNode.AppendChild (e1);
 			}			
-			return _xslCache.Process (req, res, doc, Path.Combine (DefaultTemplatePath, "bbs_list.xsl"));
+			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "bbs_list.xsl"));
 		}
 
 		object ProcessBBS (IHttpServer server, IHttpRequest req, HttpResponseHeader res, bool callByCallback)
@@ -252,7 +253,7 @@ namespace p2pncs
 				e1.AppendChild (e2);
 			}
 			rootNode.AppendChild (e1);
-			return _xslCache.Process (req, res, doc, Path.Combine (DefaultTemplatePath, "bbs.xsl"));
+			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "bbs.xsl"));
 		}
 
 		void ProcessBBS_Callback (object sender, MergeDoneCallbackArgs args)
