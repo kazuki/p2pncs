@@ -308,6 +308,7 @@ namespace p2pncs
 				res[HttpHeaderNames.ContentType] = "text/xml; charset=UTF-8";
 				string name = Helpers.GetQueryValue (req, "name").Trim ();
 				string body = Helpers.GetQueryValue (req, "body").Trim ();
+				string auth = Helpers.GetQueryValue (req, "auth").Trim ();
 				string token = Helpers.GetQueryValue (req, "token").Trim ();
 				string answer = Helpers.GetQueryValue (req, "answer").Trim ();
 				string prev = Helpers.GetQueryValue (req, "prev").Trim ();
@@ -317,15 +318,13 @@ namespace p2pncs
 						return "<result status=\"ERROR\" />";
 					MergeableFileRecord record;
 					try {
+						byte auth_idx = byte.Parse (auth);
 						if (token.Length > 0 && answer.Length > 0 && prev.Length > 0) {
 							record = (MergeableFileRecord)Serializer.Instance.Deserialize (Convert.FromBase64String (prev));
-							Console.WriteLine ("Token: {0}", token);
-							Console.WriteLine ("Answer: {0}", answer);
-							Console.WriteLine ("Prev: {0}", prev);
-							byte[] sign = _node.MMLC.VerifyCaptchaChallenge (header.AuthServers[0], record.Hash.GetByteArray (),
+							byte[] sign = _node.MMLC.VerifyCaptchaChallenge (header.AuthServers[auth_idx], record.Hash.GetByteArray (),
 								Convert.FromBase64String (token), Encoding.ASCII.GetBytes (answer));
 							if (sign != null) {
-								record.AuthorityIndex = 0;
+								record.AuthorityIndex = auth_idx;
 								record.Authentication = sign;
 								_node.MMLC.AppendRecord (key, record);
 								return "<result status=\"OK\" />";
@@ -333,7 +332,7 @@ namespace p2pncs
 						}
 
 						record = new MergeableFileRecord (new SimpleBBSRecord (name, body, DateTime.UtcNow), header.LastManagedTime, null, null, 0, null);
-						CaptchaChallengeData captchaData = _node.MMLC.GetCaptchaChallengeData (header.AuthServers[0], record.Hash.GetByteArray ());
+						CaptchaChallengeData captchaData = _node.MMLC.GetCaptchaChallengeData (header.AuthServers[auth_idx], record.Hash.GetByteArray ());
 						return string.Format ("<result status=\"CAPTCHA\"><img>{0}</img><token>{1}</token><prev>{2}</prev></result>",
 							Convert.ToBase64String (captchaData.Data), Convert.ToBase64String (captchaData.Token),
 							Convert.ToBase64String (Serializer.Instance.Serialize (record)));
@@ -364,6 +363,15 @@ namespace p2pncs
 			XmlElement title = doc.CreateElement ("title");
 			title.AppendChild (doc.CreateTextNode (simpleBBS.Title));
 			e1.AppendChild (title);
+			XmlNode authServers = e1.AppendChild (doc.CreateElement ("auth-servers"));
+			if (header.AuthServers != null && header.AuthServers.Length > 0) {
+				for (int i = 0; i < header.AuthServers.Length; i ++) {
+					authServers.AppendChild (doc.CreateElement ("auth-server", new string[][]{new[]{"index", i.ToString()}}, new[]{
+						doc.CreateElement ("public-key", null, new[]{doc.CreateTextNode (header.AuthServers[i].PublicKey.ToBase64String ())}),
+						doc.CreateElement ("serialize", null, new[]{doc.CreateTextNode (header.AuthServers[i].ToParsableString ())})
+					}));
+				}
+			}
 			for (int i = 0; i < records.Count; i ++) {
 				XmlElement e2 = doc.CreateElement ("record");
 				e2.SetAttribute ("hash", records[i].Hash.ToString ());

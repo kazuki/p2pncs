@@ -3,11 +3,12 @@ $(function() {
 		var dlg = $("#dlgPost");
 		var postName = encodeURIComponent ($("#postName").val());
 		var postBody = encodeURIComponent ($("#postBody").val());
+		var postAuthIdx = encodeURIComponent ($("#authsvr").val());
 		var postToken = encodeURIComponent ($("#postToken").val());
 		var postAnswer = encodeURIComponent ($("#postAnswer").val());
 		var postPrev = encodeURIComponent ($("#postPrev").val());
 		var bbsKey = $("#postKey").val();
-		var postUrl = "/bbs/" + bbsKey + "?name=" + postName + "&body=" + postBody
+		var postUrl = "/bbs/" + bbsKey + "?name=" + postName + "&body=" + postBody + "&auth=" + postAuthIdx
 			+ "&token=" + postToken + "&answer=" + postAnswer + "&prev=" + postPrev;
 		dlg.dialog("option", "set_default") (dlg);
 		$.ajax({

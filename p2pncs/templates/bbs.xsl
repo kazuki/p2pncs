@@ -60,6 +60,21 @@
 					<div>
 						<textarea cols="50" rows="8" id="postBody"></textarea>
 					</div>
+					<xsl:if test="count(/page/bbs/auth-servers/auth-server) &gt; 0">
+						<div style="font-size: x-small">
+							<xsl:text>認証サーバ: </xsl:text>
+							<select style="font-size: x-small" id="authsvr">
+								<xsl:for-each select="/page/bbs/auth-servers/auth-server">
+									<xsl:element name="option">
+										<xsl:attribute name="value">
+											<xsl:value-of select="@index" />
+										</xsl:attribute>
+										<xsl:value-of select="public-key" />
+									</xsl:element>
+								</xsl:for-each>
+							</select>
+						</div>
+					</xsl:if>
 				</div>
 			</body>
 		</html>
