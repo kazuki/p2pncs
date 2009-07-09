@@ -19,6 +19,8 @@ namespace p2pncs.Security.Captcha
 {
 	public interface ICaptchaAuthority
 	{
+		byte[] PublicKey { get; }
+
 		CaptchaChallengeData GetChallenge (byte[] hash);
 
 		byte[] Verify (byte[] hash, byte[] token, byte[] answer);

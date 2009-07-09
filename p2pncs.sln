@@ -19,6 +19,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HttpServer", "HttpServer\Ht
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "p2pncs", "p2pncs\p2pncs.csproj", "{C7128775-37B2-4DB3-8CCA-159C76F12CE1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "p2pncs.captcha-server", "p2pncs.captcha-server\p2pncs.captcha-server.csproj", "{261CFEB1-AB7A-49F0-B7B5-245D23323C19}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -80,6 +82,12 @@ Global
 		{C7128775-37B2-4DB3-8CCA-159C76F12CE1}.Release|Any CPU.Build.0 = Release|Any CPU
 		{C7128775-37B2-4DB3-8CCA-159C76F12CE1}.Tests|Any CPU.ActiveCfg = Release|Any CPU
 		{C7128775-37B2-4DB3-8CCA-159C76F12CE1}.Tests|Any CPU.Build.0 = Release|Any CPU
+		{261CFEB1-AB7A-49F0-B7B5-245D23323C19}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{261CFEB1-AB7A-49F0-B7B5-245D23323C19}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{261CFEB1-AB7A-49F0-B7B5-245D23323C19}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{261CFEB1-AB7A-49F0-B7B5-245D23323C19}.Release|Any CPU.Build.0 = Release|Any CPU
+		{261CFEB1-AB7A-49F0-B7B5-245D23323C19}.Tests|Any CPU.ActiveCfg = Release|Any CPU
+		{261CFEB1-AB7A-49F0-B7B5-245D23323C19}.Tests|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

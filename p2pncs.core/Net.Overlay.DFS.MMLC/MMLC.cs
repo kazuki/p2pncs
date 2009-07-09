@@ -342,26 +342,28 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			CaptchaContainer container = (CaptchaContainer)args.Request;
 			if (!(container.EndPoint is IPEndPoint))
 				return;
+
 			byte[] buffer;
-			using (Socket sock = new Socket (AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)) {
-				sock.SendTimeout = 2000;
-				sock.ReceiveTimeout = 2000;
-				try {
-					sock.Connect (container.EndPoint);
-				} catch {
-					return;
+			try {
+				WebRequest req = HttpWebRequest.Create ("http://" + (container.EndPoint as IPEndPoint).ToString () + "/");
+				req.Timeout = 2000;
+				req.Method = "POST";
+				req.ContentLength = container.Encrypted.Length;
+				req.ContentType = "application/octet-stream";
+				req.GetRequestStream ().Write (container.Encrypted, 0, container.Encrypted.Length);
+				using (WebResponse res = req.GetResponse ()) {
+					buffer = new byte[(int)res.ContentLength];
+					Stream strm = res.GetResponseStream ();
+					int received = 0;
+					while (received < buffer.Length) {
+						int ret = strm.Read (buffer, received, buffer.Length - received);
+						received += ret;
+					}
 				}
-				sock.Send (new byte[] {(byte)(container.Encrypted.Length >> 8), (byte)(container.Encrypted.Length)});
-				sock.Send (container.Encrypted);
-				buffer = new byte[2];
-				sock.Receive (buffer, 0, 2, SocketFlags.None);
-				int size = (buffer[0] << 8) | buffer[1];
-				buffer = new byte[size];
-				int recv = 0;
-				while (recv < size) {
-					int ret = sock.Receive (buffer, recv, size - recv, SocketFlags.None);
-					recv += ret;
-				}
+			} catch {
+				CaptchaChallengeSegment seg = new CaptchaChallengeSegment (0, 1, new byte[0], container.ID);
+				args.SendMessage (seg);
+				return;
 			}
 
 			int maxSegmentSize = 800;

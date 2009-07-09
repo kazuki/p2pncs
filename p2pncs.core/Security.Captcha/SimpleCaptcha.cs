@@ -30,17 +30,20 @@ namespace p2pncs.Security.Captcha
 		ECDSA _ecdsa;
 		byte[] _hmac_key;
 		byte[] _salt;
+		byte[] _pubKey;
 		const string _chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-		const int _len = 10;
+		int _len = 10;
 		Font _font;
 		Size _size;
 		Brush _brush = new SolidBrush (Color.Black);
 
-		public SimpleCaptcha (ECDSA ecdsa)
+		public SimpleCaptcha (ECDSA ecdsa, int num_of_words)
 		{
 			_ecdsa = ecdsa;
+			_len = num_of_words;
 			_hmac_key = openCrypto.RNG.GetRNGBytes (64);
 			_salt = openCrypto.RNG.GetRNGBytes (32);
+			_pubKey = ecdsa.Parameters.ExportPublicKey (true);
 
 			_font = new Font (FontFamily.GenericMonospace, 28, FontStyle.Bold);
 			using (Image img = new Bitmap (16, 16, PixelFormat.Format24bppRgb))
@@ -49,6 +52,10 @@ namespace p2pncs.Security.Captcha
 				SizeF size = g.MeasureString (new string ('Z', _len), _font);
 				_size = new Size ((int)(size.Width + 10), (int)(size.Height + 10));
 			}
+		}
+
+		public byte[] PublicKey {
+			get { return _pubKey; }
 		}
 
 		public CaptchaChallengeData GetChallenge (byte[] hash)
