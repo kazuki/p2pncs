@@ -340,12 +340,27 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		{
 			BoundaryNodeReceivedEventArgs args = (BoundaryNodeReceivedEventArgs)o;
 			CaptchaContainer container = (CaptchaContainer)args.Request;
-			if (!(container.EndPoint is IPEndPoint))
-				return;
 
 			byte[] buffer;
+			IPEndPoint ep = container.EndPoint as IPEndPoint;
 			try {
-				WebRequest req = HttpWebRequest.Create ("http://" + (container.EndPoint as IPEndPoint).ToString () + "/");
+				if (ep == null) {
+					AuthServerInfo.DnsEndPoint dnsEp = container.EndPoint as AuthServerInfo.DnsEndPoint;
+					if (dnsEp == null)
+						throw new NotImplementedException ();
+					IPAddress[] adrs_list = Dns.GetHostAddresses (dnsEp.DNS);
+					IPAddress ipv4adrs = null;
+					for (int i = 0; i < adrs_list.Length; i ++)
+						if (adrs_list[i].AddressFamily == AddressFamily.InterNetwork) {
+							ipv4adrs = adrs_list[i];
+							break;
+						}
+					if (ipv4adrs == null)
+						throw new NotSupportedException ();
+					ep = new IPEndPoint (ipv4adrs, dnsEp.Port);
+				}
+
+				WebRequest req = HttpWebRequest.Create ("http://" + ep.ToString () + "/");
 				req.Timeout = 2000;
 				req.Method = "POST";
 				req.ContentLength = container.Encrypted.Length;
