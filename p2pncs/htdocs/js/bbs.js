@@ -38,6 +38,7 @@ $(function() {
 					dlg.dialog("option", "buttons", {
 						"送信": function() {
 							$("#postAnswer").val ($("#captchaAnswer").val());
+							dlg.dialog("option", "buttons", {});
 							post_ajax ();
 						},
 						"キャンセル": function() {

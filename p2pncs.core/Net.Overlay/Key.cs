@@ -175,6 +175,16 @@ namespace p2pncs.Net.Overlay
 			return Convert.ToBase64String (_data);
 		}
 
+		public string ToUriSafeBase64String ()
+		{
+			return Utility.UriSafeBase64.Encode (_data);
+		}
+
+		public static Key FromUriSafeBase64String (string str)
+		{
+			return new Key (Utility.UriSafeBase64.Decode (str));
+		}
+
 		public static bool Equals (Key keyA, Key keyB)
 		{
 			if (keyA == keyB)

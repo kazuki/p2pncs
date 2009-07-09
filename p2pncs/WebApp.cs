@@ -220,7 +220,7 @@ namespace p2pncs
 					AuthServerInfo[] auth_servers = AuthServerInfo.ParseArray (auth);
 					if (state == "confirm") {
 						MergeableFileHeader header = _node.MMLC.CreateNew (header2, auth_servers);
-						doc.DocumentElement.AppendChild (doc.CreateElement ("created", new string[][] { new[] { "key", header.Key.ToString () } }, null));
+						doc.DocumentElement.AppendChild (doc.CreateElement ("created", new string[][] { new[] { "key", header.Key.ToUriSafeBase64String () } }, null));
 						state = "success";
 					} else {
 						state = "confirm";
@@ -282,7 +282,7 @@ namespace p2pncs
 			foreach (MergeableFileHeader header in headers) {
 				SimpleBBSHeader simpleBBS = header.Content as SimpleBBSHeader;
 				XmlElement e1 = doc.CreateElement ("bbs");
-				e1.SetAttribute ("key", header.Key.ToString ());
+				e1.SetAttribute ("key", header.Key.ToUriSafeBase64String ());
 				e1.SetAttribute ("recordset", header.RecordsetHash.ToString ());
 				XmlElement title = doc.CreateElement ("title");
 				title.AppendChild (doc.CreateTextNode (simpleBBS.Title));
@@ -297,7 +297,12 @@ namespace p2pncs
 			string str_key = req.Url.AbsolutePath.Substring (5);
 			Key key;
 			try {
-				key = Key.Parse (str_key);
+				if (str_key.Length == (DefaultAlgorithm.ECDomainBytes + 1) * 2)
+					key = Key.Parse (str_key);
+				else if (str_key.Length == (DefaultAlgorithm.ECDomainBytes + 1) * 4 / 3)
+					key = Key.FromUriSafeBase64String (str_key);
+				else
+					throw new HttpException (HttpStatusCode.NotFound);
 			} catch {
 				throw new HttpException (HttpStatusCode.NotFound);
 			}
@@ -363,8 +368,8 @@ namespace p2pncs
 			XmlElement rootNode = doc.DocumentElement;
 			SimpleBBSHeader simpleBBS = header.Content as SimpleBBSHeader;
 			XmlElement e1 = doc.CreateElement ("bbs");
-			e1.SetAttribute ("key", header.Key.ToString ());
-			e1.SetAttribute ("recordset", header.RecordsetHash.ToString ());
+			e1.SetAttribute ("key", header.Key.ToUriSafeBase64String ());
+			e1.SetAttribute ("recordset", header.RecordsetHash.ToUriSafeBase64String ());
 			XmlElement title = doc.CreateElement ("title");
 			title.AppendChild (doc.CreateTextNode (simpleBBS.Title));
 			e1.AppendChild (title);
