@@ -21,9 +21,11 @@ using System.Xml;
 using Kazuki.Net.HttpServer;
 using Kazuki.Net.HttpServer.TemplateEngines;
 using openCrypto.EllipticCurve;
+using p2pncs.Net.Overlay;
 using p2pncs.Net.Overlay.DFS.MMLC;
 using p2pncs.Security.Captcha;
 using p2pncs.Security.Cryptography;
+using SysNet = System.Net;
 
 namespace p2pncs.captcha_server
 {
@@ -32,14 +34,23 @@ namespace p2pncs.captcha_server
 		ICaptchaAuthority _captcha;
 		ECKeyPair _privateKey;
 		XslTemplateEngine _template = new XslTemplateEngine ();
-		string _template_file;
+		string _template_file, _authinfo;
 		const int MAX_REQUEST_BODY = 1048576; // 1MB
 
-		public CaptchaApp (ICaptchaAuthority captcha, ECKeyPair privateKey, string template_file)
+		public CaptchaApp (ICaptchaAuthority captcha, ECKeyPair privateKey, string host, ushort port, string template_file)
 		{
 			_captcha = captcha;
 			_privateKey = privateKey;
 			_template_file = template_file;
+
+			SysNet.EndPoint ep;
+			try {
+				SysNet.IPAddress adrs = SysNet.IPAddress.Parse (host);
+				ep = new SysNet.IPEndPoint (adrs, port);
+			} catch {
+				ep = new AuthServerInfo.DnsEndPoint (host, port);
+			}
+			_authinfo = new AuthServerInfo (new Key (_captcha.PublicKey), ep).ToParsableString ();
 		}
 
 		public object Process (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
@@ -56,9 +67,15 @@ namespace p2pncs.captcha_server
 			XmlDocument doc = new XmlDocument ();
 			doc.AppendChild (doc.CreateElement ("page"));
 			doc.DocumentElement.SetAttribute ("ver", System.Reflection.Assembly.GetCallingAssembly ().GetName ().Version.ToString ());
+			
 			XmlElement publicKey = doc.CreateElement ("public-key");
 			publicKey.AppendChild (doc.CreateTextNode (Convert.ToBase64String (_captcha.PublicKey)));
 			doc.DocumentElement.AppendChild (publicKey);
+
+			XmlElement authinfo = doc.CreateElement ("authinfo");
+			authinfo.AppendChild (doc.CreateTextNode (_authinfo));
+			doc.DocumentElement.AppendChild (authinfo);
+
 			return _template.Render (server, req, res, doc, _template_file);
 		}
 

@@ -16,13 +16,13 @@
  */
 
 using System;
-using p2pncs.Security.Captcha;
+using System.IO;
 using Kazuki.Net.HttpServer;
-using XmlConfigLibrary;
 using openCrypto.EllipticCurve;
 using openCrypto.EllipticCurve.Signature;
-using System.IO;
+using p2pncs.Security.Captcha;
 using p2pncs.Security.Cryptography;
+using XmlConfigLibrary;
 
 namespace p2pncs.captcha_server
 {
@@ -31,6 +31,7 @@ namespace p2pncs.captcha_server
 		const string CONFIG_PATH = "p2pncs.captcha-server.xml";
 		const string CONFIG_BIND_PORT = "captcha-server/bind-port";
 		const string CONFIG_PRIVATE_KEY = "captcha-server/private-key";
+		const string CONFIG_HOST = "captcha-server/host";
 
 		static void Main (string[] args)
 		{
@@ -38,8 +39,9 @@ namespace p2pncs.captcha_server
 			ECKeyPair privateKey;
 			LoadConfig (config, out privateKey);
 			SimpleCaptcha captcha = new SimpleCaptcha (new ECDSA (privateKey), 4);
-			CaptchaApp app = new CaptchaApp (captcha, privateKey, "templates/captcha-server.xsl");
-			using (IHttpServer server = HttpServer.CreateEmbedHttpServer (app, null, true, false, false, config.GetValue<int> (CONFIG_BIND_PORT), 64)) {
+			CaptchaApp app = new CaptchaApp (captcha, privateKey, config.GetValue<string> (CONFIG_HOST),
+				(ushort)config.GetValue<int> (CONFIG_BIND_PORT), "templates/captcha-server.xsl");
+			using (IHttpServer server = HttpServer.CreateEmbedHttpServer (app, null, true, false, true, config.GetValue<int> (CONFIG_BIND_PORT), 64)) {
 				Console.WriteLine ("Captcha Authentication Server is Running...");
 				Console.WriteLine ("Press enter key to exit");
 				Console.ReadLine ();
@@ -52,6 +54,7 @@ namespace p2pncs.captcha_server
 
 			config.Define<int> (CONFIG_BIND_PORT, IntParser.Instance, new IntRangeValidator (1, ushort.MaxValue), 8080);
 			config.Define<byte[]> (CONFIG_PRIVATE_KEY, BinaryParser.Instance, null, null);
+			config.Define<string> (CONFIG_HOST, StringParser.Instance, null, string.Empty);
 
 			try {
 				if (File.Exists (CONFIG_PATH))
@@ -74,6 +77,11 @@ namespace p2pncs.captcha_server
 					}
 				}
 				break;
+			}
+
+			if (config.GetValue<string> (CONFIG_HOST).Length == 0) {
+				config.SetValue<string> (CONFIG_HOST, "localhost", false);
+				saveFlag = true;
 			}
 
 			if (saveFlag)
