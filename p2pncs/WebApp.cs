@@ -318,24 +318,29 @@ namespace p2pncs
 						return "<result status=\"ERROR\" />";
 					MergeableFileRecord record;
 					try {
-						byte auth_idx = byte.Parse (auth);
-						if (token.Length > 0 && answer.Length > 0 && prev.Length > 0) {
-							record = (MergeableFileRecord)Serializer.Instance.Deserialize (Convert.FromBase64String (prev));
-							byte[] sign = _node.MMLC.VerifyCaptchaChallenge (header.AuthServers[auth_idx], record.Hash.GetByteArray (),
-								Convert.FromBase64String (token), Encoding.ASCII.GetBytes (answer));
-							if (sign != null) {
-								record.AuthorityIndex = auth_idx;
-								record.Authentication = sign;
-								_node.MMLC.AppendRecord (key, record);
-								return "<result status=\"OK\" />";
+						if (header.AuthServers == null || header.AuthServers.Length == 0) {
+							_node.MMLC.AppendRecord (key, new MergeableFileRecord (new SimpleBBSRecord (name, body, DateTime.UtcNow), header.LastManagedTime, null, null, 0, null));
+							return "<result status=\"OK\" />";
+						} else {
+							byte auth_idx = byte.Parse (auth);
+							if (token.Length > 0 && answer.Length > 0 && prev.Length > 0) {
+								record = (MergeableFileRecord)Serializer.Instance.Deserialize (Convert.FromBase64String (prev));
+								byte[] sign = _node.MMLC.VerifyCaptchaChallenge (header.AuthServers[auth_idx], record.Hash.GetByteArray (),
+									Convert.FromBase64String (token), Encoding.ASCII.GetBytes (answer));
+								if (sign != null) {
+									record.AuthorityIndex = auth_idx;
+									record.Authentication = sign;
+									_node.MMLC.AppendRecord (key, record);
+									return "<result status=\"OK\" />";
+								}
 							}
-						}
 
-						record = new MergeableFileRecord (new SimpleBBSRecord (name, body, DateTime.UtcNow), header.LastManagedTime, null, null, 0, null);
-						CaptchaChallengeData captchaData = _node.MMLC.GetCaptchaChallengeData (header.AuthServers[auth_idx], record.Hash.GetByteArray ());
-						return string.Format ("<result status=\"CAPTCHA\"><img>{0}</img><token>{1}</token><prev>{2}</prev></result>",
-							Convert.ToBase64String (captchaData.Data), Convert.ToBase64String (captchaData.Token),
-							Convert.ToBase64String (Serializer.Instance.Serialize (record)));
+							record = new MergeableFileRecord (new SimpleBBSRecord (name, body, DateTime.UtcNow), header.LastManagedTime, null, null, 0, null);
+							CaptchaChallengeData captchaData = _node.MMLC.GetCaptchaChallengeData (header.AuthServers[auth_idx], record.Hash.GetByteArray ());
+							return string.Format ("<result status=\"CAPTCHA\"><img>{0}</img><token>{1}</token><prev>{2}</prev></result>",
+								Convert.ToBase64String (captchaData.Data), Convert.ToBase64String (captchaData.Token),
+								Convert.ToBase64String (Serializer.Instance.Serialize (record)));
+						}
 					} catch {
 						return "<result status=\"ERROR\" />";
 					}

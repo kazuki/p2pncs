@@ -8,8 +8,9 @@ $(function() {
 		var postAnswer = encodeURIComponent ($("#postAnswer").val());
 		var postPrev = encodeURIComponent ($("#postPrev").val());
 		var bbsKey = $("#postKey").val();
-		var postUrl = "/bbs/" + bbsKey + "?name=" + postName + "&body=" + postBody + "&auth=" + postAuthIdx
+		var postUrl = "/bbs/" + bbsKey + "?name=" + postName + "&body=" + postBody
 			+ "&token=" + postToken + "&answer=" + postAnswer + "&prev=" + postPrev;
+		if ($("#authsvr")) postUrl += "&auth=" + postAuthIdx;
 		dlg.dialog("option", "set_default") (dlg);
 		$.ajax({
 			dataType: "xml",
