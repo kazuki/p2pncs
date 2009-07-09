@@ -60,6 +60,7 @@ namespace p2pncs
 		ISubscribeInfo _imSubscribe;
 		SubscribeRouteStatus _imLastStatus = SubscribeRouteStatus.Establishing;
 		Interrupters _ints;
+		bool _fastView = true;
 
 		public WebApp (Node node, Key imPubKey, ECKeyPair imPrivateKey, string name, Interrupters ints)
 		{
@@ -353,14 +354,17 @@ namespace p2pncs
 				return "<result status=\"EMPTY\" />";
 			}
 
-			if (!callByCallback) {
-				ManualResetEvent done = new ManualResetEvent (false);
-				CometInfo info = new CometInfo (done, req, res, null, DateTime.Now + TimeSpan.FromSeconds (5), ProcessBBS_CometHandler);
-				_node.MMLC.StartMerge (key, ProcessBBS_Callback, done);
-				return info;
-			}
-
 			List<MergeableFileRecord> records = _node.MMLC.GetRecords (key, out header);
+			if (!callByCallback) {
+				if (!_fastView || header == null) {
+					ManualResetEvent done = new ManualResetEvent (false);
+					CometInfo info = new CometInfo (done, req, res, null, DateTime.Now + TimeSpan.FromSeconds (5), ProcessBBS_CometHandler);
+					_node.MMLC.StartMerge (key, ProcessBBS_Callback, done);
+					return info;
+				} else {
+					_node.MMLC.StartMerge (key, null, null);
+				}
+			}
 			if (records == null)
 				throw new HttpException (HttpStatusCode.NotFound);
 
