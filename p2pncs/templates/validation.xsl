@@ -69,9 +69,15 @@
 			</div>
 		</xsl:if>
 		<xsl:if test="$readonly_mode and $type != 'hidden'">
-			<div class="validation-confirm">
+			<xsl:element name="div">
+				<xsl:attribute name="class">
+					<xsl:if test="$class">
+						<xsl:value-of select="$class" />
+					</xsl:if>
+					<xsl:text> validation-confirm</xsl:text>
+				</xsl:attribute>
 				<xsl:value-of select="$x/value" />
-			</div>
+			</xsl:element>
 		</xsl:if>
 	</xsl:template>
 
@@ -123,9 +129,15 @@
 			</div>
 		</xsl:if>
 		<xsl:if test="$readonly_mode">
-			<div class="validation-confirm">
+			<xsl:element name="div">
+				<xsl:attribute name="class">
+					<xsl:if test="$class">
+						<xsl:value-of select="$class" />
+					</xsl:if>
+					<xsl:text> validation-confirm</xsl:text>
+				</xsl:attribute>
 				<xsl:value-of select="$x/value" />
-			</div>
+			</xsl:element>
 		</xsl:if>
 	</xsl:template>
 

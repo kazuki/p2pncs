@@ -202,11 +202,11 @@ namespace p2pncs
 			if (req.HttpMethod == HttpMethod.POST) {
 				Dictionary<string, string> dic = HttpUtility.ParseUrlEncodedStringToDictionary (Encoding.ASCII.GetString (req.GetContentBody (MaxRequestBodySize)), Encoding.UTF8);
 				XmlNode validationRoot = doc.DocumentElement.AppendChild (doc.CreateElement ("validation"));
-				string title = Helpers.GetValueSafe (dic, "title");
-				string auth = Helpers.GetValueSafe (dic, "auth");
-				string fpname = Helpers.GetValueSafe (dic, "fpname");
-				string fpbody = Helpers.GetValueSafe (dic, "fpbody");
-				string state = Helpers.GetValueSafe (dic, "state");
+				string title = Helpers.GetValueSafe (dic, "title").Trim ();
+				string auth = Helpers.GetValueSafe (dic, "auth").Trim ();
+				string fpname = Helpers.GetValueSafe (dic, "fpname").Trim ();
+				string fpbody = Helpers.GetValueSafe (dic, "fpbody").Trim ();
+				string state = Helpers.GetValueSafe (dic, "state").Trim ();
 				bool reedit = Helpers.GetValueSafe (dic, "re-edit").Length > 0;
 				bool title_status = title.Length != 0 && title.Length <= 64;
 				bool auth_status = true;
@@ -218,15 +218,23 @@ namespace p2pncs
 				}
 				if (title_status && auth_status && !reedit) {
 					SimpleBBSHeader header2 = new SimpleBBSHeader (title);
+					MergeableFileRecord record = null;
+					if (fpbody.Length > 0)
+						record = new MergeableFileRecord (new SimpleBBSRecord (fpname, fpbody, DateTime.UtcNow), DateTime.UtcNow, null, null, byte.MaxValue, new byte[DefaultAlgorithm.ECDomainBytes + 1]);
 					AuthServerInfo[] auth_servers = AuthServerInfo.ParseArray (auth);
 					if (state == "confirm") {
-						MergeableFileHeader header = _node.MMLC.CreateNew (header2, auth_servers);
-						doc.DocumentElement.AppendChild (doc.CreateElement ("created", new string[][] { new[] { "key", header.Key.ToUriSafeBase64String () } }, null));
-						state = "success";
+						try {
+							MergeableFileHeader header = _node.MMLC.CreateNew (header2, auth_servers, record == null ? null : new MergeableFileRecord[] {record});
+							doc.DocumentElement.AppendChild (doc.CreateElement ("created", new string[][] { new[] { "key", header.Key.ToUriSafeBase64String () } }, null));
+							state = "success";
+						} catch (OutOfMemoryException) {
+							all_status = false;
+							state = "";
+						}
 					} else {
 						state = "confirm";
 						MergeableFileHeader header = new MergeableFileHeader (ECKeyPair.Create (DefaultAlgorithm.ECDomainName), DateTime.UtcNow, header2, auth_servers);
-						if (Serializer.Instance.Serialize (header).Length > 512) {
+						if (Serializer.Instance.Serialize (header).Length > MMLC.MergeableFileHeaderMaxSize || (record != null && Serializer.Instance.Serialize (record).Length > MMLC.MergeableFileRecordMaxSize)) {
 							all_status = false;
 							state = "";
 						}
@@ -237,7 +245,7 @@ namespace p2pncs
 
 				if (!all_status) {
 					validationRoot.AppendChild (doc.CreateElement ("all", null, new[]{
-						doc.CreateTextNode ("ヘッダサイズが512バイトを超えました. タイトルや認証サーバの情報量を減らしてください")
+						doc.CreateTextNode (string.Format ("ヘッダサイズが{0}バイトを超えたか、最初の投稿が{1}バイトを超えました. タイトルや認証サーバまたは投稿文の情報量を減らしてください", MMLC.MergeableFileHeaderMaxSize, MMLC.MergeableFileRecordMaxSize))
 					}));
 				}
 				validationRoot.AppendChild (doc.CreateElement ("data", new string[][] { new[] { "name", "title" }, new[] { "status", title_status ? "ok" : "error" } }, new[] {
@@ -557,7 +565,7 @@ namespace p2pncs
 					string title = Helpers.GetQueryValue (req, "title").Trim ();
 					if (title.Length == 0)
 						return "タイトルに何か文字を入力してください";
-					_node.MMLC.CreateNew (new SimpleBBSHeader (title), AuthServerInfo.ParseArray ("A/fRkcaUdXFlw0GAmlwfuFzo20SRCEGkkr6rWG0jko9M;i;127.0.0.1:51423"));
+					_node.MMLC.CreateNew (new SimpleBBSHeader (title), AuthServerInfo.ParseArray ("A/fRkcaUdXFlw0GAmlwfuFzo20SRCEGkkr6rWG0jko9M;i;127.0.0.1:51423"), null);
 					return OK;
 				}
 				default:

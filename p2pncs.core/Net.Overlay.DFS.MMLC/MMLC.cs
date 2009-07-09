@@ -37,6 +37,9 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 	/// <summary>Mergeable and Manageable DFS Providing low consistency using DHT</summary>
 	public class MMLC : IDisposable
 	{
+		public const int MergeableFileHeaderMaxSize = 512;
+		public const int MergeableFileRecordMaxSize = 1024 * 4;
+
 		// SQLite Database
 		string _db_connection_string;
 		DbProviderFactory _db_factory = Mono.Data.Sqlite.SqliteFactory.Instance;
@@ -397,16 +400,34 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		#endregion
 
 		#region Manipulating MergeableFile/MergeabileFileRecord
-		public MergeableFileHeader CreateNew (IHashComputable headerContent, AuthServerInfo[] authServers)
+		public MergeableFileHeader CreateNew (IHashComputable headerContent, AuthServerInfo[] authServers, MergeableFileRecord[] init_records)
 		{
 			ECKeyPair privateKey = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 			Key publicKey = Key.Create (privateKey);
 			MergeableFileHeader header = new MergeableFileHeader (privateKey, DateTime.UtcNow, headerContent, authServers);
+			if (Serializer.Instance.Serialize (header).Length > MergeableFileHeaderMaxSize)
+				throw new OutOfMemoryException ();
+			if (init_records != null && init_records.Length > 0) {
+				ECDSA ecdsa = new ECDSA (privateKey);
+				for (int i = 0; i < init_records.Length; i ++) {
+					init_records[i].LastManagedTime = header.LastManagedTime;
+					init_records[i].AuthorityIndex = byte.MaxValue;
+					init_records[i].UpdateHash ();
+					init_records[i].Authentication = ecdsa.SignHash (init_records[i].Hash.GetByteArray ());
+					header.RecordsetHash = header.RecordsetHash.Xor (init_records[i].Hash);
+				}
+			}
 
 			using (IDbConnection connection = CreateDBConnection ())
 			using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.Serializable)) {
+				IMergeableFileDatabaseParser parser = null;
+				long header_id;
 				Insert (transaction, publicKey, privateKey);
-				Insert (transaction, header, null);
+				Insert (transaction, header, ref parser, out header_id);
+				if (init_records != null && init_records.Length > 0) {
+					for (int i = 0; i < init_records.Length; i ++)
+						Insert (transaction, init_records[i], parser, header_id);
+				}
 				transaction.Commit ();
 			}
 

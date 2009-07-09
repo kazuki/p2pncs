@@ -6,6 +6,7 @@
 	<xsl:template name="_title">新規作成 :: BBS :: p2pncs</xsl:template>
 	<xsl:template name="_css">
 		<xsl:call-template name="create_validation_stylesheet" />
+		<link type="text/css" rel="stylesheet" href="/css/bbs_new.css" />
 	</xsl:template>
  
 	<xsl:template match="/page">
@@ -85,6 +86,7 @@
 							<xsl:with-param name="cols">70</xsl:with-param>
 							<xsl:with-param name="rows">16</xsl:with-param>
 							<xsl:with-param name="name">fpbody</xsl:with-param>
+							<xsl:with-param name="class">bbs-body</xsl:with-param>
 						</xsl:call-template>
 					</td>
 				</tr>

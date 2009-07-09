@@ -1,0 +1,8 @@
+div.bbs-body {
+  margin-top: 0.2em;
+  white-space: -moz-pre-wrap;
+  white-space: -pre-wrap;
+  white-space: -o-pre-wrap;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
