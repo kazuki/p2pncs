@@ -126,6 +126,7 @@
     <Compile Include="Serializer.cs" />
     <Compile Include="Utility\KeyValueCache.cs" />
     <Compile Include="Utility\SerializeHelper.cs" />
+    <Compile Include="Utility\UriSafeBase64.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\CompactBinarySerializer\CompactBinarySerializer.csproj">
