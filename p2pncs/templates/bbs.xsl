@@ -22,6 +22,7 @@
 								<xsl:text>/bbs/</xsl:text>
 								<xsl:value-of select="@key" />
 							</xsl:attribute>
+							<xsl:attribute name="target">_blank</xsl:attribute>
 							<xsl:value-of select="title" />
 						</xsl:element>
 					</td>
