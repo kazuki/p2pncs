@@ -254,11 +254,11 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				return null;
 
 			using (IDataReader reader = DatabaseUtility.ExecuteReader (transaction, "SELECT COUNT(id), MAX(created) FROM MMLC_MergeableRecords WHERE header_id = ?", header_id)) {
-				if (reader.Read ()) {
-					header.NumberOfRecords = reader.GetInt32 (0);
+				reader.Read ();
+				header.NumberOfRecords = reader.GetInt32 (0);
+				try {
 					header.LastModifiedTime = reader.GetUtcDateTime (1);
-				} else {
-					header.NumberOfRecords = 0;
+				} catch {
 					header.LastModifiedTime = DateTime.MinValue;
 				}
 			}
