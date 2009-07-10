@@ -28,27 +28,35 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		IHashComputable _content;
 
 		[SerializableFieldId (1)]
-		DateTime _lastManaged;
+		DateTime _created;
 
 		[SerializableFieldId (2)]
-		byte[] _sign;
+		DateTime _lastManaged;
 
 		[SerializableFieldId (3)]
-		Key _hash;
+		Key _publicKey;
 
 		[SerializableFieldId (4)]
-		byte _auth_idx;
+		byte[] _sign;
 
 		[SerializableFieldId (5)]
+		Key _hash;
+
+		[SerializableFieldId (6)]
+		byte _auth_idx;
+
+		[SerializableFieldId (7)]
 		byte[] _auth;
 
-		public MergeableFileRecord (IHashComputable content, DateTime lastManaged, Key hash, byte[] sign, byte auth_idx, byte[] auth)
+		public MergeableFileRecord (IHashComputable content, DateTime created, DateTime lastManaged, Key hash, Key publicKey, byte[] sign, byte auth_idx, byte[] auth)
 		{
-			if (lastManaged.Kind != DateTimeKind.Utc)
+			if (lastManaged.Kind != DateTimeKind.Utc || created.Kind != DateTimeKind.Utc)
 				throw new ArgumentException ();
 			_content = content;
+			_created = created;
 			_lastManaged = lastManaged;
 			_hash = hash;
+			_publicKey = publicKey;
 			_sign = sign;
 			_auth_idx = auth_idx;
 			_auth = auth;
@@ -59,14 +67,15 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		public void UpdateHash ()
 		{
 			using (HashAlgorithm algo = DefaultAlgorithm.CreateHashAlgorithm ()) {
+				byte[] tmp;
 				_content.ComputeHash (algo);
-				byte[] tmp = BitConverter.GetBytes (_lastManaged.ToUniversalTime ().Ticks);
-				if (_sign == null) {
-					algo.TransformFinalBlock (tmp, 0, tmp.Length);
-				} else {
-					algo.TransformBlock (tmp, 0, tmp.Length, null, 0);
-					algo.TransformFinalBlock (_sign, 0, _sign.Length);
-				}
+				tmp = BitConverter.GetBytes (_created.Ticks);
+				algo.TransformBlock (tmp, 0, tmp.Length, null, 0);
+				tmp = BitConverter.GetBytes (_lastManaged.Ticks);
+				algo.TransformBlock (tmp, 0, tmp.Length, null, 0);
+				if (_publicKey != null)
+					algo.TransformBlock (_publicKey.GetByteArray (), 0, _publicKey.KeyBytes, null, 0);
+				algo.TransformFinalBlock (tmp, 0, 0);
 				_hash = new Key (algo.Hash);
 			}
 		}
@@ -74,6 +83,15 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		public IHashComputable Content {
 			get { return _content; }
 			internal set { _content = value; }
+		}
+
+		public DateTime CreatedTime {
+			get { return _created; }
+			set {
+				if (value.Kind != DateTimeKind.Utc)
+					throw new ArgumentException ();
+				_created = value;
+			}
 		}
 
 		public DateTime LastManagedTime {
@@ -87,6 +105,10 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 		public Key Hash {
 			get { return _hash; }
+		}
+
+		public Key PublicKey {
+			get { return _publicKey; }
 		}
 
 		public byte[] Signature {

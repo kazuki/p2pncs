@@ -31,24 +31,28 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		Key _key;
 
 		[SerializableFieldId (1)]
-		DateTime _lastManaged;
+		DateTime _created;
 
 		[SerializableFieldId (2)]
-		IHashComputable _content;
+		DateTime _lastManaged;
 
 		[SerializableFieldId (3)]
-		AuthServerInfo[] _authServers;
+		IHashComputable _content;
 
 		[SerializableFieldId (4)]
-		byte[] _sign;
+		AuthServerInfo[] _authServers;
 
 		[SerializableFieldId (5)]
+		byte[] _sign;
+
+		[SerializableFieldId (6)]
 		Key _recordsetHash;
 
-		public MergeableFileHeader (ECKeyPair privateKey, DateTime lastManaged, IHashComputable content, AuthServerInfo[] authServers)
+		public MergeableFileHeader (ECKeyPair privateKey, DateTime created, DateTime lastManaged, IHashComputable content, AuthServerInfo[] authServers)
 		{
-			if (lastManaged.Kind != DateTimeKind.Utc)
+			if (created.Kind != DateTimeKind.Utc || lastManaged.Kind != DateTimeKind.Utc)
 				throw new ArgumentException ();
+			_created = created;
 			_lastManaged = lastManaged;
 			_content = content;
 			_authServers = authServers;
@@ -56,11 +60,12 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			Sign (privateKey);
 		}
 
-		public MergeableFileHeader (Key key, DateTime lastManaged, IHashComputable content, AuthServerInfo[] authServers, byte[] sign, Key recordsetHash)
+		public MergeableFileHeader (Key key, DateTime created, DateTime lastManaged, IHashComputable content, AuthServerInfo[] authServers, byte[] sign, Key recordsetHash)
 		{
-			if (lastManaged.Kind != DateTimeKind.Utc)
+			if (created.Kind != DateTimeKind.Utc || lastManaged.Kind != DateTimeKind.Utc)
 				throw new ArgumentException ();
 			_key = key;
+			_created = created;
 			_lastManaged = lastManaged;
 			_content = content;
 			_authServers = authServers;
@@ -72,7 +77,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 		public MergeableFileHeader CopyBasisInfo ()
 		{
-			return new MergeableFileHeader (_key, _lastManaged, _content, _authServers, _sign, new Key (new byte[DefaultAlgorithm.HashByteSize]));
+			return new MergeableFileHeader (_key, _created, _lastManaged, _content, _authServers, _sign, new Key (new byte[DefaultAlgorithm.HashByteSize]));
 		}
 
 		public void Sign (ECKeyPair privateKey)
@@ -95,6 +100,8 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			using (HashAlgorithm hash = DefaultAlgorithm.CreateHashAlgorithm ()) {
 				byte[] tmp = _key.GetByteArray ();
 				hash.TransformBlock (tmp, 0, tmp.Length, null, 0);
+				tmp = BitConverter.GetBytes (_created.ToUniversalTime ().Ticks);
+				hash.TransformBlock (tmp, 0, tmp.Length, null, 0);
 				tmp = BitConverter.GetBytes (_lastManaged.ToUniversalTime ().Ticks);
 				hash.TransformBlock (tmp, 0, tmp.Length, null, 0);
 				if (_content != null)
@@ -110,6 +117,10 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 		public Key Key {
 			get { return _key; }
+		}
+
+		public DateTime CreatedTime {
+			get { return _created; }
 		}
 
 		public DateTime LastManagedTime {

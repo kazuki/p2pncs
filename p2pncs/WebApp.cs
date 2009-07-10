@@ -225,7 +225,7 @@ namespace p2pncs
 					SimpleBBSHeader header2 = new SimpleBBSHeader (title);
 					MergeableFileRecord record = null;
 					if (fpbody.Length > 0)
-						record = new MergeableFileRecord (new SimpleBBSRecord (fpname, fpbody, DateTime.UtcNow), DateTime.UtcNow, null, null, byte.MaxValue, new byte[DefaultAlgorithm.ECDomainBytes + 1]);
+						record = new MergeableFileRecord (new SimpleBBSRecord (fpname, fpbody), DateTime.UtcNow, DateTime.UtcNow, null, null, null, byte.MaxValue, new byte[DefaultAlgorithm.ECDomainBytes + 1]);
 					AuthServerInfo[] auth_servers = AuthServerInfo.ParseArray (auth);
 					if (state == "confirm") {
 						try {
@@ -238,7 +238,7 @@ namespace p2pncs
 						}
 					} else {
 						state = "confirm";
-						MergeableFileHeader header = new MergeableFileHeader (ECKeyPair.Create (DefaultAlgorithm.ECDomainName), DateTime.UtcNow, header2, auth_servers);
+						MergeableFileHeader header = new MergeableFileHeader (ECKeyPair.Create (DefaultAlgorithm.ECDomainName), DateTime.UtcNow, DateTime.UtcNow, header2, auth_servers);
 						if (Serializer.Instance.Serialize (header).Length > MMLC.MergeableFileHeaderMaxSize || (record != null && Serializer.Instance.Serialize (record).Length > MMLC.MergeableFileRecordMaxSize)) {
 							all_status = false;
 							state = "";
@@ -338,7 +338,7 @@ namespace p2pncs
 					MergeableFileRecord record;
 					try {
 						if (header.AuthServers == null || header.AuthServers.Length == 0) {
-							_node.MMLC.AppendRecord (key, new MergeableFileRecord (new SimpleBBSRecord (name, body, DateTime.UtcNow), header.LastManagedTime, null, null, 0, null));
+							_node.MMLC.AppendRecord (key, new MergeableFileRecord (new SimpleBBSRecord (name, body), DateTime.UtcNow, header.LastManagedTime, null, null, null, 0, null));
 							return "<result status=\"OK\" />";
 						} else {
 							byte auth_idx = byte.Parse (auth);
@@ -354,7 +354,7 @@ namespace p2pncs
 								}
 							}
 
-							record = new MergeableFileRecord (new SimpleBBSRecord (name, body, DateTime.UtcNow), header.LastManagedTime, null, null, 0, null);
+							record = new MergeableFileRecord (new SimpleBBSRecord (name, body), DateTime.UtcNow, header.LastManagedTime, null, null, null, 0, null);
 							CaptchaChallengeData captchaData = _node.MMLC.GetCaptchaChallengeData (header.AuthServers[auth_idx], record.Hash.GetByteArray ());
 							return string.Format ("<result status=\"CAPTCHA\"><img>{0}</img><token>{1}</token><prev>{2}</prev></result>",
 								Convert.ToBase64String (captchaData.Data), Convert.ToBase64String (captchaData.Token),
@@ -478,7 +478,9 @@ namespace p2pncs
 		{
 			XmlElement root = doc.CreateElement ("file", new string[][] {
 				new[] {"key", header.Key.ToUriSafeBase64String ()},
-				new[] {"recordset", header.RecordsetHash.ToUriSafeBase64String ()}
+				new[] {"recordset", header.RecordsetHash.ToUriSafeBase64String ()},
+				new[] {"created", header.CreatedTime.ToString ("yyyy/MM/dd HH:mm:ss")},
+				new[] {"lastManaged", header.LastManagedTime.ToString ("yyyy/MM/dd HH:mm:ss")}
 			}, null);
 			XmlNode authServers = root.AppendChild (doc.CreateElement ("auth-servers"));
 			if (header.AuthServers != null && header.AuthServers.Length > 0) {
@@ -508,7 +510,8 @@ namespace p2pncs
 			foreach (MergeableFileRecord record in records) {
 				XmlElement record_element = (XmlElement)records_element.AppendChild (doc.CreateElement ("record", new string[][] {
 					new[] {"hash", record.Hash.ToUriSafeBase64String ()},
-					new[] {"authidx", record.AuthorityIndex.ToString ()}
+					new[] {"authidx", record.AuthorityIndex.ToString ()},
+					new[] {"created", record.CreatedTime.ToString ("yyyy/MM/dd HH:mm:ss")}
 				}, null));
 				if (record.Content is SimpleBBSRecord) {
 					record_element.SetAttribute ("type", "simple-bbs");
@@ -519,9 +522,6 @@ namespace p2pncs
 						}),
 						doc.CreateElement ("body", null, new[] {
 							doc.CreateTextNode (record_content.Body)
-						}),
-						doc.CreateElement ("posted", null, new[] {
-							doc.CreateTextNode (record_content.PostedTime.ToString ("yyyy/MM/dd HH:mm:ss"))
 						})
 					}));
 				}

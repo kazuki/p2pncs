@@ -19,23 +19,35 @@
 			<body>
 				<h1><xsl:value-of select="/page/file/bbs/title" /></h1>
 				<div id="bbsinfo">
-					<div><xsl:value-of select="/page/file/@key" /></div>
-					<div><xsl:value-of select="/page/file/@recordset" /></div>
+					<div>
+						<xsl:text>ID: </xsl:text>
+						<xsl:value-of select="/page/file/@key" />
+					</div>
+					<div>
+						<xsl:text>ハッシュ: </xsl:text>
+						<xsl:value-of select="/page/file/@recordset" />
+					</div>
+					<div>
+						<xsl:text>作成日時: </xsl:text>
+						<xsl:value-of select="/page/file/@created" />
+						<xsl:text>, 管理更新日時: </xsl:text>
+						<xsl:value-of select="/page/file/@lastManaged" />
+					</div>
 				</div>
 				<div id="bbsBody">
-					<xsl:for-each select="/page/file/records/record/bbs">
-						<xsl:sort select="posted" order="ascending" />
+					<xsl:for-each select="/page/file/records/record">
+						<xsl:sort select="@created" order="ascending" />
 						<div>
 							<div class="postName">
 								<xsl:text>[</xsl:text>
 								<xsl:value-of select="position()"/>
 								<xsl:text>] </xsl:text>
-								<xsl:value-of select="name" />
+								<xsl:value-of select="bbs/name" />
 								<xsl:text>: </xsl:text>
-								<xsl:value-of select="posted" />
+								<xsl:value-of select="@created" />
 							</div>
 							<div class="postBody">
-								<xsl:value-of select="body" />
+								<xsl:value-of select="bbs/body" />
 							</div>
 						</div>
 					</xsl:for-each>

@@ -31,14 +31,10 @@ namespace p2pncs
 		[SerializableFieldId (1)]
 		string _body;
 
-		[SerializableFieldId (2)]
-		DateTime _posted;
-
-		public SimpleBBSRecord (string name, string body, DateTime posted)
+		public SimpleBBSRecord (string name, string body)
 		{
 			_name = name;
 			_body = body;
-			_posted = posted;
 		}
 
 		public string Name {
@@ -49,10 +45,6 @@ namespace p2pncs
 			get { return _body; }
 		}
 
-		public DateTime PostedTime {
-			get { return _posted; }
-		}
-
 		#region IHashComputable Members
 
 		public void ComputeHash (HashAlgorithm hash)
@@ -60,8 +52,6 @@ namespace p2pncs
 			byte[] tmp = Encoding.UTF8.GetBytes (_name);
 			hash.TransformBlock (tmp, 0, tmp.Length, null, 0);
 			tmp = Encoding.UTF8.GetBytes (_body);
-			hash.TransformBlock (tmp, 0, tmp.Length, null, 0);
-			tmp = BitConverter.GetBytes (_posted.ToUniversalTime ().Ticks);
 			hash.TransformBlock (tmp, 0, tmp.Length, null, 0);
 		}
 
