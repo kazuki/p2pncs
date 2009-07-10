@@ -24,6 +24,7 @@
 								<li><a href="/net/exit">終了</a></li>
 							</ul>
 						</li>
+						<li><a href="/manage/">管理</a></li>
 						<li>
 							<xsl:text>BBS</xsl:text>
 							<ul>

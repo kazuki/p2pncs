@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
@@ -129,6 +130,10 @@ namespace p2pncs
 				return ProcessBbsOpenPage (server, req, res);
 			if (absPath.StartsWith ("/bbs/"))
 				return ProcessBBS (server, req, res, false);
+			if (absPath == "/manage" || absPath == "/manage/")
+				return ProcessManageTop (server, req, res);
+			if (absPath.StartsWith ("/manage/"))
+				return ProcessManageFile (server, req, res);
 			return ProcessStaticFile (server, req, res);
 		}
 
@@ -298,7 +303,7 @@ namespace p2pncs
 				e1.AppendChild (title);
 				rootNode.AppendChild (e1);
 			}
-			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "bbs_list.xsl"));
+			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "bbs.xsl"));
 		}
 
 		object ProcessBBS (IHttpServer server, IHttpRequest req, HttpResponseHeader res, bool callByCallback)
@@ -377,40 +382,8 @@ namespace p2pncs
 				throw new HttpException (HttpStatusCode.NotFound);
 
 			XmlDocument doc = CreateEmptyDocument ();
-			XmlElement rootNode = doc.DocumentElement;
-			SimpleBBSHeader simpleBBS = header.Content as SimpleBBSHeader;
-			XmlElement e1 = doc.CreateElement ("bbs");
-			e1.SetAttribute ("key", header.Key.ToUriSafeBase64String ());
-			e1.SetAttribute ("recordset", header.RecordsetHash.ToUriSafeBase64String ());
-			XmlElement title = doc.CreateElement ("title");
-			title.AppendChild (doc.CreateTextNode (simpleBBS.Title));
-			e1.AppendChild (title);
-			XmlNode authServers = e1.AppendChild (doc.CreateElement ("auth-servers"));
-			if (header.AuthServers != null && header.AuthServers.Length > 0) {
-				for (int i = 0; i < header.AuthServers.Length; i ++) {
-					authServers.AppendChild (doc.CreateElement ("auth-server", new string[][]{new[]{"index", i.ToString()}}, new[]{
-						doc.CreateElement ("public-key", null, new[]{doc.CreateTextNode (header.AuthServers[i].PublicKey.ToBase64String ())}),
-						doc.CreateElement ("serialize", null, new[]{doc.CreateTextNode (header.AuthServers[i].ToParsableString ())})
-					}));
-				}
-			}
-			for (int i = 0; i < records.Count; i ++) {
-				XmlElement e2 = doc.CreateElement ("record");
-				e2.SetAttribute ("hash", records[i].Hash.ToString ());
-				SimpleBBSRecord record = records[i].Content as SimpleBBSRecord;
-				XmlElement e3 = doc.CreateElement ("name");
-				e3.AppendChild (doc.CreateTextNode (record.Name));
-				e2.AppendChild (e3);
-				e3 = doc.CreateElement ("body");
-				e3.AppendChild (doc.CreateTextNode (record.Body));
-				e2.AppendChild (e3);
-				e3 = doc.CreateElement ("posted");
-				e3.AppendChild (doc.CreateTextNode (record.PostedTime.ToString ("yyyy/MM/dd HH:mm:ss")));
-				e2.AppendChild (e3);
-				e1.AppendChild (e2);
-			}
-			rootNode.AppendChild (e1);
-			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "bbs.xsl"));
+			doc.DocumentElement.AppendChild (CreateMergeableFileElement (doc, header, records.ToArray ()));
+			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "bbs_view.xsl"));
 		}
 
 		void ProcessBBS_Callback (object sender, MergeDoneCallbackArgs args)
@@ -425,6 +398,136 @@ namespace p2pncs
 		{
 			info.WaitHandle.Close ();
 			return ProcessBBS (null, info.Request, info.Response, true);
+		}
+
+		object ProcessManageTop (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
+		{
+			XmlDocument doc = CreateEmptyDocument ();
+			MergeableFileHeader[] headers = _node.MMLC.GetOwnMergeableFiles ();
+
+			foreach (MergeableFileHeader header in headers) {
+				doc.DocumentElement.AppendChild (CreateMergeableFileElement (doc, header));
+			}
+
+			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "manage.xsl"));
+		}
+
+		object ProcessManageFile (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
+		{
+			string str_key = req.Url.AbsolutePath.Substring (8);
+			Key key;
+			try {
+				if (str_key.Length == (DefaultAlgorithm.ECDomainBytes + 1) * 2)
+					key = Key.Parse (str_key);
+				else if (str_key.Length == (DefaultAlgorithm.ECDomainBytes + 1) * 4 / 3)
+					key = Key.FromUriSafeBase64String (str_key);
+				else
+					throw new HttpException (HttpStatusCode.NotFound);
+			} catch {
+				throw new HttpException (HttpStatusCode.NotFound);
+			}
+
+			MergeableFileHeader header;
+			if (req.HttpMethod == HttpMethod.POST && req.HasContentBody ()) {
+				header = _node.MMLC.GetMergeableFileHeader (key);
+				if (header == null)
+					throw new HttpException (HttpStatusCode.NotFound);
+				NameValueCollection c = HttpUtility.ParseUrlEncodedStringToNameValueCollection (Encoding.ASCII.GetString (req.GetContentBody (MaxRequestBodySize)), Encoding.UTF8);
+				AuthServerInfo[] auth_servers = AuthServerInfo.ParseArray (c["auth"]);
+				List<Key> list = new List<Key> ();
+				string[] keep_array = c.GetValues ("record");
+				if (keep_array != null) {
+					for (int i = 0; i < keep_array.Length; i ++) {
+						list.Add (Key.FromUriSafeBase64String (keep_array[i]));
+					}
+				}
+				IHashComputable new_header_content;
+				if (header.Content is SimpleBBSHeader) {
+					new_header_content = new SimpleBBSHeader (c["title"]);
+				} else {
+					throw new HttpException (HttpStatusCode.InternalServerError);
+				}
+				_node.MMLC.Manage (key, new_header_content, auth_servers, list.ToArray (), null);
+
+				res[HttpHeaderNames.Location] = "/bbs/" + key.ToUriSafeBase64String ();
+				throw new HttpException (req.HttpVersion == HttpVersion.Http10 ? HttpStatusCode.Found : HttpStatusCode.SeeOther);
+			}
+
+			List<MergeableFileRecord> records = _node.MMLC.GetRecords (key, out header);
+			if (header == null || records == null)
+				throw new HttpException (HttpStatusCode.NotFound);
+
+			XmlDocument doc = CreateEmptyDocument ();
+			doc.DocumentElement.AppendChild (CreateMergeableFileElement (doc, header, records.ToArray ()));
+
+			string xsl_filename;
+			if (header.Content is SimpleBBSHeader)
+				xsl_filename = "manage-simplebbs.xsl";
+			else
+				throw new HttpException (HttpStatusCode.InternalServerError);
+
+			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, xsl_filename));
+		}
+
+		XmlElement CreateMergeableFileElement (XmlDocument doc, MergeableFileHeader header)
+		{
+			return CreateMergeableFileElement (doc, header, null);
+		}
+
+		XmlElement CreateMergeableFileElement (XmlDocument doc, MergeableFileHeader header, MergeableFileRecord[] records)
+		{
+			XmlElement root = doc.CreateElement ("file", new string[][] {
+				new[] {"key", header.Key.ToUriSafeBase64String ()},
+				new[] {"recordset", header.RecordsetHash.ToUriSafeBase64String ()}
+			}, null);
+			XmlNode authServers = root.AppendChild (doc.CreateElement ("auth-servers"));
+			if (header.AuthServers != null && header.AuthServers.Length > 0) {
+				for (int i = 0; i < header.AuthServers.Length; i++) {
+					authServers.AppendChild (doc.CreateElement ("auth-server", new string[][] {
+						new[] {"index", i.ToString ()}
+					}, new[]{
+						doc.CreateElement ("public-key", null, new[]{doc.CreateTextNode (header.AuthServers[i].PublicKey.ToBase64String ())}),
+						doc.CreateElement ("serialize", null, new[]{doc.CreateTextNode (header.AuthServers[i].ToParsableString ())})
+					}));
+				}
+			}
+			if (header.Content is SimpleBBSHeader) {
+				root.SetAttribute ("type", "simple-bbs");
+				SimpleBBSHeader content = header.Content as SimpleBBSHeader;
+				root.AppendChild (doc.CreateElement ("bbs", null, new[] {
+					doc.CreateElement ("title", null, new[] {
+						doc.CreateTextNode (content.Title)
+					})
+				}));
+			}
+
+			if (records == null)
+				return root;
+
+			XmlElement records_element = (XmlElement)root.AppendChild (doc.CreateElement ("records"));
+			foreach (MergeableFileRecord record in records) {
+				XmlElement record_element = (XmlElement)records_element.AppendChild (doc.CreateElement ("record", new string[][] {
+					new[] {"hash", record.Hash.ToUriSafeBase64String ()},
+					new[] {"authidx", record.AuthorityIndex.ToString ()}
+				}, null));
+				if (record.Content is SimpleBBSRecord) {
+					record_element.SetAttribute ("type", "simple-bbs");
+					SimpleBBSRecord record_content = record.Content as SimpleBBSRecord;
+					record_element.AppendChild (doc.CreateElement ("bbs", null, new[] {
+						doc.CreateElement ("name", null, new[] {
+							doc.CreateTextNode (record_content.Name)
+						}),
+						doc.CreateElement ("body", null, new[] {
+							doc.CreateTextNode (record_content.Body)
+						}),
+						doc.CreateElement ("posted", null, new[] {
+							doc.CreateTextNode (record_content.PostedTime.ToString ("yyyy/MM/dd HH:mm:ss"))
+						})
+					}));
+				}
+			}
+
+			return root;
 		}
 
 		object ProcessAPI_GET (IHttpServer server, IHttpRequest req, HttpResponseHeader res)

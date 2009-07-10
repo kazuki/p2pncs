@@ -537,8 +537,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 			// ヘッダの内容を更新し、再署名
 			MergeableFileHeader new_header = new MergeableFileHeader (privateKey, DateTime.UtcNow,
-				new_header_content == null ? cur_header.Content : new_header_content,
-				authServers == null ? cur_header.AuthServers : authServers);
+				new_header_content == null ? cur_header.Content : new_header_content, authServers);
 			
 			// 保持するレコードのみを抽出
 			for (int i = 0; i < old_records.Count; i ++)
@@ -667,6 +666,33 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					_captcha_local.Remove (id);
 				}
 			}
+		}
+
+		public MergeableFileHeader[] GetOwnMergeableFiles ()
+		{
+			List<MergeableFileHeader> headers = new List<MergeableFileHeader> ();
+
+			using (IDbConnection connection = CreateDBConnection ())
+			using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.ReadCommitted)) {
+				List<Key> keys = new List<Key> ();
+				using (IDataReader reader = DatabaseUtility.ExecuteReader (transaction, "SELECT key FROM MMLC_PrivateKeys")) {
+					while (reader.Read ()) {
+						try {
+							keys.Add (Key.FromBase64 (reader.GetString (0)));
+						} catch {}
+					}
+				}
+				
+				for (int i = 0; i < keys.Count; i ++) {
+					try {
+						MergeableFileHeader header = SelectHeader (transaction, keys[i]) as MergeableFileHeader;
+						if (header != null)
+							headers.Add (header);
+					} catch {}
+				}
+			}
+
+			return headers.ToArray ();
 		}
 
 		void Touch (MergeableFileHeader header)

@@ -22,7 +22,7 @@ namespace p2pncs
 {
 	public static class XmlHelper
 	{
-		public static XmlNode CreateElement (this XmlDocument doc, string name, string[][] atts, XmlNode[] children)
+		public static XmlElement CreateElement (this XmlDocument doc, string name, string[][] atts, XmlNode[] children)
 		{
 			XmlElement element = doc.CreateElement (name);
 			if (atts != null) {
