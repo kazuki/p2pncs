@@ -48,6 +48,9 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		[SerializableFieldId (6)]
 		Key _recordsetHash;
 
+		int _numOfRecords;
+		DateTime _lastModified;
+
 		public MergeableFileHeader (ECKeyPair privateKey, DateTime created, DateTime lastManaged, IHashComputable content, AuthServerInfo[] authServers)
 		{
 			if (created.Kind != DateTimeKind.Utc || lastManaged.Kind != DateTimeKind.Utc)
@@ -143,6 +146,16 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		public Key RecordsetHash {
 			get { return _recordsetHash; }
 			set { _recordsetHash = value;}
+		}
+
+		public int NumberOfRecords {
+			get { return _numOfRecords; }
+			internal set { _numOfRecords = value; }
+		}
+
+		public DateTime LastModifiedTime {
+			get { return _lastModified; }
+			internal set { _lastModified = value; }
 		}
 	}
 }

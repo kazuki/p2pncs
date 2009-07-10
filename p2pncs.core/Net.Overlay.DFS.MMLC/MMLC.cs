@@ -221,6 +221,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			header_id = 0;
 			parser = null;
 
+			MergeableFileHeader header = null;
 			using (IDataReader reader1 = DatabaseUtility.ExecuteReader (transaction, "SELECT id,type,content_type FROM MMLC_Keys WHERE key=?", key.ToBase64String ())) {
 				if (!reader1.Read ())
 					return null;
@@ -236,20 +237,32 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 						if (!reader2.Read ())
 							return null;
 						try {
-							MergeableFileHeader header = new MergeableFileHeader (
+							header = new MergeableFileHeader (
 								key, reader2.GetUtcDateTime (0), reader2.GetUtcDateTime (1), null,
 								AuthServerInfo.ParseArray (reader2.GetString (2)),
 								(byte[])reader2.GetValue (3),
 								Key.FromBase64 (reader2.GetString (4)));
 							header.Content = parser.ParseHeader (reader2, 5);
-							return header;
 						} catch {
 							return null;
 						}
 					}
 				}
-				return null;
 			}
+
+			if (header == null)
+				return null;
+
+			using (IDataReader reader = DatabaseUtility.ExecuteReader (transaction, "SELECT COUNT(id), MAX(created) FROM MMLC_MergeableRecords WHERE header_id = ?", header_id)) {
+				if (reader.Read ()) {
+					header.NumberOfRecords = reader.GetInt32 (0);
+					header.LastModifiedTime = reader.GetUtcDateTime (1);
+				} else {
+					header.NumberOfRecords = 0;
+					header.LastModifiedTime = DateTime.MinValue;
+				}
+			}
+			return header;
 		}
 
 		List<MergeableFileRecord> SelectRecords (IMergeableFileDatabaseParser parser, long header_id)

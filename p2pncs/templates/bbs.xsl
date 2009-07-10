@@ -12,9 +12,13 @@
 		<table cellpadding="5" cellspacing="1" border="0">
 			<tr class="header">
 				<td>Title</td>
+				<td>レス数</td>
+				<td>最終書き込み日時</td>
 				<td>ID</td>
+				<td>作成日時</td>
+				<td>最終管理更新日時</td>
 			</tr>
-			<xsl:for-each select="/page/bbs">
+			<xsl:for-each select="/page/file">
 				<tr>
 					<td>
 						<xsl:element name="a">
@@ -23,10 +27,14 @@
 								<xsl:value-of select="@key" />
 							</xsl:attribute>
 							<xsl:attribute name="target">_blank</xsl:attribute>
-							<xsl:value-of select="title" />
+							<xsl:value-of select="bbs/title" />
 						</xsl:element>
 					</td>
+					<td><xsl:value-of select="@records" /></td>
+					<td><xsl:value-of select="@lastModified" /></td>
 					<td><xsl:value-of select="@key" /></td>
+					<td><xsl:value-of select="@created" /></td>
+					<td><xsl:value-of select="@lastManaged" /></td>
 				</tr>
 			</xsl:for-each>
 		</table>

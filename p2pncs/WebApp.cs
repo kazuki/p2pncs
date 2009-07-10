@@ -294,14 +294,7 @@ namespace p2pncs
 			XmlElement rootNode = doc.DocumentElement;
 			MergeableFileHeader[] headers = _node.MMLC.GetHeaderList ();
 			foreach (MergeableFileHeader header in headers) {
-				SimpleBBSHeader simpleBBS = header.Content as SimpleBBSHeader;
-				XmlElement e1 = doc.CreateElement ("bbs");
-				e1.SetAttribute ("key", header.Key.ToUriSafeBase64String ());
-				e1.SetAttribute ("recordset", header.RecordsetHash.ToString ());
-				XmlElement title = doc.CreateElement ("title");
-				title.AppendChild (doc.CreateTextNode (simpleBBS.Title));
-				e1.AppendChild (title);
-				rootNode.AppendChild (e1);
+				rootNode.AppendChild (CreateMergeableFileElement (doc, header));
 			}
 			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "bbs.xsl"));
 		}
@@ -480,7 +473,9 @@ namespace p2pncs
 				new[] {"key", header.Key.ToUriSafeBase64String ()},
 				new[] {"recordset", header.RecordsetHash.ToUriSafeBase64String ()},
 				new[] {"created", header.CreatedTime.ToString ("yyyy/MM/dd HH:mm:ss")},
-				new[] {"lastManaged", header.LastManagedTime.ToString ("yyyy/MM/dd HH:mm:ss")}
+				new[] {"lastManaged", header.LastManagedTime.ToString ("yyyy/MM/dd HH:mm:ss")},
+				new[] {"lastModified", header.LastModifiedTime.ToString ("yyyy/MM/dd HH:mm:ss")},
+				new[] {"records", header.NumberOfRecords.ToString ()},
 			}, null);
 			XmlNode authServers = root.AppendChild (doc.CreateElement ("auth-servers"));
 			if (header.AuthServers != null && header.AuthServers.Length > 0) {
