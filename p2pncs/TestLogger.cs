@@ -83,8 +83,9 @@ namespace p2pncs
 					foreach (KeyValuePair<IPAddress, EndPointInfo> pair in _udpRTTs) {
 						string ip = BitConverter.ToUInt32 (pair.Key.GetAddressBytes (), 0).ToString ("x");
 						IList<float> list = pair.Value.SD.Samples;
-						writer.WriteLine ("* {0} RTT Avg={1:f2}, SD={2:f2}, Rate={3:f2}", ip, pair.Value.SD.Average,
-							pair.Value.SD.ComputeStandardDeviation (), (double)pair.Value.Fail / (double)(pair.Value.Success + pair.Value.Fail));
+						writer.WriteLine ("* {0} RTT Avg={1:f2}, SD={2:f2}, Rate={3:f2}, Samples={4}", ip, pair.Value.SD.Average,
+							pair.Value.SD.ComputeStandardDeviation (), (double)pair.Value.Fail / (double)(pair.Value.Success + pair.Value.Fail),
+							pair.Value.Success + pair.Value.Fail);
 						for (int i = 0; i < list.Count; i ++)
 							writer.WriteLine ("{0}: {1:f2}", ip, list[i]);
 					}
