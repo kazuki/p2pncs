@@ -48,7 +48,7 @@ namespace p2pncs.captcha_server
 				SysNet.IPAddress adrs = SysNet.IPAddress.Parse (host);
 				ep = new SysNet.IPEndPoint (adrs, port);
 			} catch {
-				ep = new AuthServerInfo.DnsEndPoint (host, port);
+				ep = new p2pncs.Net.DnsEndPoint (host, port);
 			}
 			_authinfo = new AuthServerInfo (new Key (_captcha.PublicKey), ep).ToParsableString ();
 		}

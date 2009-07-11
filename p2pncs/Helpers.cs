@@ -15,11 +15,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using System;
 using System.Collections.Generic;
 using System.Net;
-using System.Text;
 using Kazuki.Net.HttpServer;
+using p2pncs.Net;
 
 namespace p2pncs
 {
@@ -36,13 +35,7 @@ namespace p2pncs
 					return null;
 				IPAddress adrs;
 				if (!IPAddress.TryParse (items[0], out adrs)) {
-					IAsyncResult ar = Dns.BeginGetHostAddresses (items[0], null, null);
-					if (!ar.AsyncWaitHandle.WaitOne (5000))
-						return null;
-					IPAddress[] list = Dns.EndGetHostAddresses (ar);
-					if (list.Length == 0)
-						return null;
-					adrs = list[0];
+					return new DnsEndPoint (items[0], (ushort)port);
 				}
 				return new IPEndPoint (adrs, port);
 			} catch {

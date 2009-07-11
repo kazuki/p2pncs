@@ -363,7 +363,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			IPEndPoint ep = container.EndPoint as IPEndPoint;
 			try {
 				if (ep == null) {
-					AuthServerInfo.DnsEndPoint dnsEp = container.EndPoint as AuthServerInfo.DnsEndPoint;
+					DnsEndPoint dnsEp = container.EndPoint as DnsEndPoint;
 					if (dnsEp == null)
 						throw new NotImplementedException ();
 					IPAddress[] adrs_list = Dns.GetHostAddresses (dnsEp.DNS);

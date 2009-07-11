@@ -65,6 +65,7 @@
     <Compile Include="Net.Overlay.DFS.MMLC\CaptchaChallengeSegment.cs" />
     <Compile Include="Net.Overlay.DFS.MMLC\CaptchaContainer.cs" />
     <Compile Include="Net.Overlay.DFS.MMLC\CaptchaVerifyResult.cs" />
+    <Compile Include="Net\DnsEndPoint.cs" />
     <Compile Include="Security.Captcha\CaptchaChallengeData.cs" />
     <Compile Include="Security.Captcha\ICaptchaAuthority.cs" />
     <Compile Include="Net.Overlay.DFS.MMLC\IMergeableFileDatabaseParser.cs" />

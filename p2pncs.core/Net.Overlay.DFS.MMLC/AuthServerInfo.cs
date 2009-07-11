@@ -133,30 +133,6 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			return list.ToArray ();
 		}
 
-		[SerializableTypeId (0x40b)]
-		public class DnsEndPoint : EndPoint
-		{
-			[SerializableFieldId (0)]
-			string _dns;
-
-			[SerializableFieldId (1)]
-			ushort _port;
-
-			public DnsEndPoint (string dns, ushort port)
-			{
-				_dns = dns;
-				_port = port;
-			}
-
-			public string DNS {
-				get { return _dns; }
-			}
-
-			public ushort Port {
-				get { return _port; }
-			}
-		}
-
 		[SerializableTypeId (0x40c)]
 		public class KeyEndPoint : EndPoint
 		{
