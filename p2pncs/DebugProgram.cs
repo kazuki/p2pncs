@@ -15,6 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#if DEBUG
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -53,12 +54,7 @@ namespace p2pncs
 		public DebugProgram ()
 		{
 			_ints = new Interrupters ();
-			{
-				ECKeyPair tmpKey;
-				Key tmpPubKey;
-				string tmpName;
-				Program.LoadConfig (_config, out tmpKey, out tmpPubKey, out tmpName);
-			}
+			Program.LoadConfig (_config);
 			_churnInt = new IntervalInterrupter (TimeSpan.FromSeconds (500.0 / NODES), "Churn Timer");
 			Directory.CreateDirectory ("db");
 		}
@@ -151,7 +147,7 @@ namespace p2pncs
 			{
 				_name = _name + " (" + ep.ToString () + ")";
 				_node = new Node (ints, bindedDgramSock, string.Format ("db{0}{1}.sqlite", Path.DirectorySeparatorChar, _idx));
-				_app = new WebApp (_node, _imPublicKey, _imPrivateKey, _name, ints);
+				_app = new WebApp (_node);
 				if (base_port >= 0)
 					_server = HttpServer.CreateEmbedHttpServer (_app, null, true, true, false, base_port + _idx, 16);
 			}
@@ -179,3 +175,4 @@ namespace p2pncs
 		}
 	}
 }
+#endif

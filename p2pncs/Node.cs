@@ -51,7 +51,9 @@ namespace p2pncs
 			_dgramSock = bindedDgramSock;
 			_messagingSock = new MessagingSocket (_dgramSock, true, SymmetricKey.NoneKey, p2pncs.Serializer.Instance,
 				null, ints.MessagingInt, DefaultMessagingTimeout, DefaultMessagingRetry, DefaultMessagingRetryBufferSize, DefaultMessagingDuplicationCheckBufferSize);
+#if !DEBUG
 			TestLogger.SetupUdpMessagingSocket (_messagingSock);
+#endif
 			_kbrPrivateKey = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 			_kbr = new SimpleIterativeRouter2 (Key.Create (_kbrPrivateKey), _messagingSock, new SimpleRoutingAlgorithm (), p2pncs.Serializer.Instance, true);
 			_localHT = new OnMemoryLocalHashTable (_kbr, ints.DHTInt);

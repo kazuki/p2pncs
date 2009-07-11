@@ -32,9 +32,6 @@ namespace p2pncs
 		const string CONFIG_PATH = "p2pncs.xml";
 #if !DEBUG
 		XmlConfig _config = new XmlConfig ();
-		ECKeyPair _imPrivateKey;
-		Key _imPublicKey;
-		string _name;
 #endif
 
 		static void Main (string[] args)
@@ -53,44 +50,20 @@ namespace p2pncs
 #if !DEBUG
 		public Program ()
 		{
-			LoadConfig (_config, out _imPrivateKey, out _imPublicKey, out _name);
+			LoadConfig (_config);
 		}
 #endif
 
-		public static void LoadConfig (XmlConfig config, out ECKeyPair imPrivateKey, out Key imPublicKey, out string name)
+		public static void LoadConfig (XmlConfig config)
 		{
 			bool saveFlag = false;
 			config.Define<int> ("net/bind/port", IntParser.Instance, new IntRangeValidator (1, ushort.MaxValue), 65000);
 			config.Define<int> ("gw/bind/port", IntParser.Instance, new IntRangeValidator (1, ushort.MaxValue), 8080);
-			config.Define<byte[]> ("im/private-key", BinaryParser.Instance, null, null);
-			config.Define<string> ("im/name", StringParser.Instance, null, "名無し");
 			try {
-				if (File.Exists (CONFIG_PATH))
+				saveFlag = !File.Exists (CONFIG_PATH);
+				if (!saveFlag)
 					config.Load (CONFIG_PATH);
 			} catch {
-				saveFlag = true;
-			}
-
-			byte[] raw = config.GetValue<byte[]> ("im/private-key");
-			while (true) {
-				if (raw == null || raw.Length == 0) {
-					imPrivateKey = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
-					config.SetValue<byte[]> ("im/private-key", imPrivateKey.PrivateKey, false);
-					saveFlag = true;
-				} else {
-					imPrivateKey = ECKeyPairExtensions.CreatePrivate (raw);
-					if (imPrivateKey.DomainName != DefaultAlgorithm.ECDomainName) {
-						raw = null;
-						continue;
-					}
-				}
-				break;
-			}
-			imPublicKey = Key.Create (imPrivateKey);
-
-			name = config.GetValue<string> ("im/name");
-			if (name == null || name.Length == 0) {
-				name = "名無し";
 				saveFlag = true;
 			}
 
@@ -105,7 +78,7 @@ namespace p2pncs
 			dgramSock.Bind (new IPEndPoint (IPAddress.Any, _config.GetValue<int> ("net/bind/port")));
 			using (Interrupters ints = new Interrupters ())
 			using (Node node = new Node (ints, dgramSock, "database.sqlite"))
-			using (WebApp app = new WebApp (node, _imPublicKey, _imPrivateKey, _name, ints))
+			using (WebApp app = new WebApp (node))
 			using (HttpServer.CreateEmbedHttpServer (app, null, true, true, false, _config.GetValue<int> ("gw/bind/port"), 16)) {
 				app.ExitWaitHandle.WaitOne ();
 				TestLogger.Dump ();

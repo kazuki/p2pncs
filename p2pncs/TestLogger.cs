@@ -1,4 +1,22 @@
-﻿using System;
+﻿/*
+ * Copyright (C) 2009 Kazuki Oikawa
+ * 
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#if !DEBUG
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -18,7 +36,6 @@ namespace p2pncs
 
 		public static void SetupUdpMessagingSocket (IMessagingSocket sock)
 		{
-#if !DEBUG
 			sock.InquirySuccess += delegate (object sender, InquiredEventArgs e) {
 				AddUdpRTT (e.EndPoint, (float)e.RTT.TotalMilliseconds);
 			};
@@ -35,19 +52,16 @@ namespace p2pncs
 					Interlocked.Increment (ref info.Fail);
 				}
 			};
-#endif
 		}
 
 		public static void SetupAcMessagingSocket (IMessagingSocket sock)
 		{
-#if !DEBUG
 			sock.InquirySuccess += delegate (object sender, InquiredEventArgs e) {
 				AddAcRTT ((float)e.RTT.TotalMilliseconds);
 			};
 			sock.InquiryFailure += delegate (object sender, InquiredEventArgs e) {
 				Interlocked.Increment (ref _acFail);
 			};
-#endif
 		}
 
 		static void AddUdpRTT (EndPoint ep, float rtt_ms)
@@ -107,3 +121,4 @@ namespace p2pncs
 		}
 	}
 }
+#endif
