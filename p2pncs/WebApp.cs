@@ -40,6 +40,7 @@ namespace p2pncs
 	{
 		const string DefaultTemplatePath = "templates";
 		const string DefaultStaticFilePath = "htdocs";
+		const string DefaultDateFormat = "yyyy/MM/dd HH:mm:ss";
 
 		const int MaxRetries = 2;
 		static TimeSpan Timeout = TimeSpan.FromSeconds (2);
@@ -415,9 +416,9 @@ namespace p2pncs
 			XmlElement root = doc.CreateElement ("file", new string[][] {
 				new[] {"key", header.Key.ToUriSafeBase64String ()},
 				new[] {"recordset", header.RecordsetHash.ToUriSafeBase64String ()},
-				new[] {"created", header.CreatedTime.ToString ("yyyy/MM/dd HH:mm:ss")},
-				new[] {"lastManaged", header.LastManagedTime.ToString ("yyyy/MM/dd HH:mm:ss")},
-				new[] {"lastModified", header.LastModifiedTime.ToString ("yyyy/MM/dd HH:mm:ss")},
+				new[] {"created", header.CreatedTime.ToLocalTime().ToString (DefaultDateFormat)},
+				new[] {"lastManaged", header.LastManagedTime.ToLocalTime().ToString (DefaultDateFormat)},
+				new[] {"lastModified", header.LastModifiedTime.ToLocalTime().ToString (DefaultDateFormat)},
 				new[] {"records", header.NumberOfRecords.ToString ()},
 			}, null);
 			XmlNode authServers = root.AppendChild (doc.CreateElement ("auth-servers"));
@@ -449,7 +450,7 @@ namespace p2pncs
 				XmlElement record_element = (XmlElement)records_element.AppendChild (doc.CreateElement ("record", new string[][] {
 					new[] {"hash", record.Hash.ToUriSafeBase64String ()},
 					new[] {"authidx", record.AuthorityIndex.ToString ()},
-					new[] {"created", record.CreatedTime.ToString ("yyyy/MM/dd HH:mm:ss")}
+					new[] {"created", record.CreatedTime.ToLocalTime().ToString (DefaultDateFormat)}
 				}, null));
 				if (record.Content is SimpleBBSRecord) {
 					record_element.SetAttribute ("type", "simple-bbs");
