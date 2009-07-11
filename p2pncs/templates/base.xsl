@@ -20,7 +20,7 @@
 						<li>
 							<xsl:text>ネットワーク</xsl:text>
 							<ul>
-								<li><a href="/net/init">初期ノードに接続</a></li>
+								<li><a href="/net/init">初期ノード</a></li>
 								<li><a href="/net/exit">終了</a></li>
 							</ul>
 						</li>

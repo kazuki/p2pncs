@@ -212,6 +212,12 @@ namespace p2pncs.Net
 
 		#endregion
 
+		#region Properties
+		public IPAddress CurrentPublicIPAddress {
+			get { return _pubIpVotingBox.CurrentPublicIPAddress; }
+		}
+		#endregion
+
 		#region IDisposable Members
 
 		public void Dispose ()

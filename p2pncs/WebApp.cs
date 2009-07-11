@@ -33,6 +33,9 @@ using p2pncs.Net.Overlay.DFS.MMLC;
 using p2pncs.Security.Captcha;
 using p2pncs.Security.Cryptography;
 using EndPoint = System.Net.EndPoint;
+using IPEndPoint = System.Net.IPEndPoint;
+using IPAddress = System.Net.IPAddress;
+using Dns = System.Net.Dns;
 
 namespace p2pncs
 {
@@ -112,14 +115,41 @@ namespace p2pncs
 					List<EndPoint> list = new List<EndPoint> ();
 					List<string> raw_list = new List<string> ();
 					for (int i = 0; i < lines.Length; i ++) {
-						EndPoint ep = Helpers.Parse (lines[i]);
+						EndPoint ep;
+						lines[i] = lines[i].Trim ();
+						if (lines[i].StartsWith ("%")) {
+							ep = EndPointObfuscator.Decode (lines[i]);
+						} else {
+							ep = Helpers.Parse (lines[i]);
+						}
 						if (ep != null) {
 							list.Add (ep);
 							raw_list.Add (lines[i]);
 						}
 					}
 					if (list.Count > 0) {
-						_node.KeyBasedRouter.Join (list.ToArray ());
+						new Thread (delegate () {
+							EndPoint[] eps = new EndPoint[1];
+							for (int i = 0; i < list.Count; i ++) {
+								if (list[i] is IPEndPoint) {
+									if ((list[i] as IPEndPoint).Address.Equals (_node.GetCurrentPublicIPAddress ()))
+										continue;
+									eps[0] = list[i];
+									_node.KeyBasedRouter.Join (eps);
+								}
+							}
+							for (int i = 0; i < list.Count; i++) {
+								if (list[i] is DnsEndPoint) {
+									IPAddress[] adrs_list = Dns.GetHostAddresses ((list[i] as DnsEndPoint).DNS);
+									for (int k = 0; k < adrs_list.Length; k ++) {
+										if (adrs_list[k].AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && !adrs_list[k].Equals (_node.GetCurrentPublicIPAddress ())) {
+											eps[0] = new IPEndPoint (adrs_list[k], (list[i] as DnsEndPoint).Port);
+											_node.KeyBasedRouter.Join (eps);
+										}
+									}
+								}
+							}
+						}).Start ();
 						XmlNode root = doc.DocumentElement.AppendChild (doc.CreateElement ("connected"));
 						for (int i = 0; i < list.Count; i ++) {
 							XmlElement element = doc.CreateElement ("endpoint");
@@ -127,8 +157,42 @@ namespace p2pncs
 							root.AppendChild (element);
 						}
 					}
+				} else if (dic.ContainsKey ("ip") && dic.ContainsKey ("port")) {
+					string ip_dns = dic["ip"].Trim ();
+					string port = dic["port"].Trim ();
+					try {
+						EndPoint ep = Helpers.Parse (ip_dns + ":" + port);
+						if (ep == null)
+							throw new FormatException ();
+						if (ep is IPEndPoint && (IPAddressUtility.IsPrivate ((ep as IPEndPoint).Address) || (ep as IPEndPoint).Address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork))
+							throw new FormatException ();
+						string encoded = EndPointObfuscator.Encode (ep);
+						doc.DocumentElement.AppendChild (doc.CreateElement ("encoded", null, new XmlNode[] {
+							doc.CreateElement ("source", null, new[] {
+								doc.CreateTextNode (ip_dns + ":" + port)
+							}),
+							doc.CreateTextNode (encoded)
+						}));
+					} catch {
+						doc.DocumentElement.AppendChild (doc.CreateElement ("encoded", null, new[] {
+							doc.CreateElement ("source", null, new[] {
+								doc.CreateTextNode (ip_dns + ":" + port)
+							}),
+							doc.CreateElement ("error")
+						}));
+					}
 				}
 			}
+
+			if (!IPAddressUtility.IsPrivate (_node.GetCurrentPublicIPAddress ())) {
+				doc.DocumentElement.AppendChild (doc.CreateElement ("ipendpoint", new string[][] {
+					new [] {"ip", _node.GetCurrentPublicIPAddress().ToString ()},
+					new [] {"port", _node.BindPort.ToString ()}
+				}, new [] {
+					doc.CreateTextNode (EndPointObfuscator.Encode (new IPEndPoint (_node.GetCurrentPublicIPAddress (), _node.BindPort)))
+				}));
+			}
+
 			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "net_init.xsl"));
 		}
 

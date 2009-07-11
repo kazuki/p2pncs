@@ -16,6 +16,7 @@
  */
 
 using System;
+using System.Net;
 using openCrypto.EllipticCurve;
 using p2pncs.Net;
 using p2pncs.Net.Overlay;
@@ -23,6 +24,7 @@ using p2pncs.Net.Overlay.Anonymous;
 using p2pncs.Net.Overlay.DFS.MMLC;
 using p2pncs.Net.Overlay.DHT;
 using p2pncs.Security.Cryptography;
+using p2pncs.Simulation.VirtualNet;
 
 namespace p2pncs
 {
@@ -33,6 +35,7 @@ namespace p2pncs
 		public const int DefaultMessagingRetryBufferSize = 8192;
 		public const int DefaultMessagingDuplicationCheckBufferSize = 1024;
 
+		int _port;
 		IDatagramEventSocket _dgramSock;
 		IMessagingSocket _messagingSock;
 		IKeyBasedRouter _kbr;
@@ -45,8 +48,9 @@ namespace p2pncs
 
 		ECKeyPair _kbrPrivateKey;
 
-		public Node (Interrupters ints, IDatagramEventSocket bindedDgramSock, string db_path)
+		public Node (Interrupters ints, IDatagramEventSocket bindedDgramSock, string db_path, int bindport)
 		{
+			_port = bindport;
 			_ints = ints;
 			_dgramSock = bindedDgramSock;
 			_messagingSock = new MessagingSocket (_dgramSock, true, SymmetricKey.NoneKey, p2pncs.Serializer.Instance,
@@ -92,6 +96,19 @@ namespace p2pncs
 
 		public MMLC MMLC {
 			get { return _mmlc; }
+		}
+
+		public IPAddress GetCurrentPublicIPAddress ()
+		{
+			if (_dgramSock is UdpSocket)
+				return (_dgramSock as UdpSocket).CurrentPublicIPAddress;
+			if (_dgramSock is VirtualDatagramEventSocket)
+				return (_dgramSock as VirtualDatagramEventSocket).PublicIPAddress;
+			throw new NotImplementedException ();
+		}
+
+		public int BindPort {
+			get { return _port; }
 		}
 
 		public void Dispose ()

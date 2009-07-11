@@ -20,7 +20,7 @@ using System.Collections.Generic;
 
 namespace p2pncs.Utility
 {
-	static class ArrayExtensions
+	public static class ArrayExtensions
 	{
 		public static void Shuffle<T> (this T[] array)
 		{
@@ -59,6 +59,21 @@ namespace p2pncs.Utility
 			return joinArray;
 		}
 
+		public static byte[] Join (this byte[] array1, params byte[][] arrays)
+		{
+			int size = array1.Length;
+			for (int i = 0; i < arrays.Length; i ++)
+				size += arrays[i].Length;
+
+			byte[] joinArray = new byte[size];
+			Buffer.BlockCopy (array1, 0, joinArray, 0, array1.Length);
+			for (int i = 0, q = array1.Length; i < arrays.Length; i++) {
+				Buffer.BlockCopy (arrays[i], 0, joinArray, q, arrays[i].Length);
+				q += arrays[i].Length;
+			}
+			return joinArray;
+		}
+
 		public static T[] Join<T> (this T[] array1, T[] array2)
 		{
 			T[] joinArray = new T[array1.Length + array2.Length];
@@ -67,6 +82,23 @@ namespace p2pncs.Utility
 				joinArray[j++] = array1[i];
 			for (int i = 0; i < array2.Length; i++)
 				joinArray[j++] = array2[i];
+			return joinArray;
+		}
+
+		public static T[] Join<T> (this T[] array1, params T[][] arrays)
+		{
+			int size = array1.Length;
+			for (int i = 0; i < arrays.Length; i++)
+				size += arrays[i].Length;
+
+			T[] joinArray = new T[size];
+			for (int i = 0; i < array1.Length; i ++)
+				joinArray[i] = array1[i];
+			for (int i = 0, q = array1.Length; i < arrays.Length; i++) {
+				for (int k = 0; k < arrays[i].Length; k++)
+					joinArray[q + k] = arrays[i][k];
+				q += arrays[i].Length;
+			}
 			return joinArray;
 		}
 

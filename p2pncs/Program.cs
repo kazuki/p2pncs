@@ -77,7 +77,7 @@ namespace p2pncs
 			IDatagramEventSocket dgramSock = UdpSocket.CreateIPv4 ();
 			dgramSock.Bind (new IPEndPoint (IPAddress.Any, _config.GetValue<int> ("net/bind/port")));
 			using (Interrupters ints = new Interrupters ())
-			using (Node node = new Node (ints, dgramSock, "database.sqlite"))
+			using (Node node = new Node (ints, dgramSock, "database.sqlite", _config.GetValue<int> ("net/bind/port")))
 			using (WebApp app = new WebApp (node))
 			using (HttpServer.CreateEmbedHttpServer (app, null, true, true, false, _config.GetValue<int> ("gw/bind/port"), 16)) {
 				app.ExitWaitHandle.WaitOne ();
