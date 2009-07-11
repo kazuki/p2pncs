@@ -45,7 +45,7 @@ namespace p2pncs.Net
 			_pubIpVotingBox = new SimplePublicIPAddressVotingBox (addressFamily);
 			_loopbackAdrs = _pubIpVotingBox.CurrentPublicIPAddress; // SimplePublicIPAddressVotingBoxの初期値はループバック
 			_sock = new Socket (addressFamily, SocketType.Dgram, ProtocolType.Udp);
-			_header_size = (addressFamily == AddressFamily.InterNetwork ? 4 : 16);
+			_header_size = (addressFamily == AddressFamily.InterNetwork ? 4 : 16) + 2;
 			_max_datagram_size = MAX_DATAGRAM_SIZE - _header_size;
 
 			lock (_sockets) {
@@ -106,9 +106,12 @@ namespace p2pncs.Net
 #endif
 							usock._recvBytes += receiveSize;
 							usock._recvDgrams ++;
+							ushort ver = (ushort)((recvBuffer[0] << 8) | recvBuffer[1]);
+							if (ver != ProtocolVersion.Version)
+								continue; // drop
 							byte[] recvData = new byte[receiveSize - usock._header_size];
 							Buffer.BlockCopy (recvBuffer, usock._header_size, recvData, 0, recvData.Length);
-							IPAddress adrs = new IPAddress (recvBuffer.CopyRange (0, usock._header_size));
+							IPAddress adrs = new IPAddress (recvBuffer.CopyRange (2, usock._header_size - 2));
 							usock._pubIpVotingBox.Vote ((IPEndPoint)remoteEP, adrs);
 							DatagramReceiveEventArgs e = new DatagramReceiveEventArgs (recvData, recvData.Length, remoteEP);
 							ThreadPool.QueueUserWorkItem (new InvokeHelper (usock, e).Invoke, null);
@@ -176,9 +179,11 @@ namespace p2pncs.Net
 			int ret;
 			byte[] adrs_bytes = ((IPEndPoint)remoteEP).Address.GetAddressBytes ();
 			lock (_sendBuffer) {
-				Buffer.BlockCopy (adrs_bytes, 0, _sendBuffer, 0, adrs_bytes.Length);
-				Buffer.BlockCopy (buffer, offset, _sendBuffer, adrs_bytes.Length, size);
-				ret = _sock.SendTo (_sendBuffer, 0, adrs_bytes.Length + size, SocketFlags.None, remoteEP) - _header_size;
+				_sendBuffer[0] = (byte)(ProtocolVersion.Version >> 8);
+				_sendBuffer[1] = (byte)(ProtocolVersion.Version & 0xFF);
+				Buffer.BlockCopy (adrs_bytes, 0, _sendBuffer, 2, adrs_bytes.Length);
+				Buffer.BlockCopy (buffer, offset, _sendBuffer, _header_size, size);
+				ret = _sock.SendTo (_sendBuffer, 0, _header_size + size, SocketFlags.None, remoteEP) - _header_size;
 			}
 			if (ret != size) {
 				Logger.Log (LogLevel.Fatal, this, "Sent size is unexpected. except={0}, actual={1}", size, ret);
