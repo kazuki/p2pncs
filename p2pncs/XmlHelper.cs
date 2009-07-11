@@ -16,6 +16,7 @@
  */
 
 using System;
+using System.Text;
 using System.Xml;
 
 namespace p2pncs
@@ -40,6 +41,33 @@ namespace p2pncs
 				}
 			}
 			return element;
+		}
+
+		public static XmlText CreateTextNodeSafe (this XmlDocument doc, string text)
+		{
+			StringBuilder sb = null;
+			int start = 0;
+
+			// Check Character Range (http://www.w3.org/TR/REC-xml/#charsets)
+			for (int i = 0; i < text.Length; i ++) {
+				int c = (int)text[i];
+				if (c == 0x9 || c == 0xA || c == 0xD || (c >= 0x20 && c <= 0xD7FF) || (c >= 0xE000 && c <= 0xFFFD) || (c >= 0x10000 && c <= 0x10FFFF))
+					continue;
+
+				if (sb == null)
+					sb = new StringBuilder (text.Length);
+				if (i > start)
+					sb.Append (text, start, i - start);
+				start = i + 1;
+			}
+
+			if (sb == null) {
+				return doc.CreateTextNode (text);
+			} else {
+				if (text.Length > start)
+					sb.Append (text, start, text.Length - start);
+				return doc.CreateTextNode (sb.ToString ());
+			}
 		}
 	}
 }

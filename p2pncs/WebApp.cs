@@ -493,7 +493,7 @@ namespace p2pncs
 				SimpleBBSHeader content = header.Content as SimpleBBSHeader;
 				root.AppendChild (doc.CreateElement ("bbs", null, new[] {
 					doc.CreateElement ("title", null, new[] {
-						doc.CreateTextNode (content.Title)
+						doc.CreateTextNodeSafe (content.Title)
 					})
 				}));
 			}
@@ -513,10 +513,10 @@ namespace p2pncs
 					SimpleBBSRecord record_content = record.Content as SimpleBBSRecord;
 					record_element.AppendChild (doc.CreateElement ("bbs", null, new[] {
 						doc.CreateElement ("name", null, new[] {
-							doc.CreateTextNode (record_content.Name)
+							doc.CreateTextNodeSafe (record_content.Name)
 						}),
 						doc.CreateElement ("body", null, new[] {
-							doc.CreateTextNode (record_content.Body)
+							doc.CreateTextNodeSafe (record_content.Body)
 						})
 					}));
 				}
