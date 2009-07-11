@@ -54,7 +54,7 @@ namespace p2pncs
 		{
 			string value;
 			if (req.QueryData.TryGetValue (name, out value))
-				return HttpUtility.UrlDecode (value, Encoding.UTF8);
+				return value;
 			return string.Empty;
 		}
 
