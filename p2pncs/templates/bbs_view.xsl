@@ -34,6 +34,11 @@
 						<xsl:value-of select="/page/file/@lastManaged" />
 					</div>
 				</div>
+				<div id="bbsNavi">
+					<a href="/">トップページに戻る</a>
+					<xsl:text>, </xsl:text>
+					<a href="/bbs">掲示板一覧に戻る</a>
+				</div>
 				<div id="bbsBody">
 					<xsl:for-each select="/page/file/records/record">
 						<xsl:sort select="@created" order="ascending" />
