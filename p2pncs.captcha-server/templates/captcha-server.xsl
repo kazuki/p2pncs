@@ -9,7 +9,7 @@
 			</head>
 			<body>
 				<h1 style="font-size: x-large">
-					<xsl:text>p2pncs(RinGOch) </xsl:text>
+					<xsl:text>p2pncs </xsl:text>
 					<xsl:value-of select="/page/@ver" />
 				</h1>
 				<h2 style="font-size: large">認証サーバ情報</h2>

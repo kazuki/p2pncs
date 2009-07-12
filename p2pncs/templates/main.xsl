@@ -9,7 +9,7 @@
  
 	<xsl:template match="/page">
 		<h1>
-			<xsl:text>p2pncs(RinGOch) </xsl:text>
+			<xsl:text>p2pncs </xsl:text>
 			<xsl:value-of select="@ver" />
 		</h1>
 		<p>左のメニューから行いたい操作を選んでください。</p>
