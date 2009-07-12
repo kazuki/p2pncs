@@ -50,7 +50,7 @@
 			<div>
 				<h1>レコード</h1>
 				<xsl:for-each select="/page/file/records/record">
-					<xsl:sort select="bbs/posted" order="ascending" />
+					<xsl:sort select="@created" order="ascending" />
 
 					<div>
 						<div class="postName">
@@ -67,7 +67,7 @@
 							<xsl:text>] </xsl:text>
 							<xsl:value-of select="bbs/name" />
 							<xsl:text>: </xsl:text>
-							<xsl:value-of select="bbs/posted" />
+							<xsl:value-of select="@created" />
 						</div>
 						<div class="postBody">
 							<xsl:value-of select="bbs/body" />
