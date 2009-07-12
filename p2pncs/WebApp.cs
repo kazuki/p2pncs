@@ -88,6 +88,8 @@ namespace p2pncs
 				return ProcessManageTop (server, req, res);
 			if (absPath.StartsWith ("/manage/"))
 				return ProcessManageFile (server, req, res);
+			if (absPath == "/statistics")
+				return ProcessStatistics (server, req, res);
 			return ProcessStaticFile (server, req, res);
 		}
 
@@ -469,6 +471,44 @@ namespace p2pncs
 				throw new HttpException (HttpStatusCode.InternalServerError);
 
 			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, xsl_filename));
+		}
+
+		object ProcessStatistics (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
+		{
+			XmlDocument doc = CreateEmptyDocument ();
+			Statistics.Info info = _node.Statistics.GetInfo ();
+			double runningTime = _node.RunningTime;
+
+			XmlElement messaging = doc.CreateElement ("messaging");
+			messaging.SetAttribute ("total-inquiries", info.TotalInquiries.ToString ());
+			for (int i = 0; i < info.MessagingStatistics.Length; i ++) {
+				messaging.AppendChild (doc.CreateElement ("entry", new string[][] {
+					new string[] {"success", info.MessagingStatistics[i].Success.ToString () },
+					new string[] {"fail", info.MessagingStatistics[i].Fail.ToString () },
+					new string[] {"retries", info.MessagingStatistics[i].Retries.ToString () },
+					new string[] {"rtt-avg", info.MessagingStatistics[i].SD.Average.ToString () },
+					new string[] {"rtt-sd", info.MessagingStatistics[i].SD.ComputeStandardDeviation ().ToString () },
+				}, null));
+			}
+
+			doc.DocumentElement.AppendChild (doc.CreateElement ("statistics", null, new [] {
+				doc.CreateElement ("traffic", null, new [] {
+					doc.CreateElement ("total", new string[][] {
+						new string[] {"recv-bytes", info.TotalReceiveBytes.ToString ()},
+						new string[] {"recv-packets", info.TotalReceivePackets.ToString ()},
+						new string[] {"send-bytes", info.TotalSendBytes.ToString ()},
+						new string[] {"send-packets", info.TotalSendPackets.ToString ()},
+					}, null),
+					doc.CreateElement ("average", new string[][] {
+						new string[] {"recv-bytes", (info.TotalReceiveBytes / runningTime).ToString ()},
+						new string[] {"recv-packets", (info.TotalReceivePackets / runningTime).ToString ()},
+						new string[] {"send-bytes", (info.TotalSendBytes / runningTime).ToString ()},
+						new string[] {"send-packets", (info.TotalSendPackets / runningTime).ToString ()},
+					}, null)
+				}), messaging
+			}));
+
+			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "statistics.xsl"));
 		}
 
 		XmlElement CreateMergeableFileElement (XmlDocument doc, MergeableFileHeader header)

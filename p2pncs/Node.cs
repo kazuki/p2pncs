@@ -35,6 +35,7 @@ namespace p2pncs
 		public const int DefaultMessagingRetryBufferSize = 8192;
 		public const int DefaultMessagingDuplicationCheckBufferSize = 1024;
 
+		DateTime _start = DateTime.Now;
 		int _port;
 		IDatagramEventSocket _dgramSock;
 		IMessagingSocket _messagingSock;
@@ -46,6 +47,7 @@ namespace p2pncs
 		MassKeyDeliverer _mkd;
 		MMLC _mmlc;
 		PortOpenChecker _portChecker;
+		Statistics _statistics;
 
 		ECKeyPair _kbrPrivateKey;
 
@@ -56,9 +58,7 @@ namespace p2pncs
 			_dgramSock = bindedDgramSock;
 			_messagingSock = new MessagingSocket (_dgramSock, true, SymmetricKey.NoneKey, p2pncs.Serializer.Instance,
 				null, ints.MessagingInt, DefaultMessagingTimeout, DefaultMessagingRetry, DefaultMessagingRetryBufferSize, DefaultMessagingDuplicationCheckBufferSize);
-#if !DEBUG
-			TestLogger.SetupUdpMessagingSocket (_messagingSock);
-#endif
+			_statistics = new Statistics (_messagingSock);
 			_kbrPrivateKey = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 			_kbr = new SimpleIterativeRouter2 (Key.Create (_kbrPrivateKey), _messagingSock, new SimpleRoutingAlgorithm (), p2pncs.Serializer.Instance, true);
 			_portChecker = new PortOpenChecker (_kbr);
@@ -104,6 +104,10 @@ namespace p2pncs
 			get { return _mmlc; }
 		}
 
+		public Statistics Statistics {
+			get { return _statistics; }
+		}
+
 		public IPAddress GetCurrentPublicIPAddress ()
 		{
 			if (_dgramSock is UdpSocket)
@@ -115,6 +119,10 @@ namespace p2pncs
 
 		public int BindPort {
 			get { return _port; }
+		}
+
+		public double RunningTime {
+			get { return DateTime.Now.Subtract (_start).TotalSeconds; }
 		}
 
 		public void Dispose ()

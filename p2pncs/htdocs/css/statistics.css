@@ -1,0 +1,16 @@
+td, th {
+  padding: 0.5em;
+}
+
+tbody td {
+  text-align: right;
+}
+
+thead td {
+  text-align: center;
+}
+
+thead td, th {
+  background-color: #dfd;
+  font-weight: normal;
+}

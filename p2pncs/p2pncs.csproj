@@ -50,7 +50,7 @@
     <Compile Include="SimpleBBSHeader.cs" />
     <Compile Include="SimpleBBSParser.cs" />
     <Compile Include="SimpleBBSRecord.cs" />
-    <Compile Include="TestLogger.cs" />
+    <Compile Include="Statistics.cs" />
     <Compile Include="WebApp.cs" />
     <Compile Include="XmlHelper.cs" />
   </ItemGroup>

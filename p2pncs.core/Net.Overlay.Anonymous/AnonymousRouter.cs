@@ -1073,7 +1073,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					if (ar == null)
 						return;
 					ar.Complete (msg.Payload, this);
-					InvokeInquirySuccess (this, new InquiredEventArgs (ar.Request, msg.Payload, null, DateTime.Now - ar.TransmitTime));
+					InvokeInquirySuccess (this, new InquiredEventArgs (ar.Request, msg.Payload, null, DateTime.Now - ar.TransmitTime, ar.RetryCount));
 				}
 
 				public override void Send (object obj, EndPoint remoteEP)

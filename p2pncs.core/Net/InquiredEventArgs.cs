@@ -25,17 +25,19 @@ namespace p2pncs.Net
 		object _inq, _res;
 		EndPoint _ep;
 		TimeSpan _rtt;
+		int _retries;
 
-		public InquiredEventArgs (object inq, EndPoint ep) : this (inq, null, ep, TimeSpan.MinValue)
+		public InquiredEventArgs (object inq, EndPoint ep) : this (inq, null, ep, TimeSpan.MinValue, 0)
 		{
 		}
 
-		public InquiredEventArgs (object inq, object res, EndPoint ep, TimeSpan rtt)
+		public InquiredEventArgs (object inq, object res, EndPoint ep, TimeSpan rtt, int retries)
 		{
 			_inq = inq;
 			_res = res;
 			_ep = ep;
 			_rtt = rtt;
+			_retries = retries;
 		}
 
 		public object InquireMessage {
@@ -52,6 +54,10 @@ namespace p2pncs.Net
 
 		public TimeSpan RTT {
 			get { return _rtt; }
+		}
+
+		public int Retries {
+			get { return _retries; }
 		}
 	}
 }

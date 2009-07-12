@@ -46,7 +46,7 @@ namespace p2pncs.Simulation.VirtualNet
 				if (ar == null)
 					return;
 				ar.Complete (res.Message, this);
-				InvokeInquirySuccess (this, new InquiredEventArgs (ar.Request, res.Message, remoteEP, DateTime.Now - ar.TransmitTime));
+				InvokeInquirySuccess (this, new InquiredEventArgs (ar.Request, res.Message, remoteEP, DateTime.Now - ar.TransmitTime, ar.RetryCount));
 			} else if (obj is OneWayMessage) {
 				InvokeReceived (this, new ReceivedEventArgs ((obj as OneWayMessage).Message, remoteEP));
 			}
