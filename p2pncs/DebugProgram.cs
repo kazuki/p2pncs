@@ -61,13 +61,12 @@ namespace p2pncs
 
 		public void Run ()
 		{
-			int base_port = _config.GetValue<int> ("gw/bind/port");
+			int gw_port = _config.GetValue<int> ("gw/bind/port");
 
 			_network = new VirtualNetwork (LatencyTypes.Constant (20), 5, PacketLossType.Constant (0.05), Environment.ProcessorCount);
 
 			for (int i = 0; i < NODES; i++) {
-				AddNode (base_port);
-				if (i == 10) base_port = -1;
+				AddNode (i % (NODES / 10) == 0 ? gw_port ++ : -1);
 				Thread.Sleep (100);
 			}
 			Console.WriteLine ("{0} Nodes Inserted", NODES);
@@ -76,8 +75,14 @@ namespace p2pncs
 				lock (_list) {
 					if (_list.Count <= 10)
 						return;
-					int idx = _rnd.Next (10, _list.Count);
-					DebugNode removed = _list[idx];
+					int idx;
+					DebugNode removed;
+					while (true) {
+						idx = _rnd.Next (0, _list.Count);
+						removed = _list[idx];
+						if (!removed.IsGateway)
+							break;
+					}
 					try {
 						removed.Dispose ();
 					} catch {}
@@ -91,14 +96,14 @@ namespace p2pncs
 			_list[0].WaitOne ();
 		}
 
-		DebugNode AddNode (int base_port)
+		DebugNode AddNode (int gw_port)
 		{
 			IPAddress adrs = _ipgen.Next ();
 			VirtualDatagramEventSocket sock = new VirtualDatagramEventSocket (_network, adrs);
 			IPEndPoint pubEP = new IPEndPoint (adrs, 10000);
 			sock.Bind (new IPEndPoint (IPAddress.Any, pubEP.Port));
 			DebugNode node = new DebugNode (Interlocked.Increment (ref _nodeIdx));
-			node.Prepare (_ints, sock, base_port, pubEP);
+			node.Prepare (_ints, sock, gw_port, pubEP);
 			lock (_list) {
 				_list.Add (node);
 				_eps.Add (pubEP);
@@ -137,6 +142,7 @@ namespace p2pncs
 			WebApp _app;
 			Node _node;
 			int _idx;
+			bool _is_gw;
 
 			public DebugNode (int idx)
 			{
@@ -146,13 +152,14 @@ namespace p2pncs
 				_name = "Node-" + idx.ToString ("x");
 			}
 
-			public void Prepare (Interrupters ints, IDatagramEventSocket bindedDgramSock, int base_port, IPEndPoint ep)
+			public void Prepare (Interrupters ints, IDatagramEventSocket bindedDgramSock, int gw_port, IPEndPoint ep)
 			{
 				_name = _name + " (" + ep.ToString () + ")";
 				_node = new Node (ints, bindedDgramSock, string.Format ("db{0}{1}.sqlite", Path.DirectorySeparatorChar, _idx), ep.Port);
 				_app = new WebApp (_node);
-				if (base_port >= 0)
-					_server = HttpServer.CreateEmbedHttpServer (_app, null, true, true, false, base_port + _idx, 16);
+				_is_gw = gw_port > 0;
+				if (_is_gw)
+					_server = HttpServer.CreateEmbedHttpServer (_app, null, true, true, false, gw_port, 16);
 			}
 
 			public void WaitOne ()
@@ -162,6 +169,10 @@ namespace p2pncs
 
 			public Node Node {
 				get { return _node; }
+			}
+
+			public bool IsGateway {
+				get { return _is_gw; }
 			}
 
 			public void Dispose ()
