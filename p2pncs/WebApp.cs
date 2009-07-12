@@ -475,13 +475,18 @@ namespace p2pncs
 
 		object ProcessStatistics (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
 		{
+			return _xslTemplate.Render (server, req, res, CreateStatisticsXML (), Path.Combine (DefaultTemplatePath, "statistics.xsl"));
+		}
+
+		public XmlDocument CreateStatisticsXML ()
+		{
 			XmlDocument doc = CreateEmptyDocument ();
 			Statistics.Info info = _node.Statistics.GetInfo ();
 			double runningTime = _node.RunningTime;
 
 			XmlElement messaging = doc.CreateElement ("messaging");
 			messaging.SetAttribute ("total-inquiries", info.TotalInquiries.ToString ());
-			for (int i = 0; i < info.MessagingStatistics.Length; i ++) {
+			for (int i = 0; i < info.MessagingStatistics.Length; i++) {
 				messaging.AppendChild (doc.CreateElement ("entry", new string[][] {
 					new string[] {"success", info.MessagingStatistics[i].Success.ToString () },
 					new string[] {"fail", info.MessagingStatistics[i].Fail.ToString () },
@@ -493,7 +498,7 @@ namespace p2pncs
 
 			doc.DocumentElement.AppendChild (doc.CreateElement ("statistics", new string[][] {
 				new string[] {"running-time", Math.Floor (runningTime).ToString ()}
-			}, new [] {
+			}, new[] {
 				doc.CreateElement ("traffic", null, new [] {
 					doc.CreateElement ("total", new string[][] {
 						new string[] {"recv-bytes", info.TotalReceiveBytes.ToString ()},
@@ -532,8 +537,7 @@ namespace p2pncs
 				}, null),
 				messaging
 			}));
-
-			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "statistics.xsl"));
+			return doc;
 		}
 
 		XmlElement CreateMergeableFileElement (XmlDocument doc, MergeableFileHeader header)

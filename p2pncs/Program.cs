@@ -83,6 +83,7 @@ namespace p2pncs
 				Console.WriteLine ("正常に起動しました。");
 				Console.WriteLine ("ブラウザで http://127.0.0.1:{0}/ を開いてください。", _config.GetValue<int> ("gw/bind/port"));
 				app.ExitWaitHandle.WaitOne ();
+				app.CreateStatisticsXML ().Save ("statistics-" + DateTime.Now.ToString ("yyyyMMddHHmmss") + ".xml");
 			}
 		}
 #endif

@@ -11,7 +11,21 @@
 		<h1>統計情報</h1>
 		<p>
 			<xsl:text>起動時間: </xsl:text>
-			<xsl:value-of select="statistics/@running-time" />
+			<xsl:variable name="sec" select="statistics/@running-time" />
+			<xsl:if test="$sec &gt; 60">
+				<xsl:if test="$sec &gt; 3600">
+					<xsl:if test="$sec &gt; 86400">
+						<xsl:value-of select="floor($sec div 86400)" />
+						<xsl:text>日</xsl:text>
+					</xsl:if>
+					<xsl:value-of select="floor($sec div 3600) mod 24" />
+					<xsl:text>時間</xsl:text>
+				</xsl:if>
+				<xsl:value-of select="floor($sec div 60) mod 60" />
+				<xsl:text>分</xsl:text>
+			</xsl:if>
+			<xsl:value-of select="$sec mod 60" />
+			<xsl:text>秒</xsl:text>
 		</p>
 		<xsl:apply-templates select="statistics/*" />
 	</xsl:template>
