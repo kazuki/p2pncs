@@ -129,13 +129,11 @@ namespace p2pncs
 					}
 					if (list.Count > 0) {
 						new Thread (delegate () {
-							EndPoint[] eps = new EndPoint[1];
 							for (int i = 0; i < list.Count; i ++) {
 								if (list[i] is IPEndPoint) {
 									if ((list[i] as IPEndPoint).Address.Equals (_node.GetCurrentPublicIPAddress ()))
 										continue;
-									eps[0] = list[i];
-									_node.KeyBasedRouter.Join (eps);
+									_node.PortOpenChecker.Join (list[i]);
 								}
 							}
 							for (int i = 0; i < list.Count; i++) {
@@ -143,8 +141,7 @@ namespace p2pncs
 									IPAddress[] adrs_list = Dns.GetHostAddresses ((list[i] as DnsEndPoint).DNS);
 									for (int k = 0; k < adrs_list.Length; k ++) {
 										if (adrs_list[k].AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && !adrs_list[k].Equals (_node.GetCurrentPublicIPAddress ())) {
-											eps[0] = new IPEndPoint (adrs_list[k], (list[i] as DnsEndPoint).Port);
-											_node.KeyBasedRouter.Join (eps);
+											_node.PortOpenChecker.Join (new IPEndPoint (adrs_list[k], (list[i] as DnsEndPoint).Port));
 										}
 									}
 								}

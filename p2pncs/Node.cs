@@ -45,6 +45,7 @@ namespace p2pncs
 		ILocalHashTable _localHT;
 		MassKeyDeliverer _mkd;
 		MMLC _mmlc;
+		PortOpenChecker _portChecker;
 
 		ECKeyPair _kbrPrivateKey;
 
@@ -60,6 +61,7 @@ namespace p2pncs
 #endif
 			_kbrPrivateKey = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 			_kbr = new SimpleIterativeRouter2 (Key.Create (_kbrPrivateKey), _messagingSock, new SimpleRoutingAlgorithm (), p2pncs.Serializer.Instance, true);
+			_portChecker = new PortOpenChecker (_kbr);
 			_localHT = new OnMemoryLocalHashTable (_kbr, ints.DHTInt);
 			IMassKeyDelivererLocalStore mkdLocalStore = _localHT as IMassKeyDelivererLocalStore;
 			_dht = new SimpleDHT (_kbr, _messagingSock, _localHT);
@@ -84,6 +86,10 @@ namespace p2pncs
 
 		public IKeyBasedRouter KeyBasedRouter {
 			get { return _kbr; }
+		}
+
+		public PortOpenChecker PortOpenChecker {
+			get { return _portChecker; }
 		}
 
 		public IDistributedHashTable DistributedHashTable {

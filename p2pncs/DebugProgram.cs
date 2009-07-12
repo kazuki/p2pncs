@@ -68,11 +68,14 @@ namespace p2pncs
 			for (int i = 0; i < NODES; i++) {
 				AddNode (base_port);
 				if (i == 10) base_port = -1;
+				Thread.Sleep (100);
 			}
 			Console.WriteLine ("{0} Nodes Inserted", NODES);
 
 			_churnInt.AddInterruption (delegate () {
 				lock (_list) {
+					if (_list.Count <= 10)
+						return;
 					int idx = _rnd.Next (10, _list.Count);
 					DebugNode removed = _list[idx];
 					try {
@@ -101,12 +104,12 @@ namespace p2pncs
 				_eps.Add (pubEP);
 			}
 			if (_init_nodes == null) {
-				node.Node.KeyBasedRouter.Join (_eps.ToArray ());
+				node.Node.PortOpenChecker.Join (_eps.ToArray ());
 				_eps.Add (pubEP);
 				if (_eps.Count == 4)
 					_init_nodes = _eps.ToArray ();
 			} else {
-				node.Node.KeyBasedRouter.Join (_init_nodes);
+				node.Node.PortOpenChecker.Join (_init_nodes);
 			}
 			return node;
 		}
@@ -146,7 +149,7 @@ namespace p2pncs
 			public void Prepare (Interrupters ints, IDatagramEventSocket bindedDgramSock, int base_port, IPEndPoint ep)
 			{
 				_name = _name + " (" + ep.ToString () + ")";
-				_node = new Node (ints, bindedDgramSock, string.Format ("db{0}{1}.sqlite", Path.DirectorySeparatorChar, _idx));
+				_node = new Node (ints, bindedDgramSock, string.Format ("db{0}{1}.sqlite", Path.DirectorySeparatorChar, _idx), ep.Port);
 				_app = new WebApp (_node);
 				if (base_port >= 0)
 					_server = HttpServer.CreateEmbedHttpServer (_app, null, true, true, false, base_port + _idx, 16);
