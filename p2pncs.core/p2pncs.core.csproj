@@ -117,6 +117,8 @@
     <Compile Include="Security.Cryptography\IHashComputable.cs" />
     <Compile Include="Security.Cryptography\SymmetricAlgorithmType.cs" />
     <Compile Include="Security.Cryptography\SymmetricKey.cs" />
+    <Compile Include="StatisticsNoticeEventArgs.cs" />
+    <Compile Include="StatisticsNoticeType.cs" />
     <Compile Include="Threading\InterruptHandler.cs" />
     <Compile Include="Threading\IntervalInterrupter.cs" />
     <Compile Include="Threading\ReaderWriterLockWrapper.cs" />

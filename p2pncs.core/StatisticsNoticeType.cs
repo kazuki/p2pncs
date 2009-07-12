@@ -15,23 +15,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using System;
-using System.Net;
-
-namespace p2pncs.Net.Overlay
+namespace p2pncs
 {
-	public interface IKeyBasedRouter
+	public enum StatisticsNoticeType
 	{
-		event EventHandler<StatisticsNoticeEventArgs> StatisticsNotice;
-
-		void Join (EndPoint[] initialNodes);
-		void Close ();
-
-		IAsyncResult BeginRoute (Key dest, EndPoint[] firstHops, int numOfCandidates, int numOfSimultaneous, AsyncCallback callback, object state);
-		RoutingResult EndRoute (IAsyncResult ar);
-
-		IKeyBasedRoutingAlgorithm RoutingAlgorithm { get; }
-		IMessagingSocket MessagingSocket { get; }
-		Key SelftNodeId { get; }
+		Success,
+		Failure,
+		LifeTime,
+		RTT,
+		Hops
 	}
 }

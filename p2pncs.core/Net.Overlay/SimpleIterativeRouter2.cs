@@ -36,6 +36,8 @@ namespace p2pncs.Net.Overlay
 		const int dgramMaxSize = 1000;
 		int _maxNodeHandlesPerResponse;
 
+		public event EventHandler<StatisticsNoticeEventArgs> StatisticsNotice;
+
 		public SimpleIterativeRouter2 (Key self, IMessagingSocket sock, IKeyBasedRoutingAlgorithm algo, IFormatter formatter)
 			: this (self, sock, algo, formatter, false)
 		{
@@ -108,6 +110,17 @@ namespace p2pncs.Net.Overlay
 
 		#endregion
 
+		#region Misc
+		void InvokeStatisticsNotice (StatisticsNoticeEventArgs e)
+		{
+			if (StatisticsNotice == null)
+				return;
+			try {
+				StatisticsNotice (this, e);
+			} catch {}
+		}
+		#endregion
+
 		#region MessagingSocket Inquired Event Handlers
 		void MessagingSocket_Inquired_NextHopQuery (object sender, InquiredEventArgs e)
 		{
@@ -141,13 +154,13 @@ namespace p2pncs.Net.Overlay
 		class RoutingInfo : IAsyncResult
 		{
 			Key _dest;
-			IKeyBasedRouter _router;
+			SimpleIterativeRouter2 _router;
 			int _numOfCandidates, _numOfSimultaneous;
 			AsyncCallback _callback;
 			object _state;
 			bool _completed = false, _strictLookup;
 			ManualResetEvent _done = new ManualResetEvent (false);
-			DateTime _timeout;
+			DateTime _startTime, _timeout;
 			NextHopQuery _query1;
 			CloseNodeQuery _query2;
 
@@ -158,7 +171,7 @@ namespace p2pncs.Net.Overlay
 			RoutingResult _rr;
 			Dictionary<Key, HopSlotEntry> _keyMap = new Dictionary<Key,HopSlotEntry> ();
 
-			public RoutingInfo (IKeyBasedRouter router, Key dest, int numOfCandidates, int numOfSimultaneous, bool strict_mode, AsyncCallback callback, object state)
+			public RoutingInfo (SimpleIterativeRouter2 router, Key dest, int numOfCandidates, int numOfSimultaneous, bool strict_mode, AsyncCallback callback, object state)
 			{
 				_router = router;
 				_dest = dest;
@@ -168,6 +181,7 @@ namespace p2pncs.Net.Overlay
 				_state = state;
 				_strictLookup = strict_mode;
 				_slots = new HopSlot[router.RoutingAlgorithm.MaxRoutingLevel + 1];
+				_startTime = DateTime.Now;
 				_timeout = DateTime.Now + TimeSpan.FromSeconds (10);
 				_query1 = new NextHopQuery (router.SelftNodeId, dest, numOfSimultaneous * 2, numOfCandidates);
 				_query2 = new CloseNodeQuery (router.SelftNodeId, dest, numOfCandidates);
@@ -457,11 +471,15 @@ namespace p2pncs.Net.Overlay
 			void Success (NodeHandle[] resultNodes, int hops)
 			{
 				Done (new RoutingResult (resultNodes, hops));
+				_router.InvokeStatisticsNotice (StatisticsNoticeEventArgs.CreateSuccess ());
+				_router.InvokeStatisticsNotice (StatisticsNoticeEventArgs.CreateRTT (DateTime.Now.Subtract (_startTime)));
+				_router.InvokeStatisticsNotice (StatisticsNoticeEventArgs.CreateHops (hops));
 			}
 
 			void Fail (FailReason reason, int hops)
 			{
 				Done (new RoutingResult (reason, hops));
+				_router.InvokeStatisticsNotice (StatisticsNoticeEventArgs.CreateFailure ());
 			}
 
 			void Done (RoutingResult result)

@@ -58,7 +58,6 @@ namespace p2pncs
 			_dgramSock = bindedDgramSock;
 			_messagingSock = new MessagingSocket (_dgramSock, true, SymmetricKey.NoneKey, p2pncs.Serializer.Instance,
 				null, ints.MessagingInt, DefaultMessagingTimeout, DefaultMessagingRetry, DefaultMessagingRetryBufferSize, DefaultMessagingDuplicationCheckBufferSize);
-			_statistics = new Statistics (_messagingSock);
 			_kbrPrivateKey = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 			_kbr = new SimpleIterativeRouter2 (Key.Create (_kbrPrivateKey), _messagingSock, new SimpleRoutingAlgorithm (), p2pncs.Serializer.Instance, true);
 			_portChecker = new PortOpenChecker (_kbr);
@@ -69,6 +68,7 @@ namespace p2pncs
 			ints.KBRStabilizeInt.AddInterruption (Stabilize);
 			_mkd = new MassKeyDeliverer (_dht, mkdLocalStore, ints.MassKeyDeliverTimerInt);
 			_mmlc = new MMLC (_anonymous, _dht, mkdLocalStore, db_path, ints.StreamSocketTimeoutInt, ints.DFSRePutTimerInt);
+			_statistics = new Statistics ((AnonymousRouter)_anonymous, _mmlc);
 		}
 
 		void Stabilize ()

@@ -491,7 +491,9 @@ namespace p2pncs
 				}, null));
 			}
 
-			doc.DocumentElement.AppendChild (doc.CreateElement ("statistics", null, new [] {
+			doc.DocumentElement.AppendChild (doc.CreateElement ("statistics", new string[][] {
+				new string[] {"running-time", Math.Floor (runningTime).ToString ()}
+			}, new [] {
 				doc.CreateElement ("traffic", null, new [] {
 					doc.CreateElement ("total", new string[][] {
 						new string[] {"recv-bytes", info.TotalReceiveBytes.ToString ()},
@@ -505,7 +507,30 @@ namespace p2pncs
 						new string[] {"send-bytes", (info.TotalSendBytes / runningTime).ToString ()},
 						new string[] {"send-packets", (info.TotalSendPackets / runningTime).ToString ()},
 					}, null)
-				}), messaging
+				}),
+				doc.CreateElement ("kbr", new string[][] {
+					new string[] {"success", info.KBR_Success.ToString ()},
+					new string[] {"fail", info.KBR_Failures.ToString ()},
+					new string[] {"hops-avg", info.KBR_Hops.Average.ToString ()},
+					new string[] {"hops-sd", info.KBR_Hops.ComputeStandardDeviation ().ToString ()},
+					new string[] {"rtt-avg", info.KBR_RTT.Average.ToString ()},
+					new string[] {"rtt-sd", info.KBR_RTT.ComputeStandardDeviation ().ToString ()}
+				}, null),
+				doc.CreateElement ("mcr", new string[][] {
+					new string[] {"success", info.MCR_Success.ToString ()},
+					new string[] {"fail", info.MCR_Failures.ToString ()},
+					new string[] {"lifetime-avg", info.MCR_LifeTime.Average.ToString ()},
+					new string[] {"lifetime-sd", info.MCR_LifeTime.ComputeStandardDeviation ().ToString ()}
+				}, null),
+				doc.CreateElement ("ac", new string[][] {
+					new string[] {"success", info.AC_Success.ToString ()},
+					new string[] {"fail", info.AC_Failures.ToString ()}
+				}, null),
+				doc.CreateElement ("mmlc", new string[][] {
+					new string[] {"success", info.MMLC_Success.ToString ()},
+					new string[] {"fail", info.MMLC_Failures.ToString ()}
+				}, null),
+				messaging
 			}));
 
 			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "statistics.xsl"));

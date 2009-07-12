@@ -17,7 +17,11 @@
 
 using System.Collections.Generic;
 using System.Net;
+using System.Threading;
 using p2pncs.Net;
+using p2pncs.Net.Overlay;
+using p2pncs.Net.Overlay.Anonymous;
+using p2pncs.Net.Overlay.DFS.MMLC;
 using p2pncs.Simulation;
 
 namespace p2pncs
@@ -27,13 +31,31 @@ namespace p2pncs
 		IMessagingSocket _sock;
 		Dictionary<IPAddress, EndPointInfo> _messagingStatistics = new Dictionary<IPAddress, EndPointInfo> ();
 
-		public Statistics (IMessagingSocket sock)
+		// KBR
+		long _kbrSuccess = 0, _kbrFailures = 0;
+		StandardDeviation _kbrRTT = new StandardDeviation (false);
+		StandardDeviation _kbrHops = new StandardDeviation (false);
+
+		// MCR
+		StandardDeviation _mcrLifeTime = new StandardDeviation (false);
+		long _mcrSuccess = 0, _mcrFailures = 0;
+
+		// AC
+		long _acSuccess = 0, _acFailures = 0;
+
+		// MMLC
+		long _mmlcSuccess = 0, _mmlcFailures = 0;
+
+		public Statistics (AnonymousRouter anonRouter, MMLC mmlc)
 		{
-			SetupMessagingSocket (sock);
-			_sock = sock;
+			_sock = anonRouter.KeyBasedRouter.MessagingSocket;
+			Setup (_sock);
+			Setup (anonRouter.KeyBasedRouter);
+			Setup (anonRouter);
+			Setup (mmlc);
 		}
 
-		void SetupMessagingSocket (IMessagingSocket sock)
+		void Setup (IMessagingSocket sock)
 		{
 			sock.InquirySuccess += delegate (object sender, InquiredEventArgs e) {
 				IPEndPoint ipep = e.EndPoint as IPEndPoint;
@@ -66,6 +88,68 @@ namespace p2pncs
 			};
 		}
 
+		void Setup (IKeyBasedRouter router)
+		{
+			router.StatisticsNotice += delegate (object sender, StatisticsNoticeEventArgs e) {
+				switch (e.Type) {
+					case StatisticsNoticeType.Success:
+						Interlocked.Increment (ref _kbrSuccess);
+						break;
+					case StatisticsNoticeType.Failure:
+						Interlocked.Increment (ref _kbrFailures);
+						break;
+					case StatisticsNoticeType.Hops:
+						_kbrHops.AddSample (e.IntValue);
+						break;
+					case StatisticsNoticeType.RTT:
+						_kbrRTT.AddSample ((float)e.TimeSpan.TotalMilliseconds);
+						break;
+				}
+			};
+		}
+
+		void Setup (AnonymousRouter router)
+		{
+			router.MCRStatisticsNotice += delegate (object sender, StatisticsNoticeEventArgs args) {
+				switch (args.Type) {
+					case StatisticsNoticeType.Success:
+						Interlocked.Increment (ref _mcrSuccess);
+						break;
+					case StatisticsNoticeType.Failure:
+						Interlocked.Increment (ref _mcrFailures);
+						break;
+					case StatisticsNoticeType.LifeTime:
+						_mcrLifeTime.AddSample ((float)args.TimeSpan.TotalSeconds);
+						break;
+				}
+			};
+
+			router.ACStatisticsNotice += delegate (object sender, StatisticsNoticeEventArgs args) {
+				switch (args.Type) {
+					case StatisticsNoticeType.Success:
+						Interlocked.Increment (ref _acSuccess);
+						break;
+					case StatisticsNoticeType.Failure:
+						Interlocked.Increment (ref _acFailures);
+						break;
+				}
+			};
+		}
+
+		void Setup (MMLC mmlc)
+		{
+			mmlc.MergeStatisticsNotice += delegate (object sender, StatisticsNoticeEventArgs args) {
+				switch (args.Type) {
+					case StatisticsNoticeType.Success:
+						Interlocked.Increment (ref _mmlcSuccess);
+						break;
+					case StatisticsNoticeType.Failure:
+						Interlocked.Increment (ref _mmlcFailures);
+						break;
+				}
+			};
+		}
+
 		public Info GetInfo ()
 		{
 			Info info = new Info ();
@@ -77,6 +161,17 @@ namespace p2pncs
 			info.TotalReceivePackets = _sock.BaseSocket.ReceivedDatagrams;
 			info.TotalSendBytes = _sock.BaseSocket.SentBytes;
 			info.TotalSendPackets = _sock.BaseSocket.SentDatagrams;
+			info.KBR_Success = _kbrSuccess;
+			info.KBR_Failures = _kbrFailures;
+			info.KBR_RTT = _kbrRTT;
+			info.KBR_Hops = _kbrHops;
+			info.MCR_Success = _mcrSuccess;
+			info.MCR_Failures = _mcrFailures;
+			info.MCR_LifeTime = _mcrLifeTime;
+			info.AC_Success = _acSuccess;
+			info.AC_Failures = _acFailures;
+			info.MMLC_Success = _mmlcSuccess;
+			info.MMLC_Failures = _mmlcFailures;
 			return info;
 		}
 
@@ -88,6 +183,17 @@ namespace p2pncs
 			public long TotalReceivePackets;
 			public long TotalSendBytes;
 			public long TotalSendPackets;
+			public long KBR_Success;
+			public long KBR_Failures;
+			public StandardDeviation KBR_Hops;
+			public StandardDeviation KBR_RTT;
+			public long MCR_Success;
+			public long MCR_Failures;
+			public StandardDeviation MCR_LifeTime;
+			public long AC_Success;
+			public long AC_Failures;
+			public long MMLC_Success;
+			public long MMLC_Failures;
 		}
 
 		public class EndPointInfo

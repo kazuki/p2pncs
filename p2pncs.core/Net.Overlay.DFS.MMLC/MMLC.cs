@@ -67,6 +67,8 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		delegate void CaptchaSegmentReceived (CaptchaChallengeSegment seg);
 		Dictionary<int, CaptchaSegmentReceived> _captcha_local = new Dictionary<int,CaptchaSegmentReceived> ();
 
+		public event EventHandler<StatisticsNoticeEventArgs> MergeStatisticsNotice;
+
 		const int MaxDatagramSize = 500;
 
 		public MMLC (IAnonymousRouter ar, IDistributedHashTable dht, IMassKeyDelivererLocalStore mkdStore, string db_path, IntervalInterrupter anonStrmSockInt, IntervalInterrupter reputInt)
@@ -757,6 +759,15 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			}
 		}
 
+		void InvokeMergeStatisticsNotice (StatisticsNoticeEventArgs e)
+		{
+			if (MergeStatisticsNotice == null)
+				return;
+			try {
+				MergeStatisticsNotice (this, e);
+			} catch {}
+		}
+
 		public void Dispose ()
 		{
 			_ar.RemoveBoundaryNodeReceivedEventHandler (typeof (DHTLookupRequest));
@@ -991,6 +1002,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					anon_sock.InitializedEventHandlers ();
 					InitiatorSideMergeProcess (sock, anon_sock.PayloadAtEstablishing as MergeableFileHeader);
 				} catch (Exception exception) {
+					_mmlc.InvokeMergeStatisticsNotice (StatisticsNoticeEventArgs.CreateFailure ());
 					Logger.Log (LogLevel.Trace, this, "I: マージ中に例外. {0}", exception.ToString ());
 				} finally {
 					done.Set ();
@@ -1060,6 +1072,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				Logger.Log (LogLevel.Trace, this, "I: マージ中");
 				Merge (records);
 				Logger.Log (LogLevel.Trace, this, "I: マージ完了!!!");
+				_mmlc.InvokeMergeStatisticsNotice (StatisticsNoticeEventArgs.CreateSuccess ());
 			}
 
 			void AccepterSideProcess ()
@@ -1069,6 +1082,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				try {
 					AccepterSideMergeProcess (sock, other_header);
 				} catch (Exception exception) {
+					_mmlc.InvokeMergeStatisticsNotice (StatisticsNoticeEventArgs.CreateFailure ());
 					Logger.Log (LogLevel.Trace, this, "A: マージ中に例外. {0}", exception.ToString ());
 				} finally {
 					try {
@@ -1131,6 +1145,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				Logger.Log (LogLevel.Trace, this, "A: マージ中");
 				Merge (records);
 				Logger.Log (LogLevel.Trace, this, "A: マージ完了!!!");
+				_mmlc.InvokeMergeStatisticsNotice (StatisticsNoticeEventArgs.CreateSuccess ());
 			}
 
 			void SendMessage (StreamSocket sock, object msg)

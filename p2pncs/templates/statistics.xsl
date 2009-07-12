@@ -9,8 +9,11 @@
  
 	<xsl:template match="/page">
 		<h1>統計情報</h1>
-		<xsl:apply-templates select="statistics/traffic" />
-		<xsl:apply-templates select="statistics/messaging" />
+		<p>
+			<xsl:text>起動時間: </xsl:text>
+			<xsl:value-of select="statistics/@running-time" />
+		</p>
+		<xsl:apply-templates select="statistics/*" />
 	</xsl:template>
 
 	<xsl:template match="traffic">
@@ -53,12 +56,17 @@
 		<table>
 			<thead>
 				<tr>
-					<td>Index</td>
-					<td>RTT-Avg</td>
-					<td>RTT-SD</td>
-					<td>Success</td>
-					<td>Failure</td>
-					<td>Retries</td>
+					<td rowspan="2" />
+					<td colspan="2">RTT</td>
+					<td colspan="4">問い合わせ</td>
+				</tr>
+				<tr>
+					<td>平均</td>
+					<td>分散</td>
+					<td>成功数</td>
+					<td>失敗数</td>
+					<td>成功率</td>
+					<td>再送数</td>
 				</tr>
 			</thead>
 			<tbody>
@@ -69,9 +77,111 @@
 						<td>±<xsl:value-of select="floor(@rtt-sd)" />ms</td>
 						<td><xsl:value-of select="@success" /></td>
 						<td><xsl:value-of select="@fail" /></td>
+						<td><xsl:value-of select="floor(@success * 100 div (@success + @fail))" /> %</td>
 						<td><xsl:value-of select="@retries" /></td>
 					</tr>
 				</xsl:for-each>
+			</tbody>
+		</table>
+	</xsl:template>
+
+	<xsl:template match="kbr">
+		<h2>Key-based Router</h2>
+		<table>
+			<thead>
+				<tr>
+					<td colspan="3">問い合わせ</td>
+					<td colspan="2">ホップ数</td>
+					<td colspan="2">RTT</td>
+				</tr>
+				<tr>
+					<td>成功数</td>
+					<td>失敗数</td>
+					<td>成功率</td>
+					<td>平均</td>
+					<td>分散</td>
+					<td>平均</td>
+					<td>分散</td>
+				</tr>
+			</thead>
+			<tbody>
+				<tr>
+					<td><xsl:value-of select="@success" /></td>
+					<td><xsl:value-of select="@fail" /></td>
+					<td><xsl:value-of select="floor(@success * 100 div (@success + @fail))" /> %</td>
+					<td><xsl:value-of select="floor(@hops-avg)" /></td>
+					<td>±<xsl:value-of select="floor(@hops-sd)" /></td>
+					<td><xsl:value-of select="floor(@rtt-avg)" /> msec</td>
+					<td>±<xsl:value-of select="floor(@rtt-sd)" /> msec</td>
+				</tr>
+			</tbody>
+		</table>
+	</xsl:template>
+
+	<xsl:template match="mcr">
+		<h2>多重暗号経路</h2>
+		<table>
+			<thead>
+				<tr>
+					<td rowspan="2">構築数</td>
+					<td rowspan="2">成功率</td>
+					<td colspan="2">生存時間</td>
+				</tr>
+				<tr>
+					<td>平均</td>
+					<td>分散</td>
+				</tr>
+			</thead>
+			<tbody>
+				<tr>
+					<td><xsl:value-of select="@success" /></td>
+					<td><xsl:value-of select="floor(@success * 100 div (@success + @fail))"/> %</td>
+					<td><xsl:value-of select="floor(@lifetime-avg)" /> sec</td>
+					<td>±<xsl:value-of select="floor(@lifetime-sd)" /> sec</td>
+				</tr>
+			</tbody>
+		</table>
+	</xsl:template>
+
+	<xsl:template match="ac">
+		<h2>匿名コネクション</h2>
+		<table>
+			<thead>
+				<tr>
+					<td>確立数</td>
+					<td>確立失敗数</td>
+					<td>確立成功率</td>
+				</tr>
+			</thead>
+			<tbody>
+				<tr>
+					<td><xsl:value-of select="@success" /></td>
+					<td><xsl:value-of select="@fail" /></td>
+					<td><xsl:value-of select="floor(@success * 100 div (@success + @fail))"/> %</td>
+				</tr>
+			</tbody>
+		</table>
+	</xsl:template>
+
+	<xsl:template match="ac">
+		<h2>マージ可能及び管理可能な分散ファイルシステム</h2>
+		<table>
+			<thead>
+				<tr>
+					<td colspan="3">マージ</td>
+				</tr>
+				<tr>
+					<td>成功数</td>
+					<td>失敗数</td>
+					<td>成功率</td>
+				</tr>
+			</thead>
+			<tbody>
+				<tr>
+					<td><xsl:value-of select="@success" /></td>
+					<td><xsl:value-of select="@fail" /></td>
+					<td><xsl:value-of select="floor(@success * 100 div (@success + @fail))"/> %</td>
+				</tr>
 			</tbody>
 		</table>
 	</xsl:template>

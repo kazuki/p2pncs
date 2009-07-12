@@ -36,6 +36,8 @@ namespace p2pncs.Net.Overlay
 		const int dgramMaxSize = 1000;
 		int _maxNodeHandlesPerResponse;
 
+		public event EventHandler<StatisticsNoticeEventArgs> StatisticsNotice;
+
 		public SimpleIterativeRouter (Key self, IMessagingSocket sock, IKeyBasedRoutingAlgorithm algo, IFormatter formatter)
 		{
 			_selfId = self;

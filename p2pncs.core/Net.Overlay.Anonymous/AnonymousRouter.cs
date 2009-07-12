@@ -110,6 +110,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 		DuplicationChecker<DupCheckLabel> _terminalDupChecker = new DuplicationChecker<long> (DefaultDuplicationCheckerBufferSize);
 		DuplicationChecker<DupCheckLabel> _interterminalDupChecker = new DuplicationChecker<long> (DefaultDuplicationCheckerBufferSize);
 
+		public event EventHandler<StatisticsNoticeEventArgs> MCRStatisticsNotice;
+		public event EventHandler<StatisticsNoticeEventArgs> ACStatisticsNotice;
+
 		static AnonymousRouter ()
 		{
 			int payloadSize = 1000;
@@ -283,6 +286,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 			_routingMapLock.Dispose ();
 			_connectionMapLock.Dispose ();
 			_boundaryHandlerLock.Dispose ();
+
+			MCRStatisticsNotice = null;
+			ACStatisticsNotice = null;
 		}
 
 		#endregion
@@ -836,6 +842,22 @@ namespace p2pncs.Net.Overlay.Anonymous
 			byte[] raw = RNG.GetRNGBytes (8);
 			return BitConverter.ToInt64 (raw, 0);
 		}
+		public void InvokeMCRStatisticsNotice (StatisticsNoticeEventArgs e)
+		{
+			if (MCRStatisticsNotice != null) {
+				try {
+					MCRStatisticsNotice (this, e);
+				} catch {}
+			}
+		}
+		public void InvokeACStatisticsNotice (StatisticsNoticeEventArgs e)
+		{
+			if (ACStatisticsNotice != null) {
+				try {
+					ACStatisticsNotice (this, e);
+				} catch { }
+			}
+		}
 		#endregion
 
 		#region SubscribeInfo
@@ -935,6 +957,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					_establishedList.Add (info);
 					UpdateStatus ();
 				}
+				_router.InvokeMCRStatisticsNotice (StatisticsNoticeEventArgs.CreateSuccess ());
 				Logger.Log (LogLevel.Trace, this, "Established");
 			}
 
@@ -1001,11 +1024,16 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public void Close (StartPointInfo info)
 			{
+				bool establishFail, disconnect;
 				lock (_listLock) {
-					_establishingList.Remove (info);
-					_establishedList.Remove (info);
+					establishFail = _establishingList.Remove (info);
+					disconnect = _establishedList.Remove (info);
 					UpdateStatus ();
 				}
+				if (establishFail)
+					_router.InvokeMCRStatisticsNotice (StatisticsNoticeEventArgs.CreateFailure ());
+				if (disconnect)
+					_router.InvokeMCRStatisticsNotice (StatisticsNoticeEventArgs.CreateLifeTime (DateTime.Now.Subtract (info.StartTime)));
 				CheckNumberOfEstablishedRoutes ();
 			}
 
@@ -1123,6 +1151,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			DateTime _nextPingTime = DateTime.MaxValue;
 			SubscribeInfo _subscribe;
 			RouteInfo _routeInfo = null;
+			DateTime _startTime;
 
 			public StartPointInfo (SubscribeInfo subscribe, NodeHandle[] relayNodes, SymmetricKey[] relayKeys, RouteLabel label)
 			{
@@ -1130,6 +1159,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_relayNodes = relayNodes;
 				_relayKeys = relayKeys;
 				_label = label;
+				_startTime = DateTime.Now;
 			}
 
 			public byte[] CreateEstablishData (Key recipientId, ECDomainNames domain)
@@ -1146,6 +1176,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_termEP = new AnonymousEndPoint (_relayNodes[_relayNodes.Length - 1].EndPoint, msg.Label);
 				_nextPingTime = DateTime.Now + MCR_AliveCheckScheduleInterval;
 				_subscribe.Established (this);
+				_startTime = DateTime.Now;
 			}
 
 			public void SendMessage (IMessagingSocket sock, object msg, bool useInquiry)
@@ -1193,6 +1224,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public DateTime NextPingTime {
 				get { return _nextPingTime; }
+			}
+
+			public DateTime StartTime {
+				get { return _startTime; }
 			}
 
 			public AnonymousEndPoint TerminalEndPoint {
@@ -1500,6 +1535,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				}
 				_ar.Done ();
 				_ar = null;
+				_router.InvokeACStatisticsNotice (StatisticsNoticeEventArgs.CreateSuccess ());
 			}
 
 			public void Start ()
@@ -1633,6 +1669,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					_sock.Dispose_Internal ();
 				} else if (_ar != null && !_ar.IsCompleted) {
 					_ar.Done ();
+					_router.InvokeACStatisticsNotice (StatisticsNoticeEventArgs.CreateFailure ());
 				}
 			}
 
