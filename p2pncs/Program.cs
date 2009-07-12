@@ -47,21 +47,15 @@ namespace p2pncs
 #endif
 		}
 
-#if !DEBUG
-		public Program ()
+		public static bool LoadConfig (XmlConfig config)
 		{
-			LoadConfig (_config);
-		}
-#endif
-
-		public static void LoadConfig (XmlConfig config)
-		{
-			bool saveFlag = false;
+			bool saveFlag = false, exists = false;
 			config.Define<int> ("net/bind/port", IntParser.Instance, new IntRangeValidator (1, ushort.MaxValue), 65000);
 			config.Define<int> ("gw/bind/port", IntParser.Instance, new IntRangeValidator (1, ushort.MaxValue), 8080);
 			try {
-				saveFlag = !File.Exists (CONFIG_PATH);
-				if (!saveFlag)
+				exists = File.Exists (CONFIG_PATH);
+				saveFlag = !exists;
+				if (exists)
 					config.Load (CONFIG_PATH);
 			} catch {
 				saveFlag = true;
@@ -69,11 +63,21 @@ namespace p2pncs
 
 			if (saveFlag)
 				config.Save (CONFIG_PATH);
+			return exists;
 		}
 
 #if !DEBUG
 		public void Run ()
 		{
+			if (!LoadConfig (_config)) {
+				Console.WriteLine ("設定ファイルを保存しました。");
+				Console.WriteLine ("README.txt を参考に設定ファイルを編集してください。");
+				Console.WriteLine ();
+				Console.WriteLine ("エンターキーを押すと終了します");
+				Console.ReadLine ();
+				return;
+			}
+
 			IDatagramEventSocket dgramSock = UdpSocket.CreateIPv4 ();
 			dgramSock.Bind (new IPEndPoint (IPAddress.Any, _config.GetValue<int> ("net/bind/port")));
 			using (Interrupters ints = new Interrupters ())
