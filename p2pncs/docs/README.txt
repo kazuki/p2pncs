@@ -29,6 +29,12 @@
   ・ AMD Athlon64 X2 2GHz 以上
   暗号処理の関係上、64bit環境の方が32bit環境よりも高速に動作します。
 
+  Webインターフェイスを利用するためには以下のブラウザの最新版が必要です
+  ・ Microsoft Internet Explorer
+  ・ Mozilla Firefox
+  ・ Opera
+  ・ Google Chrome
+
 3. インストール方法
 
   1. アーカイブ (7z形式またはZip形式で提供) を解凍します。
