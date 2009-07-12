@@ -66,7 +66,7 @@ namespace p2pncs.captcha_server
 		{
 			XmlDocument doc = new XmlDocument ();
 			doc.AppendChild (doc.CreateElement ("page"));
-			doc.DocumentElement.SetAttribute ("ver", System.Reflection.Assembly.GetCallingAssembly ().GetName ().Version.ToString ());
+			doc.DocumentElement.SetAttribute ("ver", System.Reflection.Assembly.GetEntryAssembly ().GetName ().Version.ToString ());
 			
 			XmlElement publicKey = doc.CreateElement ("public-key");
 			publicKey.AppendChild (doc.CreateTextNode (Convert.ToBase64String (_captcha.PublicKey)));

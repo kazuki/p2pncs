@@ -103,7 +103,7 @@ namespace p2pncs
 		object ProcessMainPage (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
 		{
 			XmlDocument doc = CreateEmptyDocument ();
-			doc.DocumentElement.SetAttribute ("ver", System.Reflection.Assembly.GetCallingAssembly ().GetName ().Version.ToString ());
+			doc.DocumentElement.SetAttribute ("ver", System.Reflection.Assembly.GetEntryAssembly ().GetName ().Version.ToString ());
 			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "main.xsl"));
 		}
 
