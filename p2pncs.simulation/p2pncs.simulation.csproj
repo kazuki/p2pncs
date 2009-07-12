@@ -37,6 +37,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="..\AssemblyVersionInfo.cs" />
     <Compile Include="AssemblyInfo.cs" />
     <Compile Include="OSTimerPrecision.cs" />
     <Compile Include="RandomIPAddressGenerator.cs" />

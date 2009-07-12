@@ -46,6 +46,7 @@
     <Reference Include="System.Drawing" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="..\AssemblyVersionInfo.cs" />
     <Compile Include="AssemblyInfo.cs" />
     <Compile Include="Logger.cs" />
     <Compile Include="Net.Overlay.Anonymous\AcceptedEventArgs.cs" />

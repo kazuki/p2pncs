@@ -35,6 +35,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="..\AssemblyVersionInfo.cs" />
     <Compile Include="CaptchaApp.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="AssemblyInfo.cs" />
