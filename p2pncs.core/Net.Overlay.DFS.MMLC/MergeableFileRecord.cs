@@ -17,6 +17,8 @@
 
 using System;
 using System.Security.Cryptography;
+using openCrypto.EllipticCurve;
+using openCrypto.EllipticCurve.Signature;
 using p2pncs.Security.Cryptography;
 
 namespace p2pncs.Net.Overlay.DFS.MMLC
@@ -77,6 +79,32 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					algo.TransformBlock (_publicKey.GetByteArray (), 0, _publicKey.KeyBytes, null, 0);
 				algo.TransformFinalBlock (tmp, 0, 0);
 				_hash = new Key (algo.Hash);
+			}
+		}
+
+		public bool Verify (MergeableFileHeader header)
+		{
+			if (_auth == null && _sign == null)
+				return true;
+
+			try {
+				byte[] hash = _hash.GetByteArray ();
+				if (_auth != null) {
+					ECKeyPair pubKey = (_auth_idx == byte.MaxValue ? header.Key.ToECPublicKey () : header.AuthServers[_auth_idx].PublicKey.ToECPublicKey ());
+					ECDSA ecdsa = new ECDSA (pubKey);
+					if (!ecdsa.VerifyHash (hash, _auth))
+						return false;
+				}
+
+				if (_sign != null) {
+					ECDSA ecdsa = new ECDSA (_publicKey.ToECPublicKey ());
+					if (!ecdsa.VerifyHash (hash, _sign))
+						return false;
+				}
+
+				return true;
+			} catch {
+				return false;
 			}
 		}
 

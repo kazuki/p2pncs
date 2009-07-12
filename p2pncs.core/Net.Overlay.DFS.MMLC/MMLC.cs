@@ -1008,9 +1008,15 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 			void InitiatorSideMergeProcess (StreamSocket sock, MergeableFileHeader header)
 			{
-				if (header == null || !(_key == null ? _cur_header.Key : _key).Equals (header.Key) || !header.Verify ()) {
-					Logger.Log (LogLevel.Trace, this, "I: 不正なヘッダだよん");
+				if (header == null || !(_key == null ? _cur_header.Key : _key).Equals (header.Key)) {
+					Logger.Log (LogLevel.Error, this, "I: 不正なヘッダを受信したのでマージ処理を中断します");
 					return;
+				}
+				if (_cur_header == null || _cur_header.LastManagedTime < header.LastManagedTime) {
+					if (!header.Verify ()) {
+						Logger.Log (LogLevel.Error, this, "I: 受信したヘッダの署名の検証に失敗したので、マージを中断します。");
+						return;
+					}
 				}
 				Merge (header, true);
 				Logger.Log (LogLevel.Trace, this, "I: ヘッダを受信");
@@ -1079,8 +1085,13 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			{
 				Logger.Log (LogLevel.Trace, this, "A: START");
 				if (other_header != null) {
-					if (_cur_header.LastManagedTime < other_header.LastManagedTime && other_header.Verify ())
-							Merge (other_header, false);
+					if (_cur_header.LastManagedTime < other_header.LastManagedTime) {
+						if (!other_header.Verify ()) {
+							Logger.Log (LogLevel.Error, this, "A: 受信したヘッダの署名の検証に失敗したので、マージを中断します。");
+							return;
+						}
+						Merge (other_header, false);
+					}
 
 					if (_cur_header.RecordsetHash.Equals (other_header.RecordsetHash)) {
 						Logger.Log (LogLevel.Trace, this, "A: 同じデータなのでマージ処理終了");
@@ -1194,6 +1205,14 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					Key hash = _cur_header.RecordsetHash;
 					for (int i = 0; i < records.Records.Length; i ++) {
 						try {
+							if (records.Records[i].LastManagedTime != _cur_header.LastManagedTime) {
+								Logger.Log (LogLevel.Error, this, "[BUG] マージしているレコードの最終管理更新日時がヘッダよりも古いです。該当レコードを無視します。");
+								continue;
+							}
+							if (!records.Records[i].Verify (_cur_header)) {
+								Logger.Log (LogLevel.Error, this, "レコードの署名が不正です。該当レコードを無視します。");
+								continue;
+							}
 							_mmlc.Insert (transaction, records.Records[i], _parser, _header_id);
 							hash = hash.Xor (records.Records[i].Hash);
 						} catch {}
