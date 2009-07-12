@@ -347,8 +347,12 @@ namespace p2pncs
 								if (sign != null) {
 									record.AuthorityIndex = auth_idx;
 									record.Authentication = sign;
-									_node.MMLC.AppendRecord (key, record);
-									return "<result status=\"OK\" />";
+									if (record.Verify (header)) {
+										_node.MMLC.AppendRecord (key, record);
+										return "<result status=\"OK\" />";
+									} else {
+										return "<result status=\"ERROR\" code=\"1\" />";
+									}
 								}
 							}
 
@@ -359,7 +363,7 @@ namespace p2pncs
 								Convert.ToBase64String (Serializer.Instance.Serialize (record)));
 						}
 					} catch {
-						return "<result status=\"ERROR\" />";
+						return "<result status=\"ERROR\" code=\"0\" />";
 					}
 				}
 				return "<result status=\"EMPTY\" />";

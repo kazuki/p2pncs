@@ -503,8 +503,8 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				if (current == null)
 					throw new KeyNotFoundException ();
 
-				record.LastManagedTime = current.LastManagedTime;
-				record.UpdateHash ();
+				if (record.LastManagedTime != current.LastManagedTime)
+					throw new ArgumentException ();
 				try {
 					Insert (transaction, record, parser, header_id);
 					current.RecordsetHash = current.RecordsetHash.Xor (record.Hash);
