@@ -350,7 +350,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					return;
 			}
 
-			Console.WriteLine ("RECEIVED SEGMENT {0}/{1}", seg.SegmentIndex + 1, seg.NumberOfSegments);
+			Logger.Log (LogLevel.Trace, this, "Received CAPTCHA Segment {0}/{1}", seg.SegmentIndex + 1, seg.NumberOfSegments);
 			func (seg);
 		}
 
@@ -924,7 +924,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				try {
 					InitiatorSideDHTLookupProcess ();
 				} catch (Exception exception) {
-					Console.WriteLine ("I: DHTルックアップ中に例外. {0}", exception.ToString ());
+					Logger.Log (LogLevel.Trace, this, "I: DHTルックアップ中に例外. {0}", exception.ToString ());
 				} finally {
 					_mmlc.MergeFinished (_key != null ? _key : _cur_header.Key);
 					lock (_callbacks) {
@@ -941,15 +941,15 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 			void InitiatorSideDHTLookupProcess ()
 			{
-				Console.WriteLine ("I: START");
-				Console.WriteLine ("I: DHTに問い合わせ中...");
+				Logger.Log (LogLevel.Trace, this, "I: START");
+				Logger.Log (LogLevel.Trace, this, "I: DHTに問い合わせ中...");
 				IAsyncResult ar = _mmlc._uploadSide.MessagingSocket.BeginInquire (new DHTLookupRequest (_key != null ? _key : _cur_header.Key), null, null, null);
 				DHTLookupResponse dhtres = _mmlc._uploadSide.MessagingSocket.EndInquire (ar) as DHTLookupResponse;
-				Console.WriteLine ("I: DHTから応答受信. 結果={0}件", dhtres == null || dhtres.Values == null ? 0 : dhtres.Values.Length);
+				Logger.Log (LogLevel.Trace, this, "I: DHTから応答受信. 結果={0}件", dhtres == null || dhtres.Values == null ? 0 : dhtres.Values.Length);
 				if (dhtres == null || dhtres.Values == null || dhtres.Values.Length == 0)
 					return;
 				foreach (DHTMergeableFileValue value in dhtres.Values)
-					Console.WriteLine ("I:   {0}/{1}", value.Holder.ToString ().Substring (0, 8), value.Hash.ToString ().Substring (0, 8));
+					Logger.Log (LogLevel.Trace, this, "I:   {0}/{1}", value.Holder.ToString ().Substring (0, 8), value.Hash.ToString ().Substring (0, 8));
 				List<WaitHandle> parallelMergeThreads = new List<WaitHandle> ();
 				HashSet<Key> mergingHashSet = new HashSet<Key> ();
 				for (int i = 0; i < dhtres.Values.Length && parallelMergeThreads.Count < MAX_PARALLEL_MERGE; i++) {
@@ -958,7 +958,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 						if (mergingHashSet.Contains (dhtres.Values[i].Hash)) continue;
 						ar = _mmlc._ar.BeginConnect (_mmlc._uploadSide.Key, dhtres.Values[i].Holder, AnonymousConnectionType.HighThroughput,
 							_key != null ? (object)_key : (object)_cur_header, null, null);
-						Console.WriteLine ("I: {0}へ接続", dhtres.Values[i].Holder.ToString ().Substring (0, 8));
+						Logger.Log (LogLevel.Trace, this, "I: {0}へ接続", dhtres.Values[i].Holder.ToString ().Substring (0, 8));
 						mergingHashSet.Add (dhtres.Values[i].Hash);
 						ManualResetEvent done = new ManualResetEvent (false);
 						parallelMergeThreads.Add (done);
@@ -966,7 +966,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					} catch {}
 				}
 				if (parallelMergeThreads.Count == 0) {
-					Console.WriteLine ("I: 接続先が見つかりません");
+					Logger.Log (LogLevel.Trace, this, "I: 接続先が見つかりません");
 					return;
 				}
 				WaitHandle.WaitAll (parallelMergeThreads.ToArray ());
@@ -983,22 +983,22 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					try {
 						anon_sock = _mmlc._ar.EndConnect (args[1] as IAsyncResult);
 					} catch {
-						Console.WriteLine ("I: 接続失敗");
+						Logger.Log (LogLevel.Trace, this, "I: 接続失敗");
 						return;
 					}
-					Console.WriteLine ("I: 接続OK");
+					Logger.Log (LogLevel.Trace, this, "I: 接続OK");
 					sock = new StreamSocket (anon_sock, null, MaxDatagramSize, DateTime.Now.Subtract (dt), _mmlc._anonStrmSockInt);
 					anon_sock.InitializedEventHandlers ();
 					InitiatorSideMergeProcess (sock, anon_sock.PayloadAtEstablishing as MergeableFileHeader);
 				} catch (Exception exception) {
-					Console.WriteLine ("I: マージ中に例外. {0}", exception.ToString ());
+					Logger.Log (LogLevel.Trace, this, "I: マージ中に例外. {0}", exception.ToString ());
 				} finally {
 					done.Set ();
 					if (sock != null) {
 						try {
 							sock.Shutdown ();
 						} catch {}
-						Console.WriteLine ("I: StreamSocket is shutdown");
+						Logger.Log (LogLevel.Trace, this, "I: StreamSocket is shutdown");
 						try {
 							sock.Dispose ();
 						} catch {}
@@ -1009,33 +1009,33 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			void InitiatorSideMergeProcess (StreamSocket sock, MergeableFileHeader header)
 			{
 				if (header == null || !(_key == null ? _cur_header.Key : _key).Equals (header.Key) || !header.Verify ()) {
-					Console.WriteLine ("I: 不正なヘッダだよん");
+					Logger.Log (LogLevel.Trace, this, "I: 不正なヘッダだよん");
 					return;
 				}
-				Merge (header);
-				Console.WriteLine ("I: ヘッダを受信");
+				Merge (header, true);
+				Logger.Log (LogLevel.Trace, this, "I: ヘッダを受信");
 
 				if (_cur_header.RecordsetHash.Equals (header.RecordsetHash)) {
-					Console.WriteLine ("I: 同じデータなのでマージ処理終了");
+					Logger.Log (LogLevel.Trace, this, "I: 同じデータなのでマージ処理終了");
 					return;
 				}
 
 				byte[] buf = new byte[4];
-				Console.WriteLine ("I: 保持しているレコード一覧を送信中");
+				Logger.Log (LogLevel.Trace, this, "I: 保持しているレコード一覧を送信中");
 				List<MergeableFileRecord> db_records = _mmlc.SelectRecords (_parser, _header_id);
 				List<Key> list = new List<Key> ();
 				for (int i = 0; i < db_records.Count; i++)
 					list.Add (db_records[i].Hash);
 				SendMessage (sock, new MergeableRecordList (list.ToArray ()));
 
-				Console.WriteLine ("I: レコード一覧を受信中...");
+				Logger.Log (LogLevel.Trace, this, "I: レコード一覧を受信中...");
 				MergeableRecordList recordList = ReceiveMessage (sock, ref buf) as MergeableRecordList;
 				if (recordList == null) {
-					Console.WriteLine ("I: デシリアライズ失敗");
+					Logger.Log (LogLevel.Error, this, "I: 受信したレコード一覧のデシリアライズに失敗");
 					return;
 				}
 
-				Console.WriteLine ("I: レコードを送信中");
+				Logger.Log (LogLevel.Trace, this, "I: レコードを送信中");
 				HashSet<Key> sendSet = new HashSet<Key> (recordList.HashList);
 				List<MergeableFileRecord> sendList = new List<MergeableFileRecord> ();
 				for (int i = 0; i < db_records.Count; i++) {
@@ -1044,16 +1044,16 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				}
 				SendMessage (sock, new MergeableRecords (sendList.ToArray ()));
 
-				Console.WriteLine ("I: レコードを受信中...");
+				Logger.Log (LogLevel.Trace, this, "I: レコードを受信中...");
 				MergeableRecords records = ReceiveMessage (sock, ref buf) as MergeableRecords;
 				if (recordList == null) {
-					Console.WriteLine ("I: デシリアライズ失敗");
+					Logger.Log (LogLevel.Error, this, "I: 受信したレコードのデシリアライズに失敗");
 					return;
 				}
 
-				Console.WriteLine ("I: マージ中");
+				Logger.Log (LogLevel.Trace, this, "I: マージ中");
 				Merge (records);
-				Console.WriteLine ("I: マージ完了!!!");
+				Logger.Log (LogLevel.Trace, this, "I: マージ完了!!!");
 			}
 
 			void AccepterSideProcess ()
@@ -1063,12 +1063,12 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				try {
 					AccepterSideMergeProcess (sock, other_header);
 				} catch (Exception exception) {
-					Console.WriteLine ("A: マージ中に例外. {0}", exception.ToString ());
+					Logger.Log (LogLevel.Trace, this, "A: マージ中に例外. {0}", exception.ToString ());
 				} finally {
 					try {
 						sock.Shutdown ();
 					} catch {}
-					Console.WriteLine ("A: StreamSocket is shutdown");
+					Logger.Log (LogLevel.Trace, this, "A: StreamSocket is shutdown");
 					try {
 						sock.Dispose ();
 					} catch {}
@@ -1077,28 +1077,28 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 			void AccepterSideMergeProcess (StreamSocket sock, MergeableFileHeader other_header)
 			{
-				Console.WriteLine ("A: START");
+				Logger.Log (LogLevel.Trace, this, "A: START");
 				if (other_header != null) {
 					if (_cur_header.LastManagedTime < other_header.LastManagedTime && other_header.Verify ())
-							Merge (other_header);
+							Merge (other_header, false);
 
 					if (_cur_header.RecordsetHash.Equals (other_header.RecordsetHash)) {
-						Console.WriteLine ("A: 同じデータなのでマージ処理終了");
+						Logger.Log (LogLevel.Trace, this, "A: 同じデータなのでマージ処理終了");
 						return;
 					}
 				}
 
 				byte[] buf = new byte[4];
-				Console.WriteLine ("A: 保持しているレコード一覧を受信中...");
+				Logger.Log (LogLevel.Trace, this, "A: 保持しているレコード一覧を受信中...");
 				MergeableRecordList recordList = ReceiveMessage (sock, ref buf) as MergeableRecordList;
 				if (recordList == null) {
-					Console.WriteLine ("A: デシリアライズ失敗");
+					Logger.Log (LogLevel.Error, this, "A: 受信したレコード一覧のデシリアライズに失敗");
 					return;
 				}
 
 				HashSet<Key> otherSet = new HashSet<Key> (recordList.HashList);
 				List<MergeableFileRecord> sendList = new List<MergeableFileRecord> ();
-				Console.WriteLine ("A: 保持しているレコード一覧を送信中");
+				Logger.Log (LogLevel.Trace, this, "A: 保持しているレコード一覧を送信中");
 				List<MergeableFileRecord> db_records = _mmlc.SelectRecords (_parser, _header_id);
 				for (int i = 0; i < db_records.Count; i++)
 					if (!otherSet.Remove (db_records[i].Hash))
@@ -1107,19 +1107,19 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				otherSet.CopyTo (keys);
 				SendMessage (sock, new MergeableRecordList (keys));
 
-				Console.WriteLine ("A: レコードを送信中");
+				Logger.Log (LogLevel.Trace, this, "A: レコードを送信中");
 				SendMessage (sock, new MergeableRecords (sendList.ToArray ()));
 
-				Console.WriteLine ("A: レコードを受信中...");
+				Logger.Log (LogLevel.Trace, this, "A: レコードを受信中...");
 				MergeableRecords records = ReceiveMessage (sock, ref buf) as MergeableRecords;
 				if (recordList == null) {
-					Console.WriteLine ("A: デシリアライズ失敗");
+					Logger.Log (LogLevel.Error, this, "A: 受信したレコードのデシリアライズに失敗");
 					return;
 				}
 
-				Console.WriteLine ("A: マージ中");
+				Logger.Log (LogLevel.Trace, this, "A: マージ中");
 				Merge (records);
-				Console.WriteLine ("A: マージ完了!!!");
+				Logger.Log (LogLevel.Trace, this, "A: マージ完了!!!");
 			}
 
 			void SendMessage (StreamSocket sock, object msg)
@@ -1155,7 +1155,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				return Serializer.Instance.Deserialize (buf);
 			}
 
-			void Merge (MergeableFileHeader new_header)
+			void Merge (MergeableFileHeader new_header, bool isInitiator)
 			{
 				using (IDbConnection connection = _mmlc.CreateDBConnection ())
 				using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.Serializable)) {
@@ -1168,7 +1168,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 							_mmlc.RemoveRecords (transaction, _header_id, _parser);
 							transaction.Commit ();
 							_cur_header = new_header2;
-							Console.WriteLine ("I: 管理更新を検出. ローカルのデータを削除");
+							Logger.Log (LogLevel.Trace, this, "{0}: 管理更新を検出. ローカルのデータを削除", isInitiator ? 'I' : 'A');
 						} else {
 							// 管理更新されていない場合は、リモートのヘッダを無視
 						}

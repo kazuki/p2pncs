@@ -247,7 +247,7 @@ namespace p2pncs.Net
 				_active = false;
 				_time_wait_start = DateTime.Now;
 				_timeoutCheckInt.AddInterruption (TimeWait);
-				Console.WriteLine ("[StreamSocket] ENTER TO TIME_WAIT");
+				Logger.Log (LogLevel.Trace, this, "Enter to TIME_WAIT");
 			}
 		}
 
@@ -263,7 +263,7 @@ namespace p2pncs.Net
 				_timeoutCheckInt.RemoveInterruption (CheckTimeout);
 				_timeoutCheckInt.RemoveInterruption (TimeWait);
 				_sock.Dispose ();
-				Console.WriteLine ("[StreamSocket] DISPOSEED");
+				Logger.Log (LogLevel.Trace, this, "Disposed");
 			}
 		}
 

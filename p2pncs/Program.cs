@@ -80,6 +80,8 @@ namespace p2pncs
 			using (Node node = new Node (ints, dgramSock, "database.sqlite", _config.GetValue<int> ("net/bind/port")))
 			using (WebApp app = new WebApp (node))
 			using (HttpServer.CreateEmbedHttpServer (app, null, true, true, false, _config.GetValue<int> ("gw/bind/port"), 16)) {
+				Console.WriteLine ("正常に起動しました。");
+				Console.WriteLine ("ブラウザで http://127.0.0.1:{0}/ を開いてください。", _config.GetValue<int> ("gw/bind/port"));
 				app.ExitWaitHandle.WaitOne ();
 				TestLogger.Dump ();
 			}
