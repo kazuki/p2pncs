@@ -31,11 +31,11 @@ namespace p2pncs
 	{
 		object ProcessManageTop (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
 		{
-			XmlDocument doc = CreateEmptyDocument ();
+			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
 			MergeableFileHeader[] headers = _node.MMLC.GetOwnMergeableFiles ();
 
 			foreach (MergeableFileHeader header in headers) {
-				doc.DocumentElement.AppendChild (CreateMergeableFileElement (doc, header));
+				doc.DocumentElement.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header));
 			}
 
 			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "manage.xsl"));
@@ -57,10 +57,12 @@ namespace p2pncs
 			}
 
 			MergeableFileHeader header;
+			IMergeableFileWebUIHelper header_helper = null;
 			if (req.HttpMethod == HttpMethod.POST && req.HasContentBody ()) {
 				header = _node.MMLC.GetMergeableFileHeader (key);
 				if (header == null)
 					throw new HttpException (HttpStatusCode.NotFound);
+				header_helper = (header.Content as IMergeableFile).WebUIHelper;
 				NameValueCollection c = HttpUtility.ParseUrlEncodedStringToNameValueCollection (Encoding.ASCII.GetString (req.GetContentBody (MaxRequestBodySize)), Encoding.UTF8);
 				AuthServerInfo[] auth_servers = AuthServerInfo.ParseArray (c["auth"]);
 				List<Key> list = new List<Key> ();
@@ -70,32 +72,22 @@ namespace p2pncs
 						list.Add (Key.FromUriSafeBase64String (keep_array[i]));
 					}
 				}
-				IHashComputable new_header_content;
-				if (IsBBSHeader (header)) {
-					new_header_content = ProcessBBS_ManageCreateNewHeader (c);
-				} else {
-					throw new HttpException (HttpStatusCode.InternalServerError);
-				}
+				IHashComputable new_header_content = header_helper.CreateHeaderContent (c);
 				_node.MMLC.Manage (key, new_header_content, auth_servers, list.ToArray (), null);
 
-				res[HttpHeaderNames.Location] = "/bbs/" + key.ToUriSafeBase64String ();
+				res[HttpHeaderNames.Location] = header_helper.ViewUrl + key.ToUriSafeBase64String ();
 				throw new HttpException (req.HttpVersion == HttpVersion.Http10 ? HttpStatusCode.Found : HttpStatusCode.SeeOther);
 			}
 
 			List<MergeableFileRecord> records = _node.MMLC.GetRecords (key, out header);
 			if (header == null || records == null)
 				throw new HttpException (HttpStatusCode.NotFound);
+			header_helper = (header.Content as IMergeableFile).WebUIHelper;
 
-			XmlDocument doc = CreateEmptyDocument ();
-			doc.DocumentElement.AppendChild (CreateMergeableFileElement (doc, header, records.ToArray ()));
+			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
+			doc.DocumentElement.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header, records.ToArray ()));
 
-			string xsl_filename;
-			if (IsBBSHeader (header))
-				xsl_filename = "manage-simplebbs.xsl";
-			else
-				throw new HttpException (HttpStatusCode.InternalServerError);
-
-			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, xsl_filename));
+			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, header_helper.ManagePageXslFileName));
 		}
 	}
 }

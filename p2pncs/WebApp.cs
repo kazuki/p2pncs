@@ -29,13 +29,6 @@ namespace p2pncs
 	{
 		const string DefaultTemplatePath = "templates";
 		const string DefaultStaticFilePath = "htdocs";
-		const string DefaultDateFormat = "yyyy/MM/dd HH:mm:ss";
-
-		const int MaxRetries = 2;
-		static TimeSpan Timeout = TimeSpan.FromSeconds (2);
-		const int RetryBufferSize = 512;
-		const int DuplicationCheckBufferSize = 512;
-		const int MaxStreamSocketSegmentSize = 500;
 		const int MaxRequestBodySize = 33554432; // 32MB
 
 		Node _node;
@@ -79,68 +72,11 @@ namespace p2pncs
 			return ProcessStaticFile (server, req, res);
 		}
 
-		public static XmlDocument CreateEmptyDocument ()
-		{
-			XmlDocument doc = new XmlDocument ();
-			doc.AppendChild (doc.CreateElement ("page"));
-			return doc;
-		}
-
 		object ProcessMainPage (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
 		{
-			XmlDocument doc = CreateEmptyDocument ();
+			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
 			doc.DocumentElement.SetAttribute ("ver", System.Reflection.Assembly.GetEntryAssembly ().GetName ().Version.ToString ());
 			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "main.xsl"));
-		}
-
-		XmlElement CreateMergeableFileElement (XmlDocument doc, MergeableFileHeader header)
-		{
-			return CreateMergeableFileElement (doc, header, null);
-		}
-
-		XmlElement CreateMergeableFileElement (XmlDocument doc, MergeableFileHeader header, MergeableFileRecord[] records)
-		{
-			XmlElement root = doc.CreateElement ("file", new string[][] {
-				new[] {"key", header.Key.ToUriSafeBase64String ()},
-				new[] {"recordset", header.RecordsetHash.ToUriSafeBase64String ()},
-				new[] {"created", header.CreatedTime.ToLocalTime().ToString (DefaultDateFormat)},
-				new[] {"lastManaged", header.LastManagedTime.ToLocalTime().ToString (DefaultDateFormat)},
-				new[] {"lastModified", header.LastModifiedTime.ToLocalTime().ToString (DefaultDateFormat)},
-				new[] {"records", header.NumberOfRecords.ToString ()},
-			}, null);
-			XmlNode authServers = root.AppendChild (doc.CreateElement ("auth-servers"));
-			if (header.AuthServers != null && header.AuthServers.Length > 0) {
-				for (int i = 0; i < header.AuthServers.Length; i++) {
-					authServers.AppendChild (doc.CreateElement ("auth-server", new string[][] {
-						new[] {"index", i.ToString ()}
-					}, new[]{
-						doc.CreateElement ("public-key", null, new[]{doc.CreateTextNode (header.AuthServers[i].PublicKey.ToBase64String ())}),
-						doc.CreateElement ("serialize", null, new[]{doc.CreateTextNode (header.AuthServers[i].ToParsableString ())})
-					}));
-				}
-			}
-			if (IsBBSHeader (header)) {
-				root.SetAttribute ("type", "simple-bbs");
-				root.AppendChild (CreateBBSHeaderElement (doc, header));
-			}
-
-			if (records == null)
-				return root;
-
-			XmlElement records_element = (XmlElement)root.AppendChild (doc.CreateElement ("records"));
-			foreach (MergeableFileRecord record in records) {
-				XmlElement record_element = (XmlElement)records_element.AppendChild (doc.CreateElement ("record", new string[][] {
-					new[] {"hash", record.Hash.ToUriSafeBase64String ()},
-					new[] {"authidx", record.AuthorityIndex.ToString ()},
-					new[] {"created", record.CreatedTime.ToLocalTime().ToString (DefaultDateFormat)}
-				}, null));
-				if (IsBBSRecord (record)) {
-					record_element.SetAttribute ("type", "simple-bbs");
-					record_element.AppendChild (CreateBBSRecordElement (doc, record));
-				}
-			}
-
-			return root;
 		}
 
 		object ProcessStaticFile (IHttpServer server, IHttpRequest req, HttpResponseHeader res)

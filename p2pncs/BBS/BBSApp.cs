@@ -36,7 +36,7 @@ namespace p2pncs
 	{
 		object ProcessBbsNewPage (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
 		{
-			XmlDocument doc = CreateEmptyDocument ();
+			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
 			if (req.HttpMethod == HttpMethod.POST) {
 				Dictionary<string, string> dic = HttpUtility.ParseUrlEncodedStringToDictionary (Encoding.ASCII.GetString (req.GetContentBody (MaxRequestBodySize)), Encoding.UTF8);
 				XmlNode validationRoot = doc.DocumentElement.AppendChild (doc.CreateElement ("validation"));
@@ -117,17 +117,17 @@ namespace p2pncs
 					throw new HttpException (req.HttpVersion == HttpVersion.Http10 ? HttpStatusCode.Found : HttpStatusCode.SeeOther);
 				}
 			}
-			XmlDocument doc = CreateEmptyDocument ();
+			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
 			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "bbs_open.xsl"));
 		}
 
 		object ProcessBbsListPage (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
 		{
-			XmlDocument doc = CreateEmptyDocument ();
+			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
 			XmlElement rootNode = doc.DocumentElement;
 			MergeableFileHeader[] headers = _node.MMLC.GetHeaderList ();
 			foreach (MergeableFileHeader header in headers) {
-				rootNode.AppendChild (CreateMergeableFileElement (doc, header));
+				rootNode.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header));
 			}
 			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "bbs.xsl"));
 		}
@@ -211,8 +211,8 @@ namespace p2pncs
 			if (records == null)
 				throw new HttpException (HttpStatusCode.NotFound);
 
-			XmlDocument doc = CreateEmptyDocument ();
-			doc.DocumentElement.AppendChild (CreateMergeableFileElement (doc, header, records.ToArray ()));
+			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
+			doc.DocumentElement.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header, records.ToArray ()));
 			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "bbs_view.xsl"));
 		}
 
@@ -228,46 +228,6 @@ namespace p2pncs
 		{
 			info.WaitHandle.Close ();
 			return ProcessBBS (null, info.Request, info.Response, true);
-		}
-
-		bool IsBBSHeader (MergeableFileHeader header)
-		{
-			return header.Content is SimpleBBSHeader;
-		}
-
-		bool IsBBSRecord (MergeableFileRecord record)
-		{
-			return record.Content is SimpleBBSRecord;
-		}
-
-		IHashComputable ProcessBBS_ManageCreateNewHeader (NameValueCollection c)
-		{
-			return new SimpleBBSHeader (c["title"]);
-		}
-
-		XmlElement CreateBBSHeaderElement (XmlDocument doc, MergeableFileHeader header)
-		{
-			SimpleBBSHeader content = header.Content as SimpleBBSHeader;
-			return doc.CreateElement ("bbs", null, new[] {
-				doc.CreateElement ("title", null, new[] {
-					doc.CreateTextNodeSafe (content.Title)
-				})
-			});
-		}
-
-		XmlElement CreateBBSRecordElement (XmlDocument doc, MergeableFileRecord record)
-		{
-			SimpleBBSRecord record_content = record.Content as SimpleBBSRecord;
-			return doc.CreateElement ("bbs", new string[][] {
-				new string[] {"short-id", record_content.GetShortId (record)}
-			}, new[] {
-				doc.CreateElement ("name", null, new[] {
-					doc.CreateTextNodeSafe (record_content.Name)
-				}),
-				doc.CreateElement ("body", null, new[] {
-					doc.CreateTextNodeSafe (record_content.Body)
-				})
-			});
 		}
 	}
 }

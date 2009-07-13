@@ -23,7 +23,7 @@ using p2pncs.Net.Overlay.DFS.MMLC;
 namespace p2pncs.BBS
 {
 	[SerializableTypeId (0x1004)]
-	class SimpleBBSRecord : IHashComputable
+	class SimpleBBSRecord : IHashComputable, IMergeableFile
 	{
 		[SerializableFieldId (0)]
 		string _name;
@@ -66,6 +66,14 @@ namespace p2pncs.BBS
 			hash.TransformBlock (tmp, 0, tmp.Length, null, 0);
 			tmp = Encoding.UTF8.GetBytes (_body);
 			hash.TransformBlock (tmp, 0, tmp.Length, null, 0);
+		}
+
+		#endregion
+
+		#region IMergeableFile Members
+
+		public IMergeableFileWebUIHelper WebUIHelper {
+			get { return SimpleBBSWebUIHelper.Instance; }
 		}
 
 		#endregion

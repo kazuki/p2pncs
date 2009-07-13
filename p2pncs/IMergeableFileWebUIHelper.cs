@@ -15,43 +15,20 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using System.Security.Cryptography;
-using System.Text;
+using System.Collections.Specialized;
+using System.Xml;
+using p2pncs.Net.Overlay.DFS.MMLC;
 using p2pncs.Security.Cryptography;
 
-namespace p2pncs.BBS
+namespace p2pncs
 {
-	[SerializableTypeId (0x1003)]
-	class SimpleBBSHeader : IHashComputable, IMergeableFile
+	interface IMergeableFileWebUIHelper
 	{
-		[SerializableFieldId (0)]
-		string _title;
-
-		public SimpleBBSHeader (string title)
-		{
-			_title = title;
-		}
-
-		public string Title {
-			get { return _title; }
-		}
-
-		#region IHashComputable Members
-
-		public void ComputeHash (HashAlgorithm hash)
-		{
-			byte[] tmp = Encoding.UTF8.GetBytes (_title);
-			hash.TransformBlock (tmp, 0, tmp.Length, null, 0);
-		}
-
-		#endregion
-
-		#region IMergeableFile Members
-
-		public IMergeableFileWebUIHelper WebUIHelper {
-			get { return SimpleBBSWebUIHelper.Instance; }
-		}
-
-		#endregion
+		XmlElement CreateHeaderElement (XmlDocument doc, MergeableFileHeader header);
+		XmlElement CreateRecordElement (XmlDocument doc, MergeableFileRecord record);
+		IHashComputable CreateHeaderContent (NameValueCollection c);
+		string ContentType { get; }
+		string ManagePageXslFileName { get; }
+		string ViewUrl { get; }
 	}
 }

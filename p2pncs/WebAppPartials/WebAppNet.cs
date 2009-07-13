@@ -34,7 +34,7 @@ namespace p2pncs
 	{
 		object ProcessNetInitPage (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
 		{
-			XmlDocument doc = CreateEmptyDocument ();
+			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
 			if (req.HttpMethod == HttpMethod.POST && req.HasContentBody ()) {
 				Dictionary<string, string> dic = HttpUtility.ParseUrlEncodedStringToDictionary (Encoding.ASCII.GetString (req.GetContentBody (MaxRequestBodySize)), Encoding.UTF8);
 				if (dic.ContainsKey ("nodes")) {
@@ -122,7 +122,7 @@ namespace p2pncs
 
 		object ProcessNetExitPage (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
 		{
-			XmlDocument doc = CreateEmptyDocument ();
+			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
 			if (req.HttpMethod == HttpMethod.POST) {
 				doc.DocumentElement.SetAttribute ("exit", "exit");
 				ThreadPool.QueueUserWorkItem (delegate (object o) {

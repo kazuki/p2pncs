@@ -18,11 +18,21 @@
 using System;
 using System.Text;
 using System.Xml;
+using p2pncs.Net.Overlay.DFS.MMLC;
 
 namespace p2pncs
 {
 	public static class XmlHelper
 	{
+		public const string DefaultDateFormat = "yyyy/MM/dd HH:mm:ss";
+
+		public static XmlDocument CreateEmptyDocument ()
+		{
+			XmlDocument doc = new XmlDocument ();
+			doc.AppendChild (doc.CreateElement ("page"));
+			return doc;
+		}
+
 		public static XmlElement CreateElement (this XmlDocument doc, string name, string[][] atts, XmlNode[] children)
 		{
 			XmlElement element = doc.CreateElement (name);
@@ -68,6 +78,53 @@ namespace p2pncs
 					sb.Append (text, start, text.Length - start);
 				return doc.CreateTextNode (sb.ToString ());
 			}
+		}
+
+		public static XmlElement CreateMergeableFileElement (XmlDocument doc, MergeableFileHeader header)
+		{
+			return CreateMergeableFileElement (doc, header, null);
+		}
+
+		public static XmlElement CreateMergeableFileElement (XmlDocument doc, MergeableFileHeader header, MergeableFileRecord[] records)
+		{
+			XmlElement root = doc.CreateElement ("file", new string[][] {
+				new[] {"key", header.Key.ToUriSafeBase64String ()},
+				new[] {"recordset", header.RecordsetHash.ToUriSafeBase64String ()},
+				new[] {"created", header.CreatedTime.ToLocalTime().ToString (DefaultDateFormat)},
+				new[] {"lastManaged", header.LastManagedTime.ToLocalTime().ToString (DefaultDateFormat)},
+				new[] {"lastModified", header.LastModifiedTime.ToLocalTime().ToString (DefaultDateFormat)},
+				new[] {"records", header.NumberOfRecords.ToString ()},
+			}, null);
+			XmlNode authServers = root.AppendChild (doc.CreateElement ("auth-servers"));
+			if (header.AuthServers != null && header.AuthServers.Length > 0) {
+				for (int i = 0; i < header.AuthServers.Length; i++) {
+					authServers.AppendChild (doc.CreateElement ("auth-server", new string[][] {
+						new[] {"index", i.ToString ()}
+					}, new[]{
+						doc.CreateElement ("public-key", null, new[]{doc.CreateTextNode (header.AuthServers[i].PublicKey.ToBase64String ())}),
+						doc.CreateElement ("serialize", null, new[]{doc.CreateTextNode (header.AuthServers[i].ToParsableString ())})
+					}));
+				}
+			}
+
+			root.SetAttribute ("type", (header.Content as IMergeableFile).WebUIHelper.ContentType);
+			root.AppendChild ((header.Content as IMergeableFile).WebUIHelper.CreateHeaderElement (doc, header));
+
+			if (records == null)
+				return root;
+
+			XmlElement records_element = (XmlElement)root.AppendChild (doc.CreateElement ("records"));
+			foreach (MergeableFileRecord record in records) {
+				XmlElement record_element = (XmlElement)records_element.AppendChild (doc.CreateElement ("record", new string[][] {
+					new[] {"hash", record.Hash.ToUriSafeBase64String ()},
+					new[] {"authidx", record.AuthorityIndex.ToString ()},
+					new[] {"created", record.CreatedTime.ToLocalTime().ToString (DefaultDateFormat)}
+				}, null));
+				record_element.SetAttribute ("type", (record.Content as IMergeableFile).WebUIHelper.ContentType);
+				record_element.AppendChild ((record.Content as IMergeableFile).WebUIHelper.CreateRecordElement (doc, record));
+			}
+
+			return root;
 		}
 	}
 }

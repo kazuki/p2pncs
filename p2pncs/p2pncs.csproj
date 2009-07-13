@@ -41,9 +41,12 @@
   <ItemGroup>
     <Compile Include="..\AssemblyVersionInfo.cs" />
     <Compile Include="BBS\BBSApp.cs" />
+    <Compile Include="BBS\SimpleBBSWebUIHelper.cs" />
     <Compile Include="DebugProgram.cs" />
     <Compile Include="EndPointObfuscator.cs" />
     <Compile Include="Helpers.cs" />
+    <Compile Include="IMergeableFile.cs" />
+    <Compile Include="IMergeableFileWebUIHelper.cs" />
     <Compile Include="Interrupters.cs" />
     <Compile Include="Node.cs" />
     <Compile Include="PortOpenChecker.cs" />

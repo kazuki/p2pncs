@@ -31,7 +31,7 @@ namespace p2pncs
 
 		public XmlDocument CreateStatisticsXML ()
 		{
-			XmlDocument doc = CreateEmptyDocument ();
+			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
 			Statistics.Info info = _node.Statistics.GetInfo ();
 			double runningTime = _node.RunningTime;
 
