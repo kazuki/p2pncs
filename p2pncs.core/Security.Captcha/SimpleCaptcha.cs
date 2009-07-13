@@ -31,8 +31,8 @@ namespace p2pncs.Security.Captcha
 		byte[] _hmac_key;
 		byte[] _salt;
 		byte[] _pubKey;
-		const string _chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-		int _len = 10;
+		const string _chars = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
+		int _len = 4;
 		Font _font;
 		Size _size;
 		Brush _brush = new SolidBrush (Color.Black);
@@ -60,10 +60,10 @@ namespace p2pncs.Security.Captcha
 
 		public CaptchaChallengeData GetChallenge (byte[] hash)
 		{
-			Random rnd = new Random (BitConverter.ToInt32 (openCrypto.RNG.GetRNGBytes (4), 0));
+			byte[] rnd = openCrypto.RNG.GetRNGBytes (_len);
 			string txt = "";
 			for (int i = 0; i < _len; i++)
-				txt += _chars[rnd.Next (0, _chars.Length)].ToString ();
+				txt += _chars[rnd[i] % _chars.Length].ToString ();
 
 			byte[] data;
 			using (Image img = new Bitmap (_size.Width, _size.Height, PixelFormat.Format24bppRgb))
