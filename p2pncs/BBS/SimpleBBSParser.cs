@@ -21,7 +21,7 @@ using p2pncs.Net.Overlay.DFS.MMLC;
 using p2pncs.Security.Cryptography;
 using p2pncs.Utility;
 
-namespace p2pncs
+namespace p2pncs.BBS
 {
 	class SimpleBBSParser : IMergeableFileDatabaseParser
 	{

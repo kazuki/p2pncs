@@ -40,6 +40,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\AssemblyVersionInfo.cs" />
+    <Compile Include="BBS\BBSApp.cs" />
     <Compile Include="DebugProgram.cs" />
     <Compile Include="EndPointObfuscator.cs" />
     <Compile Include="Helpers.cs" />
@@ -48,11 +49,14 @@
     <Compile Include="PortOpenChecker.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="AssemblyInfo.cs" />
-    <Compile Include="SimpleBBSHeader.cs" />
-    <Compile Include="SimpleBBSParser.cs" />
-    <Compile Include="SimpleBBSRecord.cs" />
+    <Compile Include="BBS\SimpleBBSHeader.cs" />
+    <Compile Include="BBS\SimpleBBSParser.cs" />
+    <Compile Include="BBS\SimpleBBSRecord.cs" />
     <Compile Include="Statistics.cs" />
     <Compile Include="WebApp.cs" />
+    <Compile Include="WebAppPartials\WebAppManage.cs" />
+    <Compile Include="WebAppPartials\WebAppNet.cs" />
+    <Compile Include="WebAppPartials\WebAppStatistics.cs" />
     <Compile Include="XmlHelper.cs" />
   </ItemGroup>
   <ItemGroup>

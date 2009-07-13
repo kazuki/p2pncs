@@ -39,7 +39,7 @@ namespace p2pncs
 {
 	class DebugProgram : IDisposable
 	{
-		const int NODES = 100;
+		const int NODES = 10;
 		RandomIPAddressGenerator _ipgen = new RandomIPAddressGenerator ();
 		VirtualNetwork _network;
 		Interrupters _ints;

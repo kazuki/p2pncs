@@ -19,7 +19,7 @@ using System.Security.Cryptography;
 using System.Text;
 using p2pncs.Security.Cryptography;
 
-namespace p2pncs
+namespace p2pncs.BBS
 {
 	[SerializableTypeId (0x1003)]
 	class SimpleBBSHeader : IHashComputable

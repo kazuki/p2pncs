@@ -20,7 +20,7 @@ using System.Text;
 using p2pncs.Security.Cryptography;
 using p2pncs.Net.Overlay.DFS.MMLC;
 
-namespace p2pncs
+namespace p2pncs.BBS
 {
 	[SerializableTypeId (0x1004)]
 	class SimpleBBSRecord : IHashComputable
