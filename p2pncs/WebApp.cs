@@ -589,7 +589,9 @@ namespace p2pncs
 				if (record.Content is SimpleBBSRecord) {
 					record_element.SetAttribute ("type", "simple-bbs");
 					SimpleBBSRecord record_content = record.Content as SimpleBBSRecord;
-					record_element.AppendChild (doc.CreateElement ("bbs", null, new[] {
+					record_element.AppendChild (doc.CreateElement ("bbs", new string[][] {
+						new string[] {"short-id", record_content.GetShortId (record)}
+					}, new[] {
 						doc.CreateElement ("name", null, new[] {
 							doc.CreateTextNodeSafe (record_content.Name)
 						}),

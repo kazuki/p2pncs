@@ -15,10 +15,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using System;
 using System.Security.Cryptography;
 using System.Text;
 using p2pncs.Security.Cryptography;
+using p2pncs.Net.Overlay.DFS.MMLC;
 
 namespace p2pncs
 {
@@ -43,6 +43,19 @@ namespace p2pncs
 
 		public string Body {
 			get { return _body; }
+		}
+
+		const string TABLE = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+		public string GetShortId (MergeableFileRecord record)
+		{
+			byte[] hash = record.Hash.GetByteArray ();
+			int value = (hash[0] << 16) | (hash[1] << 8) | hash[2];
+			char[] buf = new char[4];
+			for (int i = 0; i < 4; i ++) {
+				buf[i] = TABLE[value % TABLE.Length];
+				value /= TABLE.Length;
+			}
+			return new string (buf);
 		}
 
 		#region IHashComputable Members

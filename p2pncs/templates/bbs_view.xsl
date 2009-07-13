@@ -45,7 +45,7 @@
 						<div>
 							<div class="postName">
 								<xsl:text>[</xsl:text>
-								<xsl:value-of select="position()"/>
+								<xsl:value-of select="bbs/@short-id"/>
 								<xsl:text>] </xsl:text>
 								<xsl:value-of select="bbs/name" />
 								<xsl:text>: </xsl:text>
