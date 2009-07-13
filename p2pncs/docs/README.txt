@@ -1,100 +1,100 @@
-* �ڎ�
+* 目次
 
-  1. �T�v
-  2. �����
-  3. �C���X�g�[�����@
-  4. �������Ɋւ���
-  5. ���C�Z���X
-  6. �ڍ׏��
+  1. 概要
+  2. 動作環境
+  3. インストール方法
+  4. 匿名性に関して
+  5. ライセンス
+  6. 詳細情報
 
-1. �T�v
+1. 概要
 
-  ���̃v���O�����̓T�[�r�X�񋟎҂Ɉˑ����邱�ƂȂ��A
-  �X�[�p�o�C�U�̋��Ȃ����R�ȃR�~���j�P�[�V�������������邽�߂�
-  �i�߂Ă��錤���J���̐��ʕ��ł��B
+  このプログラムはサービス提供者に依存することなく、
+  スーパバイザの居ない自由なコミュニケーションを実現するために
+  進めている研究開発の成果物です。
 
-  ���݂̎����ł́A�f���̋@�\�݂̂�񋟂��Ă��܂��B
-  �����I�ɂ̓`���b�g��Wiki�������������֗��ȃR�~���j�P�[�V��������ڎw���܂��B
+  現在の実装では、掲示板の機能のみを提供しています。
+  将来的にはチャットやWiki等を実装しより便利なコミュニケーション環境を目指します。
 
-2. �����
+2. 動作環境
 
-  ���̃v���O������C#����ɗ��p���ċL�q����Ă��܂��̂ŁA
-  �ȉ��̎��s���̉��ꂩ�ɊY������K�v������܂��B
+  このプログラムはC#を主に利用して記述されていますので、
+  以下の実行環境の何れかに該当する必要があります。
 
-  �E Windows XP�ȏ� + .NET Framework 3.5 SP1�ȏ�
-  �E Linux + Mono 2.4.2.1�ȏ�
+  ・ Windows XP以上 + .NET Framework 3.5 SP1以上
+  ・ Linux + Mono 2.4.2.1以上
 
-  �܂��A����Ȃ�ɍ�����CPU���K�v�ł��B����͈ȉ��̒ʂ�ł�
-  �E Intel Core 2 Duo 2.0GHz �ȏ�
-  �E AMD Athlon64 X2 2GHz �ȏ�
-  �Í������̊֌W��A64bit���̕���32bit�����������ɓ��삵�܂��B
+  また、それなりに高速なCPUが必要です。奨励は以下の通りです
+  ・ Intel Core 2 Duo 2.0GHz 以上
+  ・ AMD Athlon64 X2 2GHz 以上
+  暗号処理の関係上、64bit環境の方が32bit環境よりも高速に動作します。
 
-  Web�C���^�[�t�F�C�X�𗘗p���邽�߂ɂ͈ȉ��̃u���E�U�̍ŐV�ł��K�v�ł�
-  �E Microsoft Internet Explorer
-  �E Mozilla Firefox
-  �E Opera
-  �E Google Chrome
+  Webインターフェイスを利用するためには以下の何れかのブラウザの最新版が必要です
+  ・ Microsoft Internet Explorer
+  ・ Mozilla Firefox
+  ・ Opera
+  ・ Google Chrome
 
-3. �C���X�g�[�����@
+3. インストール方法
 
-  1. �A�[�J�C�u (7z�`���܂���Zip�`���Œ�) ���𓀂��܂��B
-  (�𓀂��Ȃ���README�͓ǂ߂Ȃ��̂ŁA���ɉ𓀂��Ă���Ƃ͎v���܂���)
+  1. アーカイブ (7z形式またはZip形式で提供) を解凍します。
+  (解凍しないとREADMEは読めないので、既に解凍しているとは思いますが)
 
-  2. p2pncs.exe ���N�������܂��B����ƁA
-  > �ݒ�t�@�C����ۑ����܂����B
-  > README.txt ���Q�l�ɐݒ�t�@�C����ҏW���Ă��������B
+  2. p2pncs.exe を起動させます。すると、
+  > 設定ファイルを保存しました。
+  > README.txt を参考に設定ファイルを編集してください。
   >
-  > �G���^�[�L�[�������ƏI�����܂�
-  �Ƃ������b�Z�[�W���o�܂��̂ŁA�G���^�[�L�[��������1�x�I�������܂��B
+  > エンターキーを押すと終了します
+  というメッセージが出ますので、エンターキーを押して1度終了させます。
 
-  3. p2pncs.xml �Ƃ����t�@�C�����J���܂��B
-  config -> net -> bind -> port �Ƃ���XML�v�f�̒��g (�����l��65000)�ɁA
-  �O������̐ڑ����󂯓����UDP�̃|�[�g�ԍ�����͂��܂��B
-  �ł��̂ŁA���[�^��t�@�C�A�E�H�[���𗘗p���ċ���ꍇ�͓K�؂Ȑݒ肪�K�v�ł��B
+  3. p2pncs.xml というファイルを開きます。
+  config -> net -> bind -> port というXML要素の中身 (初期値は65000)に、
+  外部からの接続を受け入れるUDPのポート番号を入力します。
+  ですので、ルータやファイアウォールを利用して居る場合は適切な設定が必要です。
   
-  config -> gw -> bind -> port �Ƃ���XML�v�f�̒��g (�����l��8080)�ɂ́A
-  ���[�J������Web�C���^�[�t�F�C�X�A�N�Z�X����Ƃ��ɗ��p����
-  TCP�̃|�[�g�ԍ�����͂��܂��B
-  �����œ��͂���|�[�g�́A�O������A�N�Z�X�������̂ł͂Ȃ��̂ŁA
-  ���[�^��t�@�C�A�E�H�[���̐ݒ�͕s�v�ł��B
+  config -> gw -> bind -> port というXML要素の中身 (初期値は8080)には、
+  ローカルからWebインターフェイスアクセスするときに利用する
+  TCPのポート番号を入力します。
+  ここで入力するポートは、外部からアクセスされるものではないので、
+  ルータやファイアウォールの設定は不要です。
 
-  4. ������x p2pncs.exe ���N�������܂��B
-  �����炭�A����ɋN�����܂����Ƃ������b�Z�[�W���o��Ǝv���܂��B
-  �\���ɏ]���āA�u���E�U�Ŏw�肳�ꂽURL���J���Ă݂Ă��������B
-  ���Ƃ̓u���E�U�o�R�ł���Web�C���^�[�t�F�C�X�𑀍삵�ė��p���܂��B
+  4. もう一度 p2pncs.exe を起動させます。
+  おそらく、正常に起動しましたというメッセージが出ると思います。
+  表示に従って、ブラウザで指定されたURLを開いてみてください。
+  あとはブラウザ経由でこのWebインターフェイスを操作して利用します。
 
-4. �������Ɋւ���
+4. 匿名性に関して
 
-  ���̃v���O�����͓K�x�ȓ������ƌ�����ڎw���Đ݌v���Ă��܂��̂ŁA
-  ��K�͂ȃl�b�g���[�N��͂⌋���ɑ΂��Ă͑ϐ��������܂���B
-  �ł����A�ꕔ�̗��p�҂̋����ɂ���ē��������j�]���邱�Ƃ��Ȃ��悤��
-  ����\��ł��̂ŁA������x�͈��S���Ă����p���������܂��B
+  このプログラムは適度な匿名性と効率を目指して設計していますので、
+  大規模なネットワーク解析や結託に対しては耐性を持ちません。
+  ですが、一部の利用者の興味によって匿名性が破綻することがないように
+  する予定ですので、ある程度は安心してご利用いただけます。
 
-  �������A���݂̎����ł͊��S�ȓ������͒񋟂��Ă���܂���B
-  �f���ɂ����܂��ẮA���ӂ̂���m�[�h�𒆌p�m�[�h�̏I�[�ɑI��ł��܂����ꍇ�A
-  ���e���������̂����ǂꂪ�����l�ɂ�铊�e�Ȃ̂������ʂ��邱�Ƃ��\�ł��B
-  (�������������E�ł̌̓���Ɍq������ł���IP�A�h���X�Ƃ̌��т��͂����ȒP�ɂ͘R�k���܂���)
+  ただし、現在の実装では完全な匿名性は提供しておりません。
+  掲示板におきましては、悪意のあるノードを中継ノードの終端に選んでしまった場合、
+  投稿した発言のうちどれが同じ人による投稿なのかを識別することが可能です。
+  (しかし現実世界での個の特定に繋がる情報であるIPアドレスとの結びつきはそう簡単には漏洩しません)
 
-5. ���C�Z���X
+5. ライセンス
 
-  �e��A�Z���u����GPLv3�Ɋ�Â��܂��B
-  �ڍׂ͓Y�t�� gpl-3.0.txt �����ǂ݂��������B
-  �܂��AopenCrypto.NET.dll �͏C��BSD�܂���MIT/X11���C�Z���X�Ɋ�Â��܂��B
+  各種アセンブリはGPLv3に基づきます。
+  詳細は添付の gpl-3.0.txt をお読みください。
+  また、openCrypto.NET.dll は修正BSDまたはMIT/X11ライセンスに基づきます。
 
-6. �ڍ׏��
+6. 詳細情報
 
-  �ڂ����͈ȉ���URL���������������B
+  詳しくは以下のURLをご覧ください。
   - http://kserver.panicode.com/software/p2pncs
   - http://trac.panicode.com/bug/
 
-  �o�O��񍐂���ꍇ�́A
+  バグを報告する場合は、
   http://trac.panicode.com/bug/query?status=accepted&status=assigned&status=new&status=reopened&component=p2pncs
-  �ɃA�N�Z�X���A���Ƀo�O���񍐂���Ă��Ȃ������ׂ����ƁA
+  にアクセスし、既にバグが報告されていないか調べたあと、
   http://trac.panicode.com/bug/
-  �ɃA�N�Z�X���A���O�C�����s�������ƁA
+  にアクセスし、ログインを行ったあと、
   http://trac.panicode.com/bug/newticket
-  ����񍐂��邱�Ƃ��o���܂��B
+  から報告することが出来ます。
 
-  �\�[�X�R�[�h�͈ȉ���URL����擾�ł��܂�
+  ソースコードは以下のURLから取得できます
   SubVersion: https://kserver.panicode.com/svn/panicode/p2pncs/trunk
-  �u���E�Y�p: http://trac.panicode.com/bug/browser/p2pncs/trunk
+  ブラウズ用: http://trac.panicode.com/bug/browser/p2pncs/trunk

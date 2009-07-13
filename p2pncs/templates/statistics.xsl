@@ -137,7 +137,7 @@
 		<table>
 			<thead>
 				<tr>
-					<td rowspan="2">構築数</td>
+					<td rowspan="2">累計構築数</td>
 					<td rowspan="2">成功率</td>
 					<td colspan="2">生存時間</td>
 				</tr>
@@ -178,7 +178,7 @@
 	</xsl:template>
 
 	<xsl:template match="ac">
-		<h2>マージ可能及び管理可能な分散ファイルシステム</h2>
+		<h2>マージ及び管理可能な分散ファイルシステム</h2>
 		<table>
 			<thead>
 				<tr>
