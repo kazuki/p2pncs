@@ -41,7 +41,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		[SerializableFieldId (4)]
 		byte[] _sign;
 
-		[SerializableFieldId (5)]
+		//[SerializableFieldId (5)]
 		Key _hash;
 
 		[SerializableFieldId (6)]
@@ -88,7 +88,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				return true;
 
 			try {
-				byte[] hash = _hash.GetByteArray ();
+				byte[] hash = Hash.GetByteArray ();
 				if (_auth != null) {
 					ECKeyPair pubKey = (_auth_idx == byte.MaxValue ? header.Key.ToECPublicKey () : header.AuthServers[_auth_idx].PublicKey.ToECPublicKey ());
 					ECDSA ecdsa = new ECDSA (pubKey);
@@ -132,7 +132,11 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		}
 
 		public Key Hash {
-			get { return _hash; }
+			get {
+				if (_hash == null)
+					UpdateHash ();
+				return _hash;
+			}
 		}
 
 		public Key PublicKey {
