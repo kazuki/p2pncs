@@ -86,6 +86,10 @@ namespace p2pncs
 			using (HttpServer.CreateEmbedHttpServer (app, null, true, true, false, _config.GetValue<int> ("gw/bind/port"), 16)) {
 				Console.WriteLine ("正常に起動しました。");
 				Console.WriteLine ("ブラウザで http://127.0.0.1:{0}/ を開いてください。", _config.GetValue<int> ("gw/bind/port"));
+				Console.WriteLine ();
+				Console.WriteLine ("注意: このコマンドプロンプトウィンドウは閉じないでください。");
+				Console.WriteLine ("プログラムを終了するときは、左側のメニューから[ネットワーク]→[終了]を選ぶか、");
+				Console.WriteLine ("http://127.0.0.1:{0}/net/exit を開いて、\"終了する\"ボタンを押してください。", _config.GetValue<int> ("gw/bind/port"));
 				app.ExitWaitHandle.WaitOne ();
 				app.CreateStatisticsXML ().Save ("statistics-" + DateTime.Now.ToString ("yyyyMMddHHmmss") + ".xml");
 			}
