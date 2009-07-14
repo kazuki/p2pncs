@@ -84,9 +84,6 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 		public bool Verify (MergeableFileHeader header)
 		{
-			if (_auth == null && _sign == null)
-				return true;
-
 			try {
 				byte[] hash = Hash.GetByteArray ();
 				if (_auth != null) {
@@ -94,12 +91,16 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					ECDSA ecdsa = new ECDSA (pubKey);
 					if (!ecdsa.VerifyHash (hash, _auth))
 						return false;
+				} else if (header.AuthServers != null && header.AuthServers.Length > 0) {
+					return false;
 				}
 
 				if (_sign != null) {
 					ECDSA ecdsa = new ECDSA (_publicKey.ToECPublicKey ());
 					if (!ecdsa.VerifyHash (hash, _sign))
 						return false;
+				} else if (_publicKey != null) {
+					return false;
 				}
 
 				return true;
