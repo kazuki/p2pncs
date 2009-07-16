@@ -123,7 +123,7 @@ namespace p2pncs.Net.Overlay.DHT
 		/// TODO: optimization
 		public void GetEachRoutingLevelValues (IList<DHTEntry>[] values)
 		{
-			const int MAX_LIST_SIZE = 10;
+			const int MAX_LIST_SIZE = 5;
 			for (int i = 0; i < values.Length; i ++) {
 				using (_lock.EnterReadLock ()) {
 					if (_dicEachRoutingLevel[i].Count == 0)
