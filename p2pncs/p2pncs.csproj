@@ -42,6 +42,7 @@
     <Compile Include="..\AssemblyVersionInfo.cs" />
     <Compile Include="BBS\BBSApp.cs" />
     <Compile Include="BBS\SimpleBBSWebUIHelper.cs" />
+    <Compile Include="ConfigFields.cs" />
     <Compile Include="DebugProgram.cs" />
     <Compile Include="EndPointObfuscator.cs" />
     <Compile Include="Helpers.cs" />

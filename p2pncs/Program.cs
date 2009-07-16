@@ -49,20 +49,18 @@ namespace p2pncs
 
 		public static bool LoadConfig (XmlConfig config)
 		{
-			bool saveFlag = false, exists = false;
-			config.Define<int> ("net/bind/port", IntParser.Instance, new IntRangeValidator (1, ushort.MaxValue), 65000);
-			config.Define<int> ("gw/bind/port", IntParser.Instance, new IntRangeValidator (1, ushort.MaxValue), 8080);
+			bool exists = false;
+			config.Define<int> (ConfigFields.NetBindUdp, IntParser.Instance, new IntRangeValidator (1, ushort.MaxValue), new Random ().Next (49152, ushort.MaxValue));
+			config.Define<int> (ConfigFields.NetBindTcp, IntParser.Instance, new IntRangeValidator (1, ushort.MaxValue), config.GetValue<int> (ConfigFields.NetBindUdp));
+			config.Define<int> (ConfigFields.GwBindTcp, IntParser.Instance, new IntRangeValidator (1, ushort.MaxValue), 8080);
+			config.Define<bool> (ConfigFields.GwBindAny, BooleanParser.Instance, null, false);
 			try {
 				exists = File.Exists (CONFIG_PATH);
-				saveFlag = !exists;
 				if (exists)
 					config.Load (CONFIG_PATH);
-			} catch {
-				saveFlag = true;
-			}
+			} catch {}
 
-			if (saveFlag)
-				config.Save (CONFIG_PATH);
+			config.Save (CONFIG_PATH);
 			return exists;
 		}
 
@@ -79,17 +77,17 @@ namespace p2pncs
 			}
 
 			IDatagramEventSocket dgramSock = UdpSocket.CreateIPv4 ();
-			dgramSock.Bind (new IPEndPoint (IPAddress.Any, _config.GetValue<int> ("net/bind/port")));
+			dgramSock.Bind (new IPEndPoint (IPAddress.Any, _config.GetValue<int> (ConfigFields.NetBindUdp)));
 			using (Interrupters ints = new Interrupters ())
-			using (Node node = new Node (ints, dgramSock, "database.sqlite", _config.GetValue<int> ("net/bind/port")))
+			using (Node node = new Node (ints, dgramSock, "database.sqlite", _config.GetValue<int> (ConfigFields.NetBindUdp)))
 			using (WebApp app = new WebApp (node))
-			using (HttpServer.CreateEmbedHttpServer (app, null, true, true, false, _config.GetValue<int> ("gw/bind/port"), 16)) {
+			using (HttpServer.CreateEmbedHttpServer (app, null, true, true, _config.GetValue<bool> (ConfigFields.GwBindAny), _config.GetValue<int> (ConfigFields.GwBindTcp), 16)) {
 				Console.WriteLine ("正常に起動しました。");
-				Console.WriteLine ("ブラウザで http://127.0.0.1:{0}/ を開いてください。", _config.GetValue<int> ("gw/bind/port"));
+				Console.WriteLine ("ブラウザで http://127.0.0.1:{0}/ を開いてください。", _config.GetValue<int> (ConfigFields.GwBindTcp));
 				Console.WriteLine ();
 				Console.WriteLine ("注意: このコマンドプロンプトウィンドウは閉じないでください。");
 				Console.WriteLine ("プログラムを終了するときは、左側のメニューから[ネットワーク]→[終了]を選ぶか、");
-				Console.WriteLine ("http://127.0.0.1:{0}/net/exit を開いて、\"終了する\"ボタンを押してください。", _config.GetValue<int> ("gw/bind/port"));
+				Console.WriteLine ("http://127.0.0.1:{0}/net/exit を開いて、\"終了する\"ボタンを押してください。", _config.GetValue<int> (ConfigFields.GwBindTcp));
 				app.ExitWaitHandle.WaitOne ();
 				app.CreateStatisticsXML ().Save ("statistics-" + DateTime.Now.ToString ("yyyyMMddHHmmss") + ".xml");
 			}
