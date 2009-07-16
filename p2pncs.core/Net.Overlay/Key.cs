@@ -193,6 +193,14 @@ namespace p2pncs.Net.Overlay
 				return false;
 			return keyA.Equals (keyB);
 		}
+
+		public bool IsZero ()
+		{
+			for (int i = 0; i < _data.Length; i ++)
+				if (_data[i] != 0)
+					return false;
+			return true;
+		}
 		#endregion
 
 		#region Convert to/from ECKeyPair

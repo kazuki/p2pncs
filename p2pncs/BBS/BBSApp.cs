@@ -199,7 +199,7 @@ namespace p2pncs
 
 			List<MergeableFileRecord> records = _node.MMLC.GetRecords (key, out header);
 			if (!callByCallback) {
-				if (!_fastView || header == null) {
+				if (!_fastView || header == null || header.RecordsetHash.IsZero ()) {
 					ManualResetEvent done = new ManualResetEvent (false);
 					CometInfo info = new CometInfo (done, req, res, null, DateTime.Now + TimeSpan.FromSeconds (5), ProcessBBS_CometHandler);
 					_node.MMLC.StartMerge (key, ProcessBBS_Callback, done);

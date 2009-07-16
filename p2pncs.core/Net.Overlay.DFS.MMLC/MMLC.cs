@@ -767,6 +767,8 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 		void Touch (MergeableFileHeader header)
 		{
+			if (header.RecordsetHash.IsZero ())
+				return;
 			lock (_rePutList) {
 				if (_rePutList.Contains (header.Key))
 					return;
@@ -786,8 +788,11 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 						return;
 
 					MergeableFileHeader[] headers = GetHeaderList ();
-					for (int i = 0; i < headers.Length; i ++)
+					for (int i = 0; i < headers.Length; i ++) {
+						if (headers[i].RecordsetHash.IsZero ())
+							continue;
 						_rePutList.Add (headers[i].Key);
+					}
 					_rePutNextTime = DateTime.Now + _rePutInterval;
 					if (_rePutList.Count == 0)
 						return;
