@@ -76,10 +76,15 @@ namespace p2pncs
 				return;
 			}
 
+			ushort bindUdp = (ushort)_config.GetValue<int> (ConfigFields.NetBindUdp);
+			ushort bindTcp = (ushort)_config.GetValue<int> (ConfigFields.NetBindTcp);
 			IDatagramEventSocket dgramSock = UdpSocket.CreateIPv4 ();
-			dgramSock.Bind (new IPEndPoint (IPAddress.Any, _config.GetValue<int> (ConfigFields.NetBindUdp)));
+			dgramSock.Bind (new IPEndPoint (IPAddress.Any, bindUdp));
+			TcpListener listener = new TcpListener ();
+			listener.Bind (new IPEndPoint (IPAddress.Any, bindTcp));
+			listener.ListenStart ();
 			using (Interrupters ints = new Interrupters ())
-			using (Node node = new Node (ints, dgramSock, "database.sqlite", _config.GetValue<int> (ConfigFields.NetBindUdp)))
+			using (Node node = new Node (ints, dgramSock, listener, "database.sqlite", bindUdp, bindTcp))
 			using (WebApp app = new WebApp (node))
 			using (HttpServer.CreateEmbedHttpServer (app, null, true, true, _config.GetValue<bool> (ConfigFields.GwBindAny), _config.GetValue<int> (ConfigFields.GwBindTcp), 16)) {
 				Console.WriteLine ("正常に起動しました。");

@@ -111,9 +111,9 @@ namespace p2pncs
 			if (!IPAddressUtility.IsPrivate (_node.GetCurrentPublicIPAddress ())) {
 				doc.DocumentElement.AppendChild (doc.CreateElement ("ipendpoint", new string[][] {
 					new [] {"ip", _node.GetCurrentPublicIPAddress().ToString ()},
-					new [] {"port", _node.BindPort.ToString ()}
+					new [] {"port", _node.BindUdpPort.ToString ()}
 				}, new[] {
-					doc.CreateTextNode (EndPointObfuscator.Encode (new IPEndPoint (_node.GetCurrentPublicIPAddress (), _node.BindPort)))
+					doc.CreateTextNode (EndPointObfuscator.Encode (new IPEndPoint (_node.GetCurrentPublicIPAddress (), _node.BindUdpPort)))
 				}));
 			}
 

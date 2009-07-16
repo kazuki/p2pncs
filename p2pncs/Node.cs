@@ -36,8 +36,9 @@ namespace p2pncs
 		public const int DefaultMessagingDuplicationCheckBufferSize = 1024;
 
 		DateTime _start = DateTime.Now;
-		int _port;
+		int _udpPort, _tcpPort;
 		IDatagramEventSocket _dgramSock;
+		ITcpListener _tcpListener;
 		IMessagingSocket _messagingSock;
 		IKeyBasedRouter _kbr;
 		IDistributedHashTable _dht;
@@ -46,20 +47,23 @@ namespace p2pncs
 		ILocalHashTable _localHT;
 		MassKeyDeliverer _mkd;
 		MMLC _mmlc;
+		FileInfoCrawler _crawler;
 		PortOpenChecker _portChecker;
 		Statistics _statistics;
 
 		ECKeyPair _kbrPrivateKey;
 
-		public Node (Interrupters ints, IDatagramEventSocket bindedDgramSock, string db_path, int bindport)
+		public Node (Interrupters ints, IDatagramEventSocket bindedDgramSock, ITcpListener tcpListener, string db_path, ushort bindUdpPort, ushort bindTcpPort)
 		{
-			_port = bindport;
+			_udpPort = bindUdpPort;
+			_tcpPort = bindTcpPort;
 			_ints = ints;
 			_dgramSock = bindedDgramSock;
+			_tcpListener = tcpListener;
 			_messagingSock = new MessagingSocket (_dgramSock, true, SymmetricKey.NoneKey, p2pncs.Serializer.Instance,
 				null, ints.MessagingInt, DefaultMessagingTimeout, DefaultMessagingRetry, DefaultMessagingRetryBufferSize, DefaultMessagingDuplicationCheckBufferSize);
 			_kbrPrivateKey = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
-			_kbr = new SimpleIterativeRouter2 (Key.Create (_kbrPrivateKey), _messagingSock, new SimpleRoutingAlgorithm (), p2pncs.Serializer.Instance, true);
+			_kbr = new SimpleIterativeRouter2 (Key.Create (_kbrPrivateKey), bindTcpPort, _messagingSock, new SimpleRoutingAlgorithm (), p2pncs.Serializer.Instance, true);
 			_portChecker = new PortOpenChecker (_kbr);
 			_localHT = new OnMemoryLocalHashTable (_kbr, ints.DHTInt);
 			IMassKeyDelivererLocalStore mkdLocalStore = _localHT as IMassKeyDelivererLocalStore;
@@ -68,6 +72,7 @@ namespace p2pncs
 			ints.KBRStabilizeInt.AddInterruption (Stabilize);
 			_mkd = new MassKeyDeliverer (_dht, mkdLocalStore, ints.MassKeyDeliverTimerInt);
 			_mmlc = new MMLC (_anonymous, _dht, mkdLocalStore, db_path, ints.StreamSocketTimeoutInt, ints.DFSRePutTimerInt);
+			_crawler = new FileInfoCrawler (_tcpListener, _mmlc, _ints.CrawlingTimer);
 			_statistics = new Statistics ((AnonymousRouter)_anonymous, _mmlc);
 		}
 
@@ -78,6 +83,10 @@ namespace p2pncs
 
 		public IDatagramEventSocket DatagramEventSocket {
 			get { return _dgramSock; }
+		}
+
+		public ITcpListener TcpListener {
+			get { return _tcpListener; }
 		}
 
 		public IMessagingSocket MessagingSocket {
@@ -117,8 +126,12 @@ namespace p2pncs
 			throw new NotImplementedException ();
 		}
 
-		public int BindPort {
-			get { return _port; }
+		public int BindUdpPort {
+			get { return _udpPort; }
+		}
+
+		public int BindTcpPort {
+			get { return _tcpPort; }
 		}
 
 		public double RunningTime {
@@ -136,6 +149,8 @@ namespace p2pncs
 			_kbr.Close ();
 			_messagingSock.Dispose ();
 			_dgramSock.Dispose ();
+			_tcpListener.Dispose ();
+			_crawler.Dispose ();
 		}
 	}
 }

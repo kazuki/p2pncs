@@ -61,7 +61,7 @@ namespace p2pncs
 
 		public void Run ()
 		{
-			int gw_port = _config.GetValue<int> ("gw/bind/port");
+			int gw_port = _config.GetValue<int> (ConfigFields.GwBindTcp);
 
 			_network = new VirtualNetwork (LatencyTypes.Constant (20), 5, PacketLossType.Constant (0.05), Environment.ProcessorCount);
 
@@ -98,11 +98,13 @@ namespace p2pncs
 
 		DebugNode AddNode (int gw_port)
 		{
-			IPAddress adrs = _ipgen.Next ();
+			int nodeIdx = Interlocked.Increment (ref _nodeIdx);
+			IPAddress adrs = IPAddress.Loopback;//_ipgen.Next ();
 			VirtualDatagramEventSocket sock = new VirtualDatagramEventSocket (_network, adrs);
-			IPEndPoint pubEP = new IPEndPoint (adrs, 10000);
+			IPEndPoint pubEP = new IPEndPoint (adrs, 1 + nodeIdx);
+			IPEndPoint bindTcpEP = new IPEndPoint (IPAddress.Loopback, 30000 + nodeIdx);
 			sock.Bind (new IPEndPoint (IPAddress.Any, pubEP.Port));
-			DebugNode node = new DebugNode (Interlocked.Increment (ref _nodeIdx));
+			DebugNode node = new DebugNode (nodeIdx, bindTcpEP);
 			node.Prepare (_ints, sock, gw_port, pubEP);
 			lock (_list) {
 				_list.Add (node);
@@ -143,10 +145,15 @@ namespace p2pncs
 			Node _node;
 			int _idx;
 			bool _is_gw;
+			IPEndPoint _bindTcpEP;
+			ITcpListener _listener;
 
-			public DebugNode (int idx)
+			public DebugNode (int idx, IPEndPoint bindTcpEp)
 			{
 				_idx = idx;
+				_bindTcpEP = bindTcpEp;
+				_listener = new p2pncs.Net.TcpListener ();
+				_listener.Bind (bindTcpEp);
 				_imPrivateKey = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 				_imPublicKey = Key.Create (_imPrivateKey);
 				_name = "Node-" + idx.ToString ("x");
@@ -155,8 +162,9 @@ namespace p2pncs
 			public void Prepare (Interrupters ints, IDatagramEventSocket bindedDgramSock, int gw_port, IPEndPoint ep)
 			{
 				_name = _name + " (" + ep.ToString () + ")";
-				_node = new Node (ints, bindedDgramSock, string.Format ("db{0}{1}.sqlite", Path.DirectorySeparatorChar, _idx), ep.Port);
+				_node = new Node (ints, bindedDgramSock, _listener, string.Format ("db{0}{1}.sqlite", Path.DirectorySeparatorChar, _idx), (ushort)ep.Port, (ushort)_bindTcpEP.Port);
 				_app = new WebApp (_node);
+				_listener.ListenStart ();
 				_is_gw = gw_port > 0;
 				if (_is_gw)
 					_server = HttpServer.CreateEmbedHttpServer (_app, null, true, true, false, gw_port, 16);

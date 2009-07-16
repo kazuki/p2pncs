@@ -155,6 +155,13 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			DatabaseUtility.ExecuteNonQuery (transaction, sql, key.ToBase64String (), privateKey.PrivateKey);
 		}
 
+		void Insert (IDbTransaction transaction, MergeableFileHeader header)
+		{
+			long header_id;
+			IMergeableFileDatabaseParser parser = null;
+			Insert (transaction, header, ref parser, out header_id);
+		}
+
 		void Insert (IDbTransaction transaction, MergeableFileHeader header, IMergeableFileDatabaseParser parser)
 		{
 			long header_id;
@@ -258,9 +265,9 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			using (IDataReader reader = DatabaseUtility.ExecuteReader (transaction, "SELECT COUNT(id), MAX(created) FROM MMLC_MergeableRecords WHERE header_id = ?", header_id)) {
 				reader.Read ();
 				header.NumberOfRecords = reader.GetInt32 (0);
-				try {
+				if (header.NumberOfRecords > 0) {
 					header.LastModifiedTime = reader.GetUtcDateTime (1);
-				} catch {
+				} else {
 					header.LastModifiedTime = DateTime.MinValue;
 				}
 			}
@@ -303,6 +310,11 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			
 			sql = "DELETE FROM MMLC_MergeableRecords WHERE header_id=?;";
 			DatabaseUtility.ExecuteNonQuery (transaction, sql, header_id);
+		}
+
+		bool HasHeader (IDbTransaction transaction, Key key)
+		{
+			 return ((long)DatabaseUtility.ExecuteScalar (transaction, "SELECT count(id) FROM MMLC_Keys WHERE key=?", key.ToBase64String ())) != 0;
 		}
 		#endregion
 
@@ -713,6 +725,46 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			return headers.ToArray ();
 		}
 
+		public void AppendHeader (MergeableFileHeader[] headers)
+		{
+			// Check Sign
+			List<MergeableFileHeader> list = new List<MergeableFileHeader> (headers.Length);
+			for (int i = 0; i < headers.Length; i ++) {
+				if (!headers[i].Verify ())
+					return; // 署名が不正なヘッダを1つでも含む場合は全体のマージを停止する
+				list.Add (headers[i]);
+			}
+			headers = null;
+
+			using (IDbConnection connection = CreateDBConnection ())
+			using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.Serializable)) {
+				for (int i = 0; i < list.Count; i ++) {
+					if (HasHeader (transaction, list[i].Key))
+						continue;
+					Insert (transaction, list[i]);
+				}
+				transaction.Commit ();
+			}
+		}
+
+		public MergeableFileHeader[] GetRandomHeaders (int max_size)
+		{
+			List<MergeableFileHeader> headers = new List<MergeableFileHeader> ();
+			using (IDbConnection connection = CreateDBConnection ())
+			using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.ReadCommitted)) {
+				using (IDataReader reader1 = DatabaseUtility.ExecuteReader (transaction, "SELECT key FROM MMLC_Keys WHERE type=2 ORDER BY random() LIMIT " + max_size.ToString())) {
+					while (reader1.Read ()) {
+						try {
+							MergeableFileHeader header = SelectHeader (transaction, Key.FromBase64 (reader1.GetString (0))) as MergeableFileHeader;
+							if (header != null)
+								headers.Add (header.CopyBasisInfo ());
+						} catch {}
+					}
+				}
+			}
+			return headers.ToArray ();
+		}
+
 		void Touch (MergeableFileHeader header)
 		{
 			lock (_rePutList) {
@@ -766,6 +818,10 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			try {
 				MergeStatisticsNotice (this, e);
 			} catch {}
+		}
+
+		public IKeyBasedRouter KeyBasedRouter {
+			get { return _dht.KeyBasedRouter; }
 		}
 
 		public void Dispose ()
