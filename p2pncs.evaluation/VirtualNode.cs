@@ -72,9 +72,7 @@ namespace p2pncs.Evaluation
 			_msock = opt.BypassMessagingSerializer
 				? (IMessagingSocket)new VirtualMessagingSocket (sock, true, messagingInt, DefaultMessagingTimeout, DefaultMessagingRetries, DefaultMessagingRetryBufferSize, DefaultMessagingDupCheckSize)
 				: (IMessagingSocket)new MessagingSocket (sock, true, SymmetricKey.NoneKey, Serializer.Instance, null, messagingInt, DefaultMessagingTimeout, DefaultMessagingRetries, DefaultMessagingRetryBufferSize, DefaultMessagingDupCheckSize);
-			_kbr = opt.UseNewKeyBasedRouter
-				? (IKeyBasedRouter)new SimpleIterativeRouter2 (_nodeId, _msock, new SimpleRoutingAlgorithm (), Serializer.Instance, opt.NewKBRStrictMode)
-				: (IKeyBasedRouter)new SimpleIterativeRouter (_nodeId, _msock, new SimpleRoutingAlgorithm (), Serializer.Instance);
+			_kbr = new SimpleIterativeRouter2 (_nodeId, 0, _msock, new SimpleRoutingAlgorithm (), Serializer.Instance, opt.NewKBRStrictMode);
 			_localDHT = new OnMemoryLocalHashTable (_kbr, dhtInt);
 			_dht = new SimpleDHT (_kbr, _msock, _localDHT);
 			_dht.RegisterTypeID (typeof (string), 0, new LocalHashTableValueMerger<string> ());

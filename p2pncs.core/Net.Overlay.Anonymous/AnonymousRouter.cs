@@ -321,7 +321,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_sock.BeginInquire (new EstablishRouteMessage (label, payload.Payload), payload.NextHopNode, delegate (IAsyncResult ar) {
 					if (_sock.EndInquire (ar) == null) {
 						routeInfo.Timeout (null);
-						_kbr.RoutingAlgorithm.Fail (new NodeHandle (null, payload.NextHopNode));
+						_kbr.RoutingAlgorithm.Fail (payload.NextHopNode);
 					}
 				}, null);
 			} else {
@@ -426,7 +426,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			AnonymousEndPoint dest = (AnonymousEndPoint)states[1];
 			if (res == null) {
 				routeInfo.Timeout (routeInfo.Next == dest ? _sock : null);
-				_kbr.RoutingAlgorithm.Fail (new NodeHandle (null, dest.EndPoint));
+				_kbr.RoutingAlgorithm.Fail (dest.EndPoint);
 			} else {
 				if (routeInfo.Previous == dest)
 					routeInfo.ReceiveMessageFromPreviousNode ();
@@ -659,7 +659,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			bool completed;
 			if (ret == null) {
 				completed = state.Fail ();
-				_kbr.RoutingAlgorithm.Fail (new NodeHandle (null, ep));
+				_kbr.RoutingAlgorithm.Fail (ep);
 			} else {
 				completed = state.Success ();
 			}
@@ -1195,7 +1195,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				IMessagingSocket sock = (IMessagingSocket)ar.AsyncState;
 				if (sock.EndInquire (ar) == null) {
 					_routeInfo.Timeout (null);
-					_subscribe.AnonymousRouter.KeyBasedRouter.RoutingAlgorithm.Fail (new NodeHandle (null, _routeInfo.Next.EndPoint));
+					_subscribe.AnonymousRouter.KeyBasedRouter.RoutingAlgorithm.Fail (_routeInfo.Next.EndPoint);
 				} else {
 					_routeInfo.ReceiveMessageFromNextNode ();
 				}
@@ -1267,7 +1267,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				IMessagingSocket sock = (IMessagingSocket)ar.AsyncState;
 				if (sock.EndInquire (ar) == null) {
 					_routeInfo.Timeout (null);
-					_router.KeyBasedRouter.RoutingAlgorithm.Fail (new NodeHandle (null, _routeInfo.Previous.EndPoint));
+					_router.KeyBasedRouter.RoutingAlgorithm.Fail (_routeInfo.Previous.EndPoint);
 				} else {
 					_routeInfo.ReceiveMessageFromPreviousNode ();
 				}

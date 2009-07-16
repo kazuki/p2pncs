@@ -66,7 +66,11 @@
     <Compile Include="Net.Overlay.DFS.MMLC\CaptchaChallengeSegment.cs" />
     <Compile Include="Net.Overlay.DFS.MMLC\CaptchaContainer.cs" />
     <Compile Include="Net.Overlay.DFS.MMLC\CaptchaVerifyResult.cs" />
+    <Compile Include="Net.Overlay.DFS.MMLC\FileInfoCrawler.cs" />
     <Compile Include="Net\DnsEndPoint.cs" />
+    <Compile Include="Net\ITcpListener.cs" />
+    <Compile Include="Net\TcpListener.cs" />
+    <Compile Include="Net\TcpListenerAcceptedEventArgs.cs" />
     <Compile Include="ProtocolVersion.cs" />
     <Compile Include="Security.Captcha\CaptchaChallengeData.cs" />
     <Compile Include="Security.Captcha\ICaptchaAuthority.cs" />
@@ -93,7 +97,6 @@
     <Compile Include="Net.Overlay.DHT\MassKeyDeliverer.cs" />
     <Compile Include="Net.Overlay\NodeHandle.cs" />
     <Compile Include="Net.Overlay\RoutingResult.cs" />
-    <Compile Include="Net.Overlay\SimpleIterativeRouter.cs" />
     <Compile Include="Net.Overlay\SimpleIterativeRouter2.cs" />
     <Compile Include="Net.Overlay\SimpleRoutingAlgorithm.cs" />
     <Compile Include="Net\DatagramReceiveEventArgs.cs" />

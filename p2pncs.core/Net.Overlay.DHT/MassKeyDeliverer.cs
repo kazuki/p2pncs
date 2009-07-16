@@ -50,7 +50,7 @@ namespace p2pncs.Net.Overlay.DHT
 		{
 			Message msg = e.InquireMessage as Message;
 			_sock.StartResponse (e, "ACK");
-			_router.RoutingAlgorithm.Touch (new NodeHandle (msg.Sender, e.EndPoint));
+			_router.RoutingAlgorithm.Touch (new NodeHandle (msg.Sender, e.EndPoint, msg.SenderTcpPort));
 
 			for (int i = 0; i < msg.Entries.Length; i ++) {
 				DHTEntry entry = msg.Entries[i];
@@ -71,7 +71,7 @@ namespace p2pncs.Net.Overlay.DHT
 				if (nodes == null)
 					continue;
 				nodes = nodes.RandomSelection (SEND_NODES);
-				Message msg = new Message (_router.SelftNodeId, _values[i].ToArray ());
+				Message msg = new Message (_router.SelftNodeId, _router.SelfTcpPort, _values[i].ToArray ());
 				for (int q = 0; q < nodes.Length; q ++)
 					_sock.BeginInquire (msg, nodes[q].EndPoint, Deliver_Callback, nodes[q]);
 			}
@@ -103,16 +103,24 @@ namespace p2pncs.Net.Overlay.DHT
 			Key _sender;
 
 			[SerializableFieldId (1)]
+			ushort _tcpPort;
+
+			[SerializableFieldId (2)]
 			DHTEntry[] _entries;
 
-			public Message (Key sender, DHTEntry[] entries)
+			public Message (Key sender, ushort tcpPort, DHTEntry[] entries)
 			{
 				_sender = sender;
+				_tcpPort = tcpPort;
 				_entries = entries;
 			}
 
 			public Key Sender {
 				get { return _sender; }
+			}
+
+			public ushort SenderTcpPort {
+				get { return _tcpPort; }
 			}
 
 			public DHTEntry[] Entries {

@@ -33,5 +33,6 @@ namespace p2pncs.Net.Overlay
 		IKeyBasedRoutingAlgorithm RoutingAlgorithm { get; }
 		IMessagingSocket MessagingSocket { get; }
 		Key SelftNodeId { get; }
+		ushort SelfTcpPort { get; }
 	}
 }

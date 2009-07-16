@@ -28,6 +28,7 @@ namespace p2pncs.Net.Overlay
 	{
 		IKeyBasedRoutingAlgorithm _algo;
 		Key _selfId;
+		ushort _tcpPort;
 		IMessagingSocket _sock;
 
 		bool _active = true, _strict_mode;
@@ -38,14 +39,15 @@ namespace p2pncs.Net.Overlay
 
 		public event EventHandler<StatisticsNoticeEventArgs> StatisticsNotice;
 
-		public SimpleIterativeRouter2 (Key self, IMessagingSocket sock, IKeyBasedRoutingAlgorithm algo, IFormatter formatter)
-			: this (self, sock, algo, formatter, false)
+		public SimpleIterativeRouter2 (Key self, ushort tcpPort, IMessagingSocket sock, IKeyBasedRoutingAlgorithm algo, IFormatter formatter)
+			: this (self, tcpPort, sock, algo, formatter, false)
 		{
 		}
 
-		public SimpleIterativeRouter2 (Key self, IMessagingSocket sock, IKeyBasedRoutingAlgorithm algo, IFormatter formatter, bool isStrictMode)
+		public SimpleIterativeRouter2 (Key self, ushort tcpPort, IMessagingSocket sock, IKeyBasedRoutingAlgorithm algo, IFormatter formatter, bool isStrictMode)
 		{
 			_selfId = self;
+			_tcpPort = tcpPort;
 			_sock = sock;
 			_algo = algo;
 			_strict_mode = isStrictMode;
@@ -54,11 +56,11 @@ namespace p2pncs.Net.Overlay
 			int overhead, nodeHandleBytes;
 			{
 				using (MemoryStream ms = new MemoryStream ()) {
-					formatter.Serialize (ms, new NextHopResponse (self, true, new NodeHandle[0]));
+					formatter.Serialize (ms, new NextHopResponse (self, _tcpPort, true, new NodeHandle[0]));
 					overhead = (int)ms.Length;
 				}
 				using (MemoryStream ms = new MemoryStream ()) {
-					formatter.Serialize (ms, new NodeHandle (self, new IPEndPoint (IPAddress.Loopback, 0)));
+					formatter.Serialize (ms, new NodeHandle (self, new IPEndPoint (IPAddress.Loopback, 0), tcpPort));
 					nodeHandleBytes = (int)ms.Length;
 				}
 			}
@@ -108,6 +110,10 @@ namespace p2pncs.Net.Overlay
 			get { return _selfId; }
 		}
 
+		public ushort SelfTcpPort {
+			get { return _tcpPort; }
+		}
+
 		#endregion
 
 		#region Misc
@@ -134,8 +140,8 @@ namespace p2pncs.Net.Overlay
 				isRoot = true;
 				nextHops = _algo.GetCloseNodes (req.Destination, req.NumberOfRootCandidates, req.Sender);
 			}
-			_sock.StartResponse (e, new NextHopResponse (_selfId, isRoot, nextHops));
-			_algo.Touch (new NodeHandle (req.Sender, e.EndPoint));
+			_sock.StartResponse (e, new NextHopResponse (_selfId, _tcpPort, isRoot, nextHops));
+			_algo.Touch (new NodeHandle (req.Sender, e.EndPoint, req.SenderTcpPort));
 		}
 
 		void MessagingSocket_Inquired_CloseNodeQuery (object sender, InquiredEventArgs e)
@@ -145,8 +151,8 @@ namespace p2pncs.Net.Overlay
 
 			CloseNodeQuery req = (CloseNodeQuery)e.InquireMessage;
 			NodeHandle[] closeNodes = _algo.GetCloseNodes (req.Destination, req.NumberOfCloseNodes, req.Sender);
-			_sock.StartResponse (e, new CloseNodeResponse (_selfId, closeNodes));
-			_algo.Touch (new NodeHandle (req.Sender, e.EndPoint));
+			_sock.StartResponse (e, new CloseNodeResponse (_selfId, _tcpPort, closeNodes));
+			_algo.Touch (new NodeHandle (req.Sender, e.EndPoint, req.SenderTcpPort));
 		}
 		#endregion
 
@@ -183,8 +189,8 @@ namespace p2pncs.Net.Overlay
 				_slots = new HopSlot[router.RoutingAlgorithm.MaxRoutingLevel + 1];
 				_startTime = DateTime.Now;
 				_timeout = DateTime.Now + TimeSpan.FromSeconds (10);
-				_query1 = new NextHopQuery (router.SelftNodeId, dest, numOfSimultaneous * 2, numOfCandidates);
-				_query2 = new CloseNodeQuery (router.SelftNodeId, dest, numOfCandidates);
+				_query1 = new NextHopQuery (router.SelftNodeId, router.SelfTcpPort, dest, numOfSimultaneous * 2, numOfCandidates);
+				_query2 = new CloseNodeQuery (router.SelftNodeId, router.SelfTcpPort, dest, numOfCandidates);
 			}
 
 			#region IAsyncResult Members
@@ -220,7 +226,7 @@ namespace p2pncs.Net.Overlay
 						if (nodes == null || nodes.Length == 0) {
 							isRoot = true;
 							List<NodeHandle> list = new List<NodeHandle> (_numOfCandidates + 1);
-							list.Add (new NodeHandle (_router.SelftNodeId, null));
+							list.Add (new NodeHandle (_router.SelftNodeId, null, _router.SelfTcpPort));
 							list.AddRange (_router.RoutingAlgorithm.GetCloseNodes (_dest, _numOfCandidates, null));
 							nodes = list.ToArray ();
 						}
@@ -228,7 +234,7 @@ namespace p2pncs.Net.Overlay
 				} else {
 					nodes = new NodeHandle [firstHops.Length];
 					for (int i = 0; i < firstHops.Length; i ++)
-						nodes[i] = new NodeHandle (null, firstHops[i]);
+						nodes[i] = new NodeHandle (null, firstHops[i], 0);
 				}
 				lock (_fillLock) {
 					FillSlot (null, nodes, isRoot, 0);
@@ -339,7 +345,7 @@ namespace p2pncs.Net.Overlay
 					return;
 				}
 
-				entry.Responsed (res.Sender, _keyMap);
+				entry.Responsed (res.Sender, res.SenderTcpPort, _keyMap);
 				_router.RoutingAlgorithm.Touch (entry.NodeHandle);
 				lock (_fillLock) {
 					FillSlot (entry, res.NextHops, res.IsRootCandidate, Interlocked.Decrement (ref _inquiring));
@@ -355,7 +361,7 @@ namespace p2pncs.Net.Overlay
 
 				if (_rootCandidates.Count == 0 && _dest.Equals (_router.SelftNodeId)) {
 					// 自分自身が宛先と同じなので候補に追加する
-					_rootCandidates.Add (new HopSlotEntry (new NodeHandle (_dest, null), 0));
+					_rootCandidates.Add (new HopSlotEntry (new NodeHandle (_router.SelftNodeId, null, _router.SelfTcpPort), 0));
 				}
 				if (senderIsRoot && sender != null) {
 					// senderがルート候補なので追加する
@@ -459,7 +465,7 @@ namespace p2pncs.Net.Overlay
 					return;
 				}
 
-				entry.Responsed (res.Sender, _keyMap);
+				entry.Responsed (res.Sender, res.SenderTcpPort, _keyMap);
 				_router.RoutingAlgorithm.Touch (entry.NodeHandle);
 				lock (_fillLock) {
 					FillRootCandidateSlot (entry, false, res.CloseNodes, Interlocked.Decrement (ref _inquiring));
@@ -585,11 +591,11 @@ namespace p2pncs.Net.Overlay
 					_isInquiryStarted = true;
 				}
 				
-				public void Responsed (Key key, Dictionary<Key, HopSlotEntry> map)
+				public void Responsed (Key key, ushort tcpPort, Dictionary<Key, HopSlotEntry> map)
 				{
 					_time = DateTime.Now.Subtract (_start);
 					if (_node.NodeID == null) {
-						_node = new NodeHandle (key, _node.EndPoint);
+						_node = new NodeHandle (key, _node.EndPoint, tcpPort);
 						map.Add (key, this);
 					}
 				}
@@ -608,6 +614,9 @@ namespace p2pncs.Net.Overlay
 			[SerializableFieldId (0)]
 			Key _sender;
 
+			[SerializableFieldId (4)]
+			ushort _tcpPort;
+
 			[SerializableFieldId (1)]
 			Key _dest;
 
@@ -617,9 +626,10 @@ namespace p2pncs.Net.Overlay
 			[SerializableFieldId (3)]
 			int _numOfRootCandidates;
 
-			public NextHopQuery (Key sender, Key dest, int numOfNextHops, int numOfRootCandidates)
+			public NextHopQuery (Key sender, ushort senderTcpPort, Key dest, int numOfNextHops, int numOfRootCandidates)
 			{
 				_sender = sender;
+				_tcpPort = senderTcpPort;
 				_dest = dest;
 				_numOfNextHops = numOfNextHops;
 				_numOfRootCandidates = numOfRootCandidates;
@@ -627,6 +637,10 @@ namespace p2pncs.Net.Overlay
 
 			public Key Sender {
 				get { return _sender; }
+			}
+
+			public ushort SenderTcpPort {
+				get { return _tcpPort; }
 			}
 
 			public Key Destination {
@@ -648,21 +662,29 @@ namespace p2pncs.Net.Overlay
 			[SerializableFieldId (0)]
 			Key _sender;
 
+			[SerializableFieldId (3)]
+			ushort _tcpPort;
+
 			[SerializableFieldId (1)]
 			bool _isRootCandidate;
 
 			[SerializableFieldId (2)]
 			NodeHandle[] _nextHops;
 
-			public NextHopResponse (Key sender, bool isRootCandidate, NodeHandle[] nextHops)
+			public NextHopResponse (Key sender, ushort senderTcpPort, bool isRootCandidate, NodeHandle[] nextHops)
 			{
 				_sender = sender;
+				_tcpPort = senderTcpPort;
 				_isRootCandidate = isRootCandidate;
 				_nextHops = nextHops;
 			}
 
 			public Key Sender {
 				get { return _sender; }
+			}
+
+			public ushort SenderTcpPort {
+				get { return _tcpPort; }
 			}
 
 			public bool IsRootCandidate {
@@ -680,21 +702,29 @@ namespace p2pncs.Net.Overlay
 			[SerializableFieldId (0)]
 			Key _sender;
 
+			[SerializableFieldId (3)]
+			ushort _tcpPort;
+
 			[SerializableFieldId (1)]
 			Key _dest;
 
 			[SerializableFieldId (2)]
 			int _numOfCloseNodes;
 
-			public CloseNodeQuery (Key sender, Key dest, int numOfCloseNodes)
+			public CloseNodeQuery (Key sender, ushort senderTcpPort, Key dest, int numOfCloseNodes)
 			{
 				_sender = sender;
+				_tcpPort = senderTcpPort;
 				_dest = dest;
 				_numOfCloseNodes = numOfCloseNodes;
 			}
 
 			public Key Sender {
 				get { return _sender; }
+			}
+
+			public ushort SenderTcpPort {
+				get { return _tcpPort; }
 			}
 
 			public Key Destination {
@@ -712,17 +742,25 @@ namespace p2pncs.Net.Overlay
 			[SerializableFieldId (0)]
 			Key _sender;
 
+			[SerializableFieldId (2)]
+			ushort _tcpPort;
+
 			[SerializableFieldId (1)]
 			NodeHandle[] _closeNodes;
 
-			public CloseNodeResponse (Key sender, NodeHandle[] closeNodes)
+			public CloseNodeResponse (Key sender, ushort senderTcpPort, NodeHandle[] closeNodes)
 			{
 				_sender = sender;
+				_tcpPort = senderTcpPort;
 				_closeNodes = closeNodes;
 			}
 
 			public Key Sender {
 				get { return _sender; }
+			}
+
+			public ushort SenderTcpPort {
+				get { return _tcpPort; }
 			}
 
 			public NodeHandle[] CloseNodes {

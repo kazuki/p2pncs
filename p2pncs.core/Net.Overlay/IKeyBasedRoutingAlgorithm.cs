@@ -36,6 +36,7 @@ namespace p2pncs.Net.Overlay
 
 		void Touch (NodeHandle node);
 		void Fail (NodeHandle node);
+		void Fail (EndPoint ep);
 
 		void Setup (Key selfNodeId, IKeyBasedRouter router);
 		void Stabilize ();

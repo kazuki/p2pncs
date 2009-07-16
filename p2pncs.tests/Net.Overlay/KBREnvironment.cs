@@ -70,8 +70,7 @@ namespace p2pncs.tests.Net.Overlay
 				//IMessagingSocket msock = new MessagingSocket (sock, true, SymmetricKey.NoneKey, Serializer.Instance, null, _interrupter, TimeSpan.FromSeconds (1), 2, 1024);
 				IMessagingSocket msock = new VirtualMessagingSocket (sock, true, _interrupter, TimeSpan.FromSeconds (1), 2, 1024, 1024);
 				_sockets.Add (msock);
-				//IKeyBasedRouter router = new SimpleIterativeRouter (keys[i], msock, new SimpleRoutingAlgorithm (), Serializer.Instance);
-				IKeyBasedRouter router = new SimpleIterativeRouter2 (keys[i], msock, new SimpleRoutingAlgorithm (), Serializer.Instance, true);
+				IKeyBasedRouter router = new SimpleIterativeRouter2 (keys[i], 0, msock, new SimpleRoutingAlgorithm (), Serializer.Instance, true);
 				_routers.Add (router);
 				if (_dhts != null) {
 					IDistributedHashTable dht = new SimpleDHT (router, msock, new OnMemoryLocalHashTable (router, _dhtInt));

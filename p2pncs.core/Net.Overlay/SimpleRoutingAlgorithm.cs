@@ -210,7 +210,7 @@ namespace p2pncs.Net.Overlay
 			}
 		}
 
-		void Fail (EndPoint ep)
+		public void Fail (EndPoint ep)
 		{
 			NodeHandle node;
 			lock (_routingTable) {

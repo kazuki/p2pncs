@@ -31,10 +31,14 @@ namespace p2pncs.Net.Overlay
 		[SerializableFieldId (1)]
 		Key _id;
 
-		public NodeHandle (Key id, EndPoint ep)
+		[SerializableFieldId (2)]
+		ushort _tcpPort;
+
+		public NodeHandle (Key id, EndPoint ep, ushort tcpPort)
 		{
 			_id = id;
 			_ep = ep;
+			_tcpPort = tcpPort;
 		}
 
 		public EndPoint EndPoint {
@@ -45,9 +49,13 @@ namespace p2pncs.Net.Overlay
 			get { return _id; }
 		}
 
+		public ushort TcpPort {
+			get { return _tcpPort; }
+		}
+
 		public override string ToString ()
 		{
-			return (_id == null ? "null" : _id.ToString ()) + (_ep == null ? "@null" : "@" + _ep.ToString ());
+			return (_id == null ? "null" : _id.ToString ()) + (_ep == null ? "@null" : "@" + _ep.ToString ()) + "#" + _tcpPort.ToString ();
 		}
 	}
 }
