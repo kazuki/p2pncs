@@ -55,6 +55,9 @@ namespace p2pncs.Wiki
 				doc.CreateElement ("title", null, new[] {
 					doc.CreateTextNodeSafe (content.PageName)
 				}),
+				doc.CreateElement ("title-for-url", null, new[] {
+					doc.CreateTextNodeSafe (WebApp.WikiTitleToUrl (content.PageName))
+				}),
 				doc.CreateElement ("name", null, new[] {
 					doc.CreateTextNodeSafe (content.Name)
 				}),

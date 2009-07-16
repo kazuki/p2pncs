@@ -105,7 +105,7 @@ namespace p2pncs.Wiki.Engine
 						break;
 					case WikiInlineMarkupType.WikiName:
 						text = r.Replace (text, delegate (Match m) {
-							return "<a href=\"" + Uri.EscapeUriString (m.Groups["name"].Value) + "\">" + m.Groups["name"].Value + "</a>";
+							return "<a href=\"" + WebApp.WikiTitleToUrl (m.Groups["name"].Value) + "\">" + m.Groups["name"].Value + "</a>";
 						});
 						break;
 				}

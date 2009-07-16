@@ -9,7 +9,7 @@
 	</xsl:variable>
 	<xsl:variable name="page_url">
 		<xsl:value-of select="$base_url" />
-		<xsl:value-of select="/page/page-title" />
+		<xsl:value-of select="/page/page-title-for-url" />
 	</xsl:variable>
 
 	<xsl:template match="/">

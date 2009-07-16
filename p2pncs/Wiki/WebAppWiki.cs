@@ -187,6 +187,7 @@ namespace p2pncs
 				doc.DocumentElement.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header, new MergeableFileRecord[] {record}));
 			}
 			doc.DocumentElement.AppendChild (doc.CreateElement ("page-title", null, new []{doc.CreateTextNode (page_title)}));
+			doc.DocumentElement.AppendChild (doc.CreateElement ("page-title-for-url", null, new[]{doc.CreateTextNode (WikiTitleToUrl (page_title))}));
 
 			string xsl = "wiki.xsl";
 			if (req.QueryData.ContainsKey ("edit"))
@@ -226,6 +227,13 @@ namespace p2pncs
 					latest = records[i];
 			}
 			return latest;
+		}
+
+		public static string WikiTitleToUrl (string title)
+		{
+			title = Uri.EscapeUriString (title);
+			title = title.Replace ("/", "%2F");
+			return title;
 		}
 
 		enum SpecialPageType

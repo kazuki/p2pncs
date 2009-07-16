@@ -17,7 +17,7 @@
 					<xsl:element name="a">
 						<xsl:attribute name="href">
 							<xsl:value-of select="$base_url" />
-							<xsl:value-of select="wiki/title" />
+							<xsl:value-of select="wiki/title-for-url" />
 						</xsl:attribute>
 						<xsl:text>/</xsl:text>
 						<xsl:value-of select="wiki/title" />
