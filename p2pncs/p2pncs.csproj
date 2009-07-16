@@ -60,6 +60,30 @@
     <Compile Include="WebAppPartials\WebAppManage.cs" />
     <Compile Include="WebAppPartials\WebAppNet.cs" />
     <Compile Include="WebAppPartials\WebAppStatistics.cs" />
+    <Compile Include="Wiki\Engine\IWikiParser.cs" />
+    <Compile Include="Wiki\Engine\PukiWikiMarkupParser.cs" />
+    <Compile Include="Wiki\Engine\WikiElement.cs" />
+    <Compile Include="Wiki\Engine\WikiHeadingElement.cs" />
+    <Compile Include="Wiki\Engine\WikiHtmlRenderer.cs" />
+    <Compile Include="Wiki\Engine\WikiIndentedElement.cs" />
+    <Compile Include="Wiki\Engine\WikiInlineMarkupInfo.cs" />
+    <Compile Include="Wiki\Engine\WikiInlineMarkupType.cs" />
+    <Compile Include="Wiki\Engine\WikiListContainer.cs" />
+    <Compile Include="Wiki\Engine\WikiListItemElement.cs" />
+    <Compile Include="Wiki\Engine\WikiListType.cs" />
+    <Compile Include="Wiki\Engine\WikiNode.cs" />
+    <Compile Include="Wiki\Engine\WikiParagraphElement.cs" />
+    <Compile Include="Wiki\Engine\WikiRootElement.cs" />
+    <Compile Include="Wiki\Engine\WikiTextNode.cs" />
+    <Compile Include="Wiki\Engine\WikiTextUtility.cs" />
+    <Compile Include="Wiki\WebAppWiki.cs" />
+    <Compile Include="Wiki\WikiCompressType.cs" />
+    <Compile Include="Wiki\WikiDiffType.cs" />
+    <Compile Include="Wiki\WikiHeader.cs" />
+    <Compile Include="Wiki\WikiMarkupType.cs" />
+    <Compile Include="Wiki\WikiParser.cs" />
+    <Compile Include="Wiki\WikiRecord.cs" />
+    <Compile Include="Wiki\WikiWebUIHelper.cs" />
     <Compile Include="XmlHelper.cs" />
   </ItemGroup>
   <ItemGroup>

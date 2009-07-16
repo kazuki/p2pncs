@@ -40,6 +40,7 @@ namespace p2pncs
 		{
 			_node = node;
 			node.MMLC.Register (BBS.SimpleBBSParser.Instance);
+			node.MMLC.Register (Wiki.WikiParser.Instance);
 		}
 
 		public void Dispose ()
@@ -63,6 +64,12 @@ namespace p2pncs
 				return ProcessBbsOpenPage (server, req, res);
 			if (absPath.StartsWith ("/bbs/"))
 				return ProcessBBS (server, req, res, false);
+			if (absPath == "/wiki" || absPath == "/wiki/")
+				return ProcessWikiListPage (server, req, res);
+			if (absPath == "/wiki/new")
+				return ProcessWikiNewPage (server, req, res);
+			if (absPath.StartsWith ("/wiki/"))
+				return ProcessWikiPage (server, req, res, false);
 			if (absPath == "/manage" || absPath == "/manage/")
 				return ProcessManageTop (server, req, res);
 			if (absPath.StartsWith ("/manage/"))

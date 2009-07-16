@@ -34,6 +34,13 @@
 								<li><a href="/bbs">一覧</a></li>
 							</ul>
 						</li>
+						<li>
+							<xsl:text>Wiki</xsl:text>
+							<ul>
+								<li><a href="/wiki/new">新規作成</a></li>
+								<li><a href="/wiki">一覧</a></li>
+							</ul>
+						</li>
 					</ul>
 				</div>
 				<div id="contents">
