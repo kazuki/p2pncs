@@ -1,22 +1,28 @@
 $(function() {
 	var post_ajax = function () {
 		var dlg = $("#dlgPost");
-		var postName = encodeURIComponent ($("#postName").val());
-		var postBody = encodeURIComponent ($("#postBody").val());
-		var postAuthIdx = encodeURIComponent ($("#authsvr").val());
-		var postToken = encodeURIComponent ($("#postToken").val());
-		var postAnswer = encodeURIComponent ($("#postAnswer").val());
-		var postPrev = encodeURIComponent ($("#postPrev").val());
+		var postName = $("#postName").val();
+		var postBody = $("#postBody").val();
+		var postAuthIdx = $("#authsvr").val();
+		var postToken = $("#postToken").val();
+		var postAnswer = $("#postAnswer").val();
+		var postPrev = $("#postPrev").val();
 		var bbsKey = $("#postKey").val();
-		var postUrl = "/bbs/" + bbsKey + "?name=" + postName + "&body=" + postBody
-			+ "&token=" + postToken + "&answer=" + postAnswer + "&prev=" + postPrev;
-		if ($("#authsvr")) postUrl += "&auth=" + postAuthIdx;
+		var postUrl = "/bbs/" + bbsKey;
 		dlg.dialog("option", "set_default") (dlg);
 		$.ajax({
 			dataType: "xml",
 			cache: false,
 			type: "POST",
 			url: postUrl,
+			data: {
+				"name": postName,
+				"body": postBody,
+				"token": postToken,
+				"answer": postAnswer,
+				"prev": postPrev,
+				"auth": postAuthIdx
+			},
 			error: function () {
 				dlg.children().remove().add("p").text("CAPTCHA認証サーバへの問い合わせがタイムアウトしました");
 				dlg.dialog("option", "buttons", {

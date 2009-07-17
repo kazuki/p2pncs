@@ -77,13 +77,14 @@ namespace p2pncs
 			MergeableFileHeader header;
 			if (req.HttpMethod == HttpMethod.POST) {
 				// posting...
+				Dictionary<string, string> dic = HttpUtility.ParseUrlEncodedStringToDictionary (req.GetContentBody (MaxRequestBodySize));
 				res[HttpHeaderNames.ContentType] = "text/xml; charset=UTF-8";
-				string name = Helpers.GetQueryValue (req, "name").Trim ();
-				string body = Helpers.GetQueryValue (req, "body").Trim ();
-				string auth = Helpers.GetQueryValue (req, "auth").Trim ();
-				string token = Helpers.GetQueryValue (req, "token").Trim ();
-				string answer = Helpers.GetQueryValue (req, "answer").Trim ();
-				string prev = Helpers.GetQueryValue (req, "prev").Trim ();
+				string name = Helpers.GetValueSafe (dic, "name").Trim ();
+				string body = Helpers.GetValueSafe (dic, "body").Trim ();
+				string auth = Helpers.GetValueSafe (dic, "auth").Trim ();
+				string token = Helpers.GetValueSafe (dic, "token").Trim ();
+				string answer = Helpers.GetValueSafe (dic, "answer").Trim ();
+				string prev = Helpers.GetValueSafe (dic, "prev").Trim ();
 				if (body.Length > 0) {
 					header = _node.MMLC.GetMergeableFileHeader (key);
 					if (header == null)
