@@ -13,6 +13,7 @@
 				<script type="text/javascript" charset="utf-8" src="/js/jquery-1.3.2.min.js" />
 				<script type="text/javascript" charset="utf-8" src="/js/jquery-ui-1.7.2.custom.min.js" />
 				<script type="text/javascript" charset="utf-8" src="/js/jquery-simple-dom.js" />
+				<script type="text/javascript" charset="utf-8" src="/js/post.js" />
 				<script type="text/javascript" charset="utf-8" src="/js/bbs.js" />
 				<link type="text/css" rel="stylesheet" href="/css/bbs.css" />
 			</head>
