@@ -7,4 +7,5 @@ input.validation-hidden {
 div.validation-all-error {
   background-color: #faa;
   border: 1px solid black;
+  padding-left: 1em;
 }

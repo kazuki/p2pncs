@@ -34,79 +34,6 @@ namespace p2pncs
 {
 	partial class WebApp
 	{
-		object ProcessBbsNewPage (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
-		{
-			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
-			if (req.HttpMethod == HttpMethod.POST) {
-				Dictionary<string, string> dic = HttpUtility.ParseUrlEncodedStringToDictionary (Encoding.ASCII.GetString (req.GetContentBody (MaxRequestBodySize)), Encoding.UTF8);
-				XmlNode validationRoot = doc.DocumentElement.AppendChild (doc.CreateElement ("validation"));
-				string title = Helpers.GetValueSafe (dic, "title").Trim ();
-				string auth = Helpers.GetValueSafe (dic, "auth").Trim ();
-				string fpname = Helpers.GetValueSafe (dic, "fpname").Trim ();
-				string fpbody = Helpers.GetValueSafe (dic, "fpbody").Trim ();
-				string state = Helpers.GetValueSafe (dic, "state").Trim ();
-				bool reedit = Helpers.GetValueSafe (dic, "re-edit").Length > 0;
-				bool title_status = title.Length != 0 && title.Length <= 64;
-				bool auth_status = true;
-				bool all_status = true;
-				try {
-					AuthServerInfo.ParseArray (auth);
-				} catch {
-					auth_status = false;
-				}
-				if (title_status && auth_status && !reedit) {
-					SimpleBBSHeader header2 = new SimpleBBSHeader (title);
-					MergeableFileRecord record = null;
-					if (fpbody.Length > 0)
-						record = new MergeableFileRecord (new SimpleBBSRecord (fpname, fpbody), DateTime.UtcNow, DateTime.UtcNow, null, null, null, byte.MaxValue, new byte[DefaultAlgorithm.ECDomainBytes + 1]);
-					AuthServerInfo[] auth_servers = AuthServerInfo.ParseArray (auth);
-					if (state == "confirm") {
-						try {
-							MergeableFileHeader header = _node.MMLC.CreateNew (header2, auth_servers, record == null ? null : new MergeableFileRecord[] { record });
-							doc.DocumentElement.AppendChild (doc.CreateElement ("created", new string[][] { new[] { "key", header.Key.ToUriSafeBase64String () } }, null));
-							state = "success";
-						} catch (OutOfMemoryException) {
-							all_status = false;
-							state = "";
-						}
-					} else {
-						state = "confirm";
-						MergeableFileHeader header = new MergeableFileHeader (ECKeyPair.Create (DefaultAlgorithm.ECDomainName), DateTime.UtcNow, DateTime.UtcNow, header2, auth_servers);
-						if (Serializer.Instance.Serialize (header).Length > MMLC.MergeableFileHeaderMaxSize || (record != null && Serializer.Instance.Serialize (record).Length > MMLC.MergeableFileRecordMaxSize)) {
-							all_status = false;
-							state = "";
-						}
-					}
-				} else {
-					state = string.Empty;
-				}
-
-				if (!all_status) {
-					validationRoot.AppendChild (doc.CreateElement ("all", null, new[]{
-						doc.CreateTextNode (string.Format ("ヘッダサイズが{0}バイトを超えたか、最初の投稿が{1}バイトを超えました. タイトルや認証サーバまたは投稿文の情報量を減らしてください", MMLC.MergeableFileHeaderMaxSize, MMLC.MergeableFileRecordMaxSize))
-					}));
-				}
-				validationRoot.AppendChild (doc.CreateElement ("data", new string[][] { new[] { "name", "title" }, new[] { "status", title_status ? "ok" : "error" } }, new[] {
-					doc.CreateElement ("value", null, new[]{doc.CreateTextNode (title)}),
-					title_status ? null : doc.CreateElement ("msg", null, new[]{doc.CreateTextNode ("タイトルは1文字～64文字に収まらなければいけません")})
-				}));
-				validationRoot.AppendChild (doc.CreateElement ("data", new string[][] { new[] { "name", "auth" }, new[] { "status", auth_status ? "ok" : "error" } }, new[] {
-					doc.CreateElement ("value", null, new[]{doc.CreateTextNode (auth)}),
-					auth_status ? null : doc.CreateElement ("msg", null, new[]{doc.CreateTextNode ("認識できません。入力ミスがないか確認してください")})
-				}));
-				validationRoot.AppendChild (doc.CreateElement ("data", new string[][] { new[] { "name", "fpname" } }, new[] {
-					doc.CreateElement ("value", null, new[]{doc.CreateTextNode (fpname)})
-				}));
-				validationRoot.AppendChild (doc.CreateElement ("data", new string[][] { new[] { "name", "fpbody" } }, new[] {
-					doc.CreateElement ("value", null, new[]{doc.CreateTextNode (fpbody)})
-				}));
-				validationRoot.AppendChild (doc.CreateElement ("data", new string[][] { new[] { "name", "state" } }, new[] {
-					doc.CreateElement ("value", null, new[]{doc.CreateTextNode (state)})
-				}));
-			}
-			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "bbs_new.xsl"));
-		}
-
 		object ProcessBbsOpenPage (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
 		{
 			if (req.HttpMethod == HttpMethod.POST && req.HasContentBody ()) {
@@ -229,5 +156,75 @@ namespace p2pncs
 			info.WaitHandle.Close ();
 			return ProcessBBS (null, info.Request, info.Response, true);
 		}
+	}
+}
+
+namespace p2pncs.BBS
+{
+	class BBSWebApp : WebApp.IMergeableFileCommonProcess
+	{
+		static BBSWebApp _instance = new BBSWebApp ();
+		public static BBSWebApp Instance {
+			get { return _instance; }
+		}
+		BBSWebApp () {}
+
+		#region IMergeableFileCommonProcess Members
+
+		void ParseNewPagePostData (Dictionary<string, string> dic, out string title, out string fpname, out string fpbody, out bool title_check)
+		{
+			title = Helpers.GetValueSafe (dic, "title").Trim ();
+			fpname = Helpers.GetValueSafe (dic, "fpname").Trim ();
+			fpbody = Helpers.GetValueSafe (dic, "fpbody").Trim ();
+			title_check = (title.Length > 0 && title.Length <= 64);
+		}
+
+		public bool ParseNewPagePostData (Dictionary<string, string> dic, out IHashComputable header, out IHashComputable[] records)
+		{
+			string title, fpname, fpbody;
+			bool title_check;
+			ParseNewPagePostData (dic, out title, out fpname, out fpbody, out title_check);
+
+			if (!title_check) {
+				header = null;
+				records = null;
+				return false;
+			}
+
+			header = new SimpleBBSHeader (title);
+			if (fpbody.Length == 0) {
+				records = null;
+			} else {
+				records = new IHashComputable[] {
+					new SimpleBBSRecord (fpname, fpbody)
+				};
+			}
+			return true;
+		}
+
+		public void OutputNewPageData (Dictionary<string, string> dic, XmlElement validationRoot)
+		{
+			XmlDocument doc = validationRoot.OwnerDocument;
+			string title, fpname, fpbody;
+			bool title_check;
+			ParseNewPagePostData (dic, out title, out fpname, out fpbody, out title_check);
+
+			validationRoot.AppendChild (doc.CreateElement ("data", new string[][] { new[] { "name", "title" }, new[] { "status", title_check ? "ok" : "error" } }, new[] {
+				doc.CreateElement ("value", null, new[]{doc.CreateTextNode (title)}),
+				title_check ? null : doc.CreateElement ("msg", null, new[]{doc.CreateTextNode ("タイトルは1文字～64文字に収まらなければいけません")})
+			}));
+			validationRoot.AppendChild (doc.CreateElement ("data", new string[][] { new[] { "name", "fpname" } }, new[] {
+				doc.CreateElement ("value", null, new[]{doc.CreateTextNode (fpname)})
+			}));
+			validationRoot.AppendChild (doc.CreateElement ("data", new string[][] { new[] { "name", "fpbody" } }, new[] {
+				doc.CreateElement ("value", null, new[]{doc.CreateTextNode (fpbody)})
+			}));
+		}
+
+		public string NewPageXSL {
+			get { return "bbs_new.xsl"; }
+		}
+
+		#endregion
 	}
 }

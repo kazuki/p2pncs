@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <xsl:stylesheet version="1.0" xmlns="http://www.w3.org/1999/xhtml" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
 
+	<xsl:variable name="confirm_mode" select="/page/validation/data[@name='state']/value = 'confirm'" />
+	<xsl:variable name="success_mode" select="/page/validation/data[@name='state']/value = 'success'" />
+
 	<xsl:template name="create_validation_stylesheet">
 		<link type="text/css" rel="stylesheet" href="/css/validation.css" />
 	</xsl:template>
@@ -12,9 +15,9 @@
 			<xsl:with-param name="class">validation-hidden</xsl:with-param>
 		</xsl:call-template>
 
-		<xsl:if test="validation/all">
+		<xsl:if test="count(validation/error) &gt; 0">
 			<div class="validation-all-error">
-				<xsl:value-of select="validation/all" />
+				<xsl:apply-templates select="validation/error" />
 			</div>
 		</xsl:if>
 	</xsl:template>
