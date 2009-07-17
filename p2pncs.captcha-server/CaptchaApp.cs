@@ -76,7 +76,7 @@ namespace p2pncs.captcha_server
 			authinfo.AppendChild (doc.CreateTextNode (_authinfo));
 			doc.DocumentElement.AppendChild (authinfo);
 
-			return _template.Render (server, req, res, doc, _template_file);
+			return _template.Render (req, res, doc, _template_file);
 		}
 
 		object Process_Captcha (IHttpServer server, IHttpRequest req, HttpResponseHeader res)

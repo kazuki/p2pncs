@@ -32,7 +32,7 @@ namespace p2pncs
 {
 	partial class WebApp
 	{
-		object ProcessNetInitPage (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
+		object ProcessNetInitPage (IHttpRequest req, HttpResponseHeader res)
 		{
 			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
 			if (req.HttpMethod == HttpMethod.POST && req.HasContentBody ()) {
@@ -117,10 +117,10 @@ namespace p2pncs
 				}));
 			}
 
-			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "net_init.xsl"));
+			return _xslTemplate.Render (req, res, doc, Path.Combine (DefaultTemplatePath, "net_init.xsl"));
 		}
 
-		object ProcessNetExitPage (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
+		object ProcessNetExitPage (IHttpRequest req, HttpResponseHeader res)
 		{
 			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
 			if (req.HttpMethod == HttpMethod.POST) {
@@ -130,7 +130,7 @@ namespace p2pncs
 					_exitWaitHandle.Set ();
 				});
 			}
-			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "net_exit.xsl"));
+			return _xslTemplate.Render (req, res, doc, Path.Combine (DefaultTemplatePath, "net_exit.xsl"));
 		}
 	}
 }

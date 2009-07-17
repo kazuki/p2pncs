@@ -24,9 +24,9 @@ namespace p2pncs
 {
 	partial class WebApp
 	{
-		object ProcessStatistics (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
+		object ProcessStatistics (IHttpRequest req, HttpResponseHeader res)
 		{
-			return _xslTemplate.Render (server, req, res, CreateStatisticsXML (), Path.Combine (DefaultTemplatePath, "statistics.xsl"));
+			return _xslTemplate.Render (req, res, CreateStatisticsXML (), Path.Combine (DefaultTemplatePath, "statistics.xsl"));
 		}
 
 		public XmlDocument CreateStatisticsXML ()

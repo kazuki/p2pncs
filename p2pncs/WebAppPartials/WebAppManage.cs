@@ -29,7 +29,7 @@ namespace p2pncs
 {
 	partial class WebApp
 	{
-		object ProcessManageTop (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
+		object ProcessManageTop (IHttpRequest req, HttpResponseHeader res)
 		{
 			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
 			MergeableFileHeader[] headers = _node.MMLC.GetOwnMergeableFiles ();
@@ -38,10 +38,10 @@ namespace p2pncs
 				doc.DocumentElement.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header));
 			}
 
-			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "manage.xsl"));
+			return _xslTemplate.Render (req, res, doc, Path.Combine (DefaultTemplatePath, "manage.xsl"));
 		}
 
-		object ProcessManageFile (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
+		object ProcessManageFile (IHttpRequest req, HttpResponseHeader res)
 		{
 			string str_key = req.Url.AbsolutePath.Substring (8);
 			Key key;
@@ -87,7 +87,7 @@ namespace p2pncs
 			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
 			doc.DocumentElement.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header, records.ToArray ()));
 
-			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, header_helper.ManagePageXslFileName));
+			return _xslTemplate.Render (req, res, doc, Path.Combine (DefaultTemplatePath, header_helper.ManagePageXslFileName));
 		}
 	}
 }

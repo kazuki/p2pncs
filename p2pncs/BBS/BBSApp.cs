@@ -34,7 +34,7 @@ namespace p2pncs
 {
 	partial class WebApp
 	{
-		object ProcessBbsOpenPage (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
+		object ProcessBbsOpenPage (IHttpRequest req, HttpResponseHeader res)
 		{
 			if (req.HttpMethod == HttpMethod.POST && req.HasContentBody ()) {
 				Dictionary<string, string> dic = HttpUtility.ParseUrlEncodedStringToDictionary (Encoding.ASCII.GetString (req.GetContentBody (MaxRequestBodySize)), Encoding.UTF8);
@@ -45,10 +45,10 @@ namespace p2pncs
 				}
 			}
 			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
-			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "bbs_open.xsl"));
+			return _xslTemplate.Render (req, res, doc, Path.Combine (DefaultTemplatePath, "bbs_open.xsl"));
 		}
 
-		object ProcessBbsListPage (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
+		object ProcessBbsListPage (IHttpRequest req, HttpResponseHeader res)
 		{
 			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
 			XmlElement rootNode = doc.DocumentElement;
@@ -56,27 +56,14 @@ namespace p2pncs
 			foreach (MergeableFileHeader header in headers) {
 				rootNode.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header));
 			}
-			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "bbs.xsl"));
+			return _xslTemplate.Render (req, res, doc, Path.Combine (DefaultTemplatePath, "bbs.xsl"));
 		}
 
-		object ProcessBBS (IHttpServer server, IHttpRequest req, HttpResponseHeader res, bool callByCallback)
+		object ProcessBBS (IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, string tail_url)
 		{
-			string str_key = req.Url.AbsolutePath.Substring (5);
-			Key key;
-			try {
-				if (str_key.Length == (DefaultAlgorithm.ECDomainBytes + 1) * 2)
-					key = Key.Parse (str_key);
-				else if (str_key.Length == (DefaultAlgorithm.ECDomainBytes + 1) * 4 / 3)
-					key = Key.FromUriSafeBase64String (str_key);
-				else
-					throw new HttpException (HttpStatusCode.NotFound);
-			} catch {
-				throw new HttpException (HttpStatusCode.NotFound);
-			}
-
-			MergeableFileHeader header;
 			if (req.HttpMethod == HttpMethod.POST) {
 				// posting...
+				Key key = header.Key;
 				Dictionary<string, string> dic = HttpUtility.ParseUrlEncodedStringToDictionary (req.GetContentBody (MaxRequestBodySize));
 				res[HttpHeaderNames.ContentType] = "text/xml; charset=UTF-8";
 				string name = Helpers.GetValueSafe (dic, "name").Trim ();
@@ -125,37 +112,13 @@ namespace p2pncs
 				return "<result status=\"EMPTY\" />";
 			}
 
-			List<MergeableFileRecord> records = _node.MMLC.GetRecords (key, out header);
-			if (!callByCallback) {
-				if (!_fastView || header == null || header.RecordsetHash.IsZero ()) {
-					ManualResetEvent done = new ManualResetEvent (false);
-					CometInfo info = new CometInfo (done, req, res, null, DateTime.Now + TimeSpan.FromSeconds (5), ProcessBBS_CometHandler);
-					_node.MMLC.StartMerge (key, ProcessBBS_Callback, done);
-					return info;
-				} else {
-					_node.MMLC.StartMerge (key, null, null);
-				}
-			}
+			List<MergeableFileRecord> records = _node.MMLC.GetRecords (header.Key, out header);
 			if (records == null)
 				throw new HttpException (HttpStatusCode.NotFound);
 
 			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
 			doc.DocumentElement.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header, records.ToArray ()));
-			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "bbs_view.xsl"));
-		}
-
-		void ProcessBBS_Callback (object sender, MergeDoneCallbackArgs args)
-		{
-			ManualResetEvent done = args.State as ManualResetEvent;
-			if (done.SafeWaitHandle.IsClosed)
-				return;
-			done.Set ();
-		}
-
-		object ProcessBBS_CometHandler (CometInfo info)
-		{
-			info.WaitHandle.Close ();
-			return ProcessBBS (null, info.Request, info.Response, true);
+			return _xslTemplate.Render (req, res, doc, Path.Combine (DefaultTemplatePath, "bbs_view.xsl"));
 		}
 	}
 }

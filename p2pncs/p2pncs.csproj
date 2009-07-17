@@ -58,7 +58,9 @@
     <Compile Include="BBS\SimpleBBSRecord.cs" />
     <Compile Include="Statistics.cs" />
     <Compile Include="WebApp.cs" />
+    <Compile Include="WebAppPartials\WebAppFileCommon.cs" />
     <Compile Include="WebAppPartials\WebAppManage.cs" />
+    <Compile Include="WebAppPartials\WebAppMergebleFileCommon.cs" />
     <Compile Include="WebAppPartials\WebAppNet.cs" />
     <Compile Include="WebAppPartials\WebAppStatistics.cs" />
     <Compile Include="Wiki\Engine\IWikiParser.cs" />

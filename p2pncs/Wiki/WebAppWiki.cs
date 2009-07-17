@@ -32,7 +32,7 @@ namespace p2pncs
 {
 	partial class WebApp
 	{
-		object ProcessWikiListPage (IHttpServer server, IHttpRequest req, HttpResponseHeader res)
+		object ProcessWikiListPage (IHttpRequest req, HttpResponseHeader res)
 		{
 			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
 			XmlElement rootNode = doc.DocumentElement;
@@ -40,65 +40,30 @@ namespace p2pncs
 			foreach (MergeableFileHeader header in headers) {
 				rootNode.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header));
 			}
-			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "wiki_list.xsl"));
+			return _xslTemplate.Render (req, res, doc, Path.Combine (DefaultTemplatePath, "wiki_list.xsl"));
 		}
 
-		object ProcessWikiPage (IHttpServer server, IHttpRequest req, HttpResponseHeader res, bool callByCallback)
+		object ProcessWikiPage (IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, string url_tail)
 		{
-			string str_key = req.Url.AbsolutePath.Substring (6);
-			Key key;
-			string page_title;
-			int len = str_key.IndexOf ('/');
-			if (len < 0) {
-				res[HttpHeaderNames.Location] = req.Url.AbsolutePath + "/";
-				throw new HttpException (req.HttpVersion == HttpVersion.Http10 ? HttpStatusCode.Found : HttpStatusCode.SeeOther);
-			}
-			try {
-				if (len == (DefaultAlgorithm.ECDomainBytes + 1) * 2)
-					key = Key.Parse (str_key.Substring (0, len));
-				else if (len == (DefaultAlgorithm.ECDomainBytes + 1) * 4 / 3)
-					key = Key.FromUriSafeBase64String (str_key.Substring (0, len));
-				else
-					throw new HttpException (HttpStatusCode.NotFound);
-				page_title = HttpUtility.UrlDecode (len == str_key.Length ? string.Empty : str_key.Substring (len).TrimStart ('/'), Encoding.UTF8);
-				if (page_title == "StartPage" || page_title == "FrontPage")
-					page_title = string.Empty;
-			} catch {
-				throw new HttpException (HttpStatusCode.NotFound);
-			}
+			string page_title = HttpUtility.UrlDecode (url_tail.Trim ().Trim ('/'), Encoding.UTF8);
+			if (page_title == "StartPage" || page_title == "FrontPage")
+				page_title = string.Empty;
 
-			MergeableFileHeader header;
-			List<MergeableFileRecord> records = _node.MMLC.GetRecords (key, out header);
-			if (!callByCallback) {
-				if (!_fastView || header == null || header.RecordsetHash.IsZero ()) {
-					ManualResetEvent done = new ManualResetEvent (false);
-					CometInfo info = new CometInfo (done, req, res, null, DateTime.Now + TimeSpan.FromSeconds (5), ProcessWikiPage_CometHandler);
-					_node.MMLC.StartMerge (key, ProcessBBS_Callback, done);
-					return info;
-				} else {
-					_node.MMLC.StartMerge (key, null, null);
-				}
-			}
-			if (header == null)
+			List<MergeableFileRecord> records = _node.MMLC.GetRecords (header.Key, out header);
+			if (records == null)
 				throw new HttpException (HttpStatusCode.NotFound);
 
 			switch (GetSpecialPageType (page_title)) {
 				case SpecialPageType.None:
-					return ProcessWikiPage_Default (server, req, res, header, records, page_title);
+					return ProcessWikiPage_Default (req, res, header, records, page_title);
 				case SpecialPageType.TitleIndex:
-					return ProcessWikiPage_TitleIndex (server, req, res, header, records);
+					return ProcessWikiPage_TitleIndex (req, res, header, records);
 				default:
 					throw new HttpException (HttpStatusCode.InternalServerError);
 			}
 		}
 
-		object ProcessWikiPage_CometHandler (CometInfo info)
-		{
-			info.WaitHandle.Close ();
-			return ProcessWikiPage (null, info.Request, info.Response, true);
-		}
-
-		object ProcessWikiPage_Default (IHttpServer server, IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, List<MergeableFileRecord> records, string page_title)
+		object ProcessWikiPage_Default (IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, List<MergeableFileRecord> records, string page_title)
 		{
 			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
 			MergeableFileRecord record = GetLatestPage (records, page_title);
@@ -129,10 +94,10 @@ namespace p2pncs
 			string xsl = "wiki.xsl";
 			if (req.QueryData.ContainsKey ("edit"))
 				xsl = "wiki_edit.xsl";
-			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, xsl));
+			return _xslTemplate.Render (req, res, doc, Path.Combine (DefaultTemplatePath, xsl));
 		}
 
-		object ProcessWikiPage_TitleIndex (IHttpServer server, IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, List<MergeableFileRecord> records)
+		object ProcessWikiPage_TitleIndex (IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, List<MergeableFileRecord> records)
 		{
 			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
 			Dictionary<string, MergeableFileRecord> dic = new Dictionary<string,MergeableFileRecord> ();
@@ -145,7 +110,7 @@ namespace p2pncs
 
 			List<MergeableFileRecord> list = new List<MergeableFileRecord> (dic.Values);
 			doc.DocumentElement.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header, list.ToArray ()));
-			return _xslTemplate.Render (server, req, res, doc, Path.Combine (DefaultTemplatePath, "wiki_titleindex.xsl"));
+			return _xslTemplate.Render (req, res, doc, Path.Combine (DefaultTemplatePath, "wiki_titleindex.xsl"));
 		}
 
 		SpecialPageType GetSpecialPageType (string page_title)
