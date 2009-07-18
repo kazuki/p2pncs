@@ -19,6 +19,6 @@ namespace p2pncs
 {
 	public static class ProtocolVersion
 	{
-		public const ushort Version = 0;
+		public const ushort Version = 1;
 	}
 }
