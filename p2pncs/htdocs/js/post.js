@@ -12,16 +12,21 @@ $.extend({
 			minWidth: 0,
 			beforeclose: function () { return false; }
 		});
-		dlg.set_default = function () {
-			dlg.empty().add("p").text("認証サーバへの問い合わせ中...");
-		};
-		dlg.close_force = function (is_success) {
-			if (is_success)
-				success_callback ();
-			else
-				failure_callback ();
-			dlg.dialog("destroy").remove();
-		};
+		dlg.extend({
+			set_text: function (text) {
+				this.empty().append (text);
+			},
+			set_default: function () {
+				this.set_text ("認証サーバへの問い合わせ中...");
+			},
+			close_force: function (is_success) {
+				if (is_success)
+					success_callback ();
+				else
+					failure_callback ();
+				dlg.dialog("destroy").remove();
+			}
+		});
 
 		var post_ajax = function () {
 			dlg.set_default ();
@@ -32,7 +37,7 @@ $.extend({
 				url: postUrl,
 				data: postData,
 				error: function () {
-					dlg.children().remove().add("p").text("CAPTCHA認証サーバへの問い合わせがタイムアウトしました");
+					dlg.set_text ("CAPTCHA認証サーバへの問い合わせがタイムアウトしました");
 					dlg.dialog("option", "buttons", {
 						"OK": function() { dlg.close_force (false); }
 					});
@@ -58,7 +63,7 @@ $.extend({
 						});
 						return;
 					case "OK":
-						dlg.empty().add("p").text("投稿処理成功!");
+						dlg.set_text ("投稿処理成功!");
 						dlg.dialog("option", "buttons", {
 							"OK": function() {dlg.close_force (true);}
 						});
@@ -67,13 +72,13 @@ $.extend({
 						dlg.close_force(false);
 						return;
 					case "ERROR":
-						dlg.empty().add("p").text($("result:first", data).text ());
+						dlg.set_text ($("result:first", data).text ());
 						dlg.dialog("option", "buttons", {
 							"OK": function() {dlg.close_force(false);}
 						});
 						return;
 					default:
-						dlg.empty().add("p").text("よくわかんないけど、エラーだよん");
+						dlg.set_text ("よくわかんないけど、エラーだよん");
 						dlg.dialog("option", "buttons", {
 							"OK": function() {dlg.close_force(false);}
 						});
