@@ -105,7 +105,7 @@ namespace p2pncs.Wiki.Engine
 						break;
 					case WikiInlineMarkupType.WikiName:
 						text = r.Replace (text, delegate (Match m) {
-							return "<a href=\"" + WikiWebApp.WikiTitleToUrl (m.Groups["name"].Value) + "\">" + m.Groups["name"].Value + "</a>";
+							return "<a href=\"" + WikiWebApp.WikiTitleToUrl (Unescape (m.Groups["name"].Value)) + "\">" + m.Groups["name"].Value + "</a>";
 						});
 						break;
 				}
@@ -122,6 +122,14 @@ namespace p2pncs.Wiki.Engine
 				case ">": return "&gt;";
 			}
 			return match.Value;
+		}
+
+		static string Unescape (string text)
+		{
+			return text.Replace ("&amp;", "&")
+				.Replace ("&quot;", "\"")
+				.Replace ("&lt;", "<")
+				.Replace ("&gt;", ">");
 		}
 	}
 }

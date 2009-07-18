@@ -215,7 +215,7 @@ namespace p2pncs.Wiki
 
 		public static string WikiTitleToUrl (string title)
 		{
-			title = Uri.EscapeUriString (title);
+			title = Kazuki.Net.HttpServer.HttpUtility.UrlEncode (title, Encoding.UTF8);
 			title = title.Replace ("/", "%2F");
 			return title;
 		}
