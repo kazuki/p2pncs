@@ -118,7 +118,7 @@ namespace p2pncs
 			return _xslTemplate.Render (req, res, doc, Path.Combine (DefaultTemplatePath, comm.NewPageXSL));
 		}
 
-		object Process_ViewMergeableFilePage (IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, string url_tail)
+		object Process_ViewMergeableFilePage (IHttpRequest req, HttpResponseHeader res, Key key, MergeableFileHeader header, string url_tail)
 		{
 			if (req.HttpMethod == HttpMethod.POST) {
 				if (req.QueryData.Count > 0) {
@@ -129,9 +129,9 @@ namespace p2pncs
 
 			if (!_fastView || header == null || header.RecordsetHash.IsZero ()) {
 				ManualResetEvent done = new ManualResetEvent (false);
-				MergeCometInfo mci = new MergeCometInfo (_node, header, url_tail);
+				MergeCometInfo mci = new MergeCometInfo (_node, key, url_tail);
 				CometInfo info = new CometInfo (done, req, res, null, DateTime.Now + TimeSpan.FromSeconds (5), mci.CometHandler);
-				_node.MMLC.StartMerge (header.Key, delegate (object sender, MergeDoneCallbackArgs args) {
+				_node.MMLC.StartMerge (key, delegate (object sender, MergeDoneCallbackArgs args) {
 					if (done.SafeWaitHandle.IsClosed)
 						return;
 					done.Set ();
@@ -192,22 +192,25 @@ namespace p2pncs
 
 		class MergeCometInfo
 		{
-			public MergeableFileHeader _header;
+			Key _key;
 			string _tail;
 			Node _node;
 
-			public MergeCometInfo (Node node, MergeableFileHeader header, string tail_url)
+			public MergeCometInfo (Node node, Key key, string tail_url)
 			{
 				_node = node;
-				_header = header;
+				_key = key;
 				_tail = tail_url;
 			}
 
 			public object CometHandler (CometInfo info)
 			{
 				info.WaitHandle.Close ();
-				return (_header.Content as IMergeableFile).WebUIHelper.ProcessGetRequest
-					(_node, info.Request, info.Response, _header, _tail);
+				MergeableFileHeader header = _node.MMLC.GetMergeableFileHeader (_key);
+				if (header == null)
+					throw new HttpException (HttpStatusCode.NotFound);
+				return (header.Content as IMergeableFile).WebUIHelper.ProcessGetRequest
+					(_node, info.Request, info.Response, header, _tail);
 			}
 		}
 

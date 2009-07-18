@@ -69,7 +69,7 @@ namespace p2pncs
 			string tailurl;
 			Key key = ParseRequestKey (req, res, out tailurl);
 			MergeableFileHeader header = _node.MMLC.GetMergeableFileHeader (key);
-			return Process_ViewMergeableFilePage (req, res, header, tailurl);
+			return Process_ViewMergeableFilePage (req, res, key, header, tailurl);
 		}
 	}
 }
