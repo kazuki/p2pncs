@@ -11,6 +11,17 @@
 		<xsl:value-of select="$base_url" />
 		<xsl:value-of select="/page/page-title-for-url" />
 	</xsl:variable>
+	<xsl:variable name="page_title">
+		<xsl:choose>
+			<xsl:when test="not(/page/page-title)" />
+			<xsl:when test="/page/page-title!=''">
+				<xsl:value-of select="/page/file/records/record/wiki/title" />
+			</xsl:when>
+			<xsl:otherwise>
+				<xsl:text>StartPage</xsl:text>
+			</xsl:otherwise>
+		</xsl:choose>
+	</xsl:variable>
 
 	<xsl:template match="/">
 		<html>
@@ -66,7 +77,7 @@
 									<xsl:text>一覧</xsl:text>
 								</xsl:element>
 							</li>
-							<li>
+							<!--<li>
 								<xsl:element name="a">
 									<xsl:attribute name="href">
 										<xsl:value-of select="$base_url" />
@@ -74,7 +85,7 @@
 									</xsl:attribute>
 									<xsl:text>全体の編集履歴</xsl:text>
 								</xsl:element>
-							</li>
+							</li>-->
 						</ul>
 					</div>
 				</div>

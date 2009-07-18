@@ -4,12 +4,7 @@
 	<xsl:import href="wiki_view.xsl" />
 
 	<xsl:template name="_title">
-		<xsl:if test="/page/page-title=''">
-			<xsl:text>StartPage</xsl:text>
-		</xsl:if>
-		<xsl:if test="/page/page-title!=''">
-			<xsl:value-of select="/page/page-title" />
-		</xsl:if>
+		<xsl:value-of select="$page_title" />
 		<xsl:text>を編集中 :: </xsl:text>
 		<xsl:value-of select="/page/file/wiki/title" />
 		<xsl:text> :: wiki :: p2pncs</xsl:text>

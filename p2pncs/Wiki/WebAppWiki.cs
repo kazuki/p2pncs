@@ -121,7 +121,7 @@ namespace p2pncs.Wiki
 
 			switch (GetSpecialPageType (page_title)) {
 				case SpecialPageType.None:
-					return ProcessWikiPage_Default (node, req, res, header, records, page_title);
+					return ProcessWikiPage (node, req, res, header, records, page_title);
 				case SpecialPageType.TitleIndex:
 					return ProcessWikiPage_TitleIndex (req, res, header, records);
 				default:
@@ -129,10 +129,10 @@ namespace p2pncs.Wiki
 			}
 		}
 
-		object ProcessWikiPage_Default (Node node, IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, List<MergeableFileRecord> records, string page_title)
+		object ProcessWikiPage (Node node, IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, List<MergeableFileRecord> records, string page_title)
 		{
 			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
-			MergeableFileRecord record = GetLatestPage (records, page_title);
+			MergeableFileRecord record = null;
 			if (req.HttpMethod == HttpMethod.POST && req.HasContentBody ()) {
 				Dictionary<string, string> dic = HttpUtility.ParseUrlEncodedStringToDictionary (Encoding.ASCII.GetString (req.GetContentBody (WebApp.MaxRequestBodySize)), Encoding.UTF8);
 				record = new MergeableFileRecord (ParseNewPostData (dic),
@@ -143,17 +143,30 @@ namespace p2pncs.Wiki
 					throw new HttpException (HttpStatusCode.Forbidden);
 				}
 			}
-			if (record == null) {
-				doc.DocumentElement.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header));
-			} else {
-				doc.DocumentElement.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header, new MergeableFileRecord[] { record }));
+
+			string xsl = "wiki.xsl";
+			bool edit_mode = req.QueryData.ContainsKey ("edit");
+			bool history_mode = req.QueryData.ContainsKey ("history") & !edit_mode;
+			if (record == null && !history_mode)
+				record = GetLatestPage (records, page_title);
+			if (!history_mode) {
+				if (record == null)
+					doc.DocumentElement.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header));
+				else
+					doc.DocumentElement.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header, new MergeableFileRecord[] { record }));
+				if (edit_mode)
+					xsl = "wiki_edit.xsl";
+			} else if (history_mode) {
+				records.RemoveAll (delegate (MergeableFileRecord ri) {
+					WikiRecord wr = (WikiRecord)ri.Content;
+					return !wr.PageName.Equals (page_title);
+				});
+				doc.DocumentElement.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header, records.ToArray ()));
+				xsl = "wiki_history.xsl";
 			}
 			doc.DocumentElement.AppendChild (doc.CreateElement ("page-title", null, new[] { doc.CreateTextNode (page_title) }));
 			doc.DocumentElement.AppendChild (doc.CreateElement ("page-title-for-url", null, new[] { doc.CreateTextNode (WikiTitleToUrl (page_title)) }));
 
-			string xsl = "wiki.xsl";
-			if (req.QueryData.ContainsKey ("edit"))
-				xsl = "wiki_edit.xsl";
 			return WebApp.Template.Render (req, res, doc, Path.Combine (WebApp.DefaultTemplatePath, xsl));
 		}
 
