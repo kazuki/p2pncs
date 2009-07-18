@@ -22,6 +22,7 @@ using System.Xml;
 using p2pncs.Net.Overlay.DFS.MMLC;
 using p2pncs.Security.Cryptography;
 using p2pncs.Wiki.Engine;
+using Kazuki.Net.HttpServer;
 
 namespace p2pncs.Wiki
 {
@@ -56,7 +57,7 @@ namespace p2pncs.Wiki
 					doc.CreateTextNodeSafe (content.PageName)
 				}),
 				doc.CreateElement ("title-for-url", null, new[] {
-					doc.CreateTextNodeSafe (WebApp.WikiTitleToUrl (content.PageName))
+					doc.CreateTextNodeSafe (WikiWebApp.WikiTitleToUrl (content.PageName))
 				}),
 				doc.CreateElement ("name", null, new[] {
 					doc.CreateTextNodeSafe (content.Name)
@@ -106,6 +107,16 @@ namespace p2pncs.Wiki
 
 		public string ViewUrl {
 			get { return "/wiki/"; }
+		}
+
+		public object ProcessGetRequest (Node node, IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, string url_tail)
+		{
+			return WikiWebApp.Instance.ProcessGetRequest (node, req, res, header, url_tail);
+		}
+
+		public object ProcessPutRequest (Node node, IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, string url_tail)
+		{
+			return WikiWebApp.Instance.ProcessGetRequest (node, req, res, header, url_tail);
 		}
 	}
 }

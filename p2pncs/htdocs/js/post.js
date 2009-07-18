@@ -66,6 +66,12 @@ $.extend({
 					case "EMPTY":
 						dlg.close_force(false);
 						return;
+					case "ERROR":
+						dlg.empty().add("p").text($("result:first", data).text ());
+						dlg.dialog("option", "buttons", {
+							"OK": function() {dlg.close_force(false);}
+						});
+						return;
 					default:
 						dlg.empty().add("p").text("よくわかんないけど、エラーだよん");
 						dlg.dialog("option", "buttons", {

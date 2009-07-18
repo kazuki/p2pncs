@@ -23,7 +23,7 @@ using p2pncs.Security.Cryptography;
 namespace p2pncs.Wiki
 {
 	[SerializableTypeId (0x1009)]
-	class WikiRecord : IHashComputable, IMergeableFile
+	class WikiRecord : IHashComputable
 	{
 		[SerializableFieldId (0)]
 		string _pageName;
@@ -114,14 +114,6 @@ namespace p2pncs.Wiki
 				(byte)_diffType
 			};
 			hash.TransformBlock (enums, 0, enums.Length, null, 0);
-		}
-
-		#endregion
-
-		#region IMergeableFile Members
-
-		public IMergeableFileWebUIHelper WebUIHelper {
-			get { return WikiWebUIHelper.Instance; }
 		}
 
 		#endregion

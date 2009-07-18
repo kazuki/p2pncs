@@ -25,6 +25,7 @@ using Kazuki.Net.HttpServer;
 using openCrypto.EllipticCurve;
 using p2pncs.Net.Overlay;
 using p2pncs.Net.Overlay.DFS.MMLC;
+using p2pncs.Security.Captcha;
 using p2pncs.Security.Cryptography;
 
 namespace p2pncs
@@ -120,12 +121,15 @@ namespace p2pncs
 		object Process_ViewMergeableFilePage (IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, string url_tail)
 		{
 			if (req.HttpMethod == HttpMethod.POST) {
-				throw new HttpException (HttpStatusCode.NotFound);
+				if (req.QueryData.Count > 0) {
+					return (header.Content as IMergeableFile).WebUIHelper.ProcessPutRequest (_node, req, res, header, url_tail);
+				}
+				return Process_Post (req, res, header, url_tail);
 			}
 
 			if (!_fastView || header == null || header.RecordsetHash.IsZero ()) {
 				ManualResetEvent done = new ManualResetEvent (false);
-				MergeCometInfo mci = new MergeCometInfo (this, header, url_tail);
+				MergeCometInfo mci = new MergeCometInfo (_node, header, url_tail);
 				CometInfo info = new CometInfo (done, req, res, null, DateTime.Now + TimeSpan.FromSeconds (5), mci.CometHandler);
 				_node.MMLC.StartMerge (header.Key, delegate (object sender, MergeDoneCallbackArgs args) {
 					if (done.SafeWaitHandle.IsClosed)
@@ -137,35 +141,73 @@ namespace p2pncs
 				_node.MMLC.StartMerge (header.Key, null, null);
 			}
 
-			return Process_ViewMergeableFilePage_Switch (req, res, header, url_tail);
+			return (header.Content as IMergeableFile).WebUIHelper.ProcessGetRequest (_node, req, res, header, url_tail);
 		}
 
-		object Process_ViewMergeableFilePage_Switch (IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, string url_tail)
+		object Process_Post (IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, string url_tail)
 		{
-			if (header.Content is BBS.SimpleBBSHeader)
-				return ProcessBBS (req, res, header, url_tail);
-			if (header.Content is Wiki.WikiHeader)
-				return ProcessWikiPage (req, res, header, url_tail);
-			throw new HttpException (HttpStatusCode.NotFound);
+			WebApp.IMergeableFileCommonProcess comm = (header.Content as IMergeableFile).WebUIMergeableFileCommon;
+			Dictionary<string, string> dic = HttpUtility.ParseUrlEncodedStringToDictionary (req.GetContentBody (WebApp.MaxRequestBodySize));
+			res[HttpHeaderNames.ContentType] = "text/xml; charset=UTF-8";
+			try {
+				string auth = Helpers.GetValueSafe (dic, "auth").Trim ();
+				string token = Helpers.GetValueSafe (dic, "token").Trim ();
+				string answer = Helpers.GetValueSafe (dic, "answer").Trim ();
+				string prev = Helpers.GetValueSafe (dic, "prev").Trim ();
+				if (header.AuthServers == null || header.AuthServers.Length == 0) {
+					_node.MMLC.AppendRecord (header.Key, new MergeableFileRecord (comm.ParseNewPostData (dic), DateTime.UtcNow, header.LastManagedTime, null, null, null, 0, null));
+					return "<result status=\"OK\" />";
+				} else {
+					byte auth_idx = byte.Parse (auth);
+					MergeableFileRecord record;
+					if (token.Length > 0 && answer.Length > 0 && prev.Length > 0) {
+						record = (MergeableFileRecord)Serializer.Instance.Deserialize (Convert.FromBase64String (prev));
+						byte[] sign = _node.MMLC.VerifyCaptchaChallenge (header.AuthServers[auth_idx], record.Hash.GetByteArray (),
+							Convert.FromBase64String (token), Encoding.ASCII.GetBytes (answer));
+						if (sign != null) {
+							record.AuthorityIndex = auth_idx;
+							record.Authentication = sign;
+							if (record.Verify (header)) {
+								_node.MMLC.AppendRecord (header.Key , record);
+								return "<result status=\"OK\" />";
+							} else {
+								return "<result status=\"ERROR\" code=\"1\" />";
+							}
+						}
+					}
+
+					record = new MergeableFileRecord (comm.ParseNewPostData (dic), DateTime.UtcNow, header.LastManagedTime, null, null, null, 0, null);
+					byte[] raw = Serializer.Instance.Serialize (record);
+					if (raw.Length > MMLC.MergeableFileRecordMaxSize)
+						throw new OutOfMemoryException ("データが多すぎます");
+					CaptchaChallengeData captchaData = _node.MMLC.GetCaptchaChallengeData (header.AuthServers[auth_idx], record.Hash.GetByteArray ());
+					return string.Format ("<result status=\"CAPTCHA\"><img>{0}</img><token>{1}</token><prev>{2}</prev></result>",
+						Convert.ToBase64String (captchaData.Data), Convert.ToBase64String (captchaData.Token), Convert.ToBase64String (raw));
+				}
+			} catch (Exception exception) {
+				return "<result status=\"ERROR\" code=\"0\">" +
+					exception.Message.Replace ("&", "&amp;").Replace ("<", "&lt;").Replace (">", "&gt;").Replace ("\"", "&quot;") + "</result>";
+			}
 		}
 
 		class MergeCometInfo
 		{
-			public MergeableFileHeader FileHeader;
-			string TailUrl;
-			WebApp App;
+			public MergeableFileHeader _header;
+			string _tail;
+			Node _node;
 
-			public MergeCometInfo (WebApp app, MergeableFileHeader header, string tail_url)
+			public MergeCometInfo (Node node, MergeableFileHeader header, string tail_url)
 			{
-				App = app;
-				FileHeader = header;
-				TailUrl = tail_url;
+				_node = node;
+				_header = header;
+				_tail = tail_url;
 			}
 
 			public object CometHandler (CometInfo info)
 			{
 				info.WaitHandle.Close ();
-				return App.Process_ViewMergeableFilePage_Switch (info.Request, info.Response, FileHeader, TailUrl);
+				return (_header.Content as IMergeableFile).WebUIHelper.ProcessGetRequest
+					(_node, info.Request, info.Response, _header, _tail);
 			}
 		}
 
@@ -174,6 +216,8 @@ namespace p2pncs
 			bool ParseNewPagePostData (Dictionary<string, string> dic, out IHashComputable header, out IHashComputable[] records);
 			void OutputNewPageData (Dictionary<string, string> dic, XmlElement validationRoot);
 			string NewPageXSL { get; }
+
+			IHashComputable ParseNewPostData (Dictionary<string, string> dic);
 		}
 	}
 }

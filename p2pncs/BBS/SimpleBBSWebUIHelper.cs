@@ -20,6 +20,7 @@ using System.Collections.Specialized;
 using System.Xml;
 using p2pncs.Net.Overlay.DFS.MMLC;
 using p2pncs.Security.Cryptography;
+using Kazuki.Net.HttpServer;
 
 namespace p2pncs.BBS
 {
@@ -72,6 +73,16 @@ namespace p2pncs.BBS
 
 		public string ViewUrl {
 			get { return "/bbs/"; }
+		}
+
+		public object ProcessGetRequest (Node node, IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, string url_tail)
+		{
+			return BBS.BBSWebApp.Instance.ProcessGetRequest (node, req, res, header, url_tail);
+		}
+
+		public object ProcessPutRequest (Node node, IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, string url_tail)
+		{
+			throw new HttpException (HttpStatusCode.NotFound);
 		}
 	}
 }

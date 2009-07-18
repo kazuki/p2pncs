@@ -19,6 +19,7 @@ using System.Collections.Specialized;
 using System.Xml;
 using p2pncs.Net.Overlay.DFS.MMLC;
 using p2pncs.Security.Cryptography;
+using Kazuki.Net.HttpServer;
 
 namespace p2pncs
 {
@@ -30,5 +31,11 @@ namespace p2pncs
 		string ContentType { get; }
 		string ManagePageXslFileName { get; }
 		string ViewUrl { get; }
+
+		// GETメソッドに対する応答
+		object ProcessGetRequest (Node node, IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, string url_tail);
+		
+		// PUTメソッドに対する応答 (但し、クエリ文字列が含まれる場合)
+		object ProcessPutRequest (Node node, IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, string url_tail);
 	}
 }

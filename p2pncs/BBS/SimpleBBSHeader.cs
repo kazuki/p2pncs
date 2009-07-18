@@ -52,6 +52,10 @@ namespace p2pncs.BBS
 			get { return SimpleBBSWebUIHelper.Instance; }
 		}
 
+		public WebApp.IMergeableFileCommonProcess WebUIMergeableFileCommon {
+			get { return BBSWebApp.Instance; }
+		}
+
 		#endregion
 	}
 }

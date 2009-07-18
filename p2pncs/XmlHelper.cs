@@ -120,8 +120,7 @@ namespace p2pncs
 					new[] {"authidx", record.AuthorityIndex.ToString ()},
 					new[] {"created", record.CreatedTime.ToLocalTime().ToString (DefaultDateFormat)}
 				}, null));
-				record_element.SetAttribute ("type", (record.Content as IMergeableFile).WebUIHelper.ContentType);
-				record_element.AppendChild ((record.Content as IMergeableFile).WebUIHelper.CreateRecordElement (doc, record));
+				record_element.AppendChild ((header.Content as IMergeableFile).WebUIHelper.CreateRecordElement (doc, record));
 			}
 
 			return root;

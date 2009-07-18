@@ -71,9 +71,6 @@
 						<xsl:text>名前: </xsl:text>
 						<input type="text" id="postName" />
 						<button id="postButton">投稿</button>
-						<input type="hidden" id="postToken" value="" />
-						<input type="hidden" id="postAnswer" value="" />
-						<input type="hidden" id="postPrev" value="" />
 					</div>
 					<div>
 						<textarea cols="50" rows="8" id="postBody"></textarea>

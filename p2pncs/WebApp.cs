@@ -26,13 +26,13 @@ namespace p2pncs
 {
 	partial class WebApp : IHttpApplication, IDisposable
 	{
-		const string DefaultTemplatePath = "templates";
+		public const string DefaultTemplatePath = "templates";
 		const string DefaultStaticFilePath = "htdocs";
-		const int MaxRequestBodySize = 33554432; // 32MB
+		public const int MaxRequestBodySize = 33554432; // 32MB
 
 		Node _node;
 		ManualResetEvent _exitWaitHandle = new ManualResetEvent (false);
-		XslTemplateEngine _xslTemplate = new XslTemplateEngine ();
+		static XslTemplateEngine _xslTemplate = new XslTemplateEngine ();
 		bool _fastView = true;
 
 		public WebApp (Node node)
@@ -125,6 +125,10 @@ namespace p2pncs
 
 		public WaitHandle ExitWaitHandle {
 			get { return _exitWaitHandle; }
+		}
+
+		public static XslTemplateEngine Template {
+			get { return _xslTemplate; }
 		}
 	}
 }

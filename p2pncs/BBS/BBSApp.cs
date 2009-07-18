@@ -58,68 +58,6 @@ namespace p2pncs
 			}
 			return _xslTemplate.Render (req, res, doc, Path.Combine (DefaultTemplatePath, "bbs.xsl"));
 		}
-
-		object ProcessBBS (IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, string tail_url)
-		{
-			if (req.HttpMethod == HttpMethod.POST) {
-				// posting...
-				Key key = header.Key;
-				Dictionary<string, string> dic = HttpUtility.ParseUrlEncodedStringToDictionary (req.GetContentBody (MaxRequestBodySize));
-				res[HttpHeaderNames.ContentType] = "text/xml; charset=UTF-8";
-				string name = Helpers.GetValueSafe (dic, "name").Trim ();
-				string body = Helpers.GetValueSafe (dic, "body").Trim ();
-				string auth = Helpers.GetValueSafe (dic, "auth").Trim ();
-				string token = Helpers.GetValueSafe (dic, "token").Trim ();
-				string answer = Helpers.GetValueSafe (dic, "answer").Trim ();
-				string prev = Helpers.GetValueSafe (dic, "prev").Trim ();
-				if (body.Length > 0) {
-					header = _node.MMLC.GetMergeableFileHeader (key);
-					if (header == null)
-						return "<result status=\"ERROR\" />";
-					MergeableFileRecord record;
-					try {
-						if (header.AuthServers == null || header.AuthServers.Length == 0) {
-							_node.MMLC.AppendRecord (key, new MergeableFileRecord (new SimpleBBSRecord (name, body), DateTime.UtcNow, header.LastManagedTime, null, null, null, 0, null));
-							return "<result status=\"OK\" />";
-						} else {
-							byte auth_idx = byte.Parse (auth);
-							if (token.Length > 0 && answer.Length > 0 && prev.Length > 0) {
-								record = (MergeableFileRecord)Serializer.Instance.Deserialize (Convert.FromBase64String (prev));
-								byte[] sign = _node.MMLC.VerifyCaptchaChallenge (header.AuthServers[auth_idx], record.Hash.GetByteArray (),
-									Convert.FromBase64String (token), Encoding.ASCII.GetBytes (answer));
-								if (sign != null) {
-									record.AuthorityIndex = auth_idx;
-									record.Authentication = sign;
-									if (record.Verify (header)) {
-										_node.MMLC.AppendRecord (key, record);
-										return "<result status=\"OK\" />";
-									} else {
-										return "<result status=\"ERROR\" code=\"1\" />";
-									}
-								}
-							}
-
-							record = new MergeableFileRecord (new SimpleBBSRecord (name, body), DateTime.UtcNow, header.LastManagedTime, null, null, null, 0, null);
-							CaptchaChallengeData captchaData = _node.MMLC.GetCaptchaChallengeData (header.AuthServers[auth_idx], record.Hash.GetByteArray ());
-							return string.Format ("<result status=\"CAPTCHA\"><img>{0}</img><token>{1}</token><prev>{2}</prev></result>",
-								Convert.ToBase64String (captchaData.Data), Convert.ToBase64String (captchaData.Token),
-								Convert.ToBase64String (Serializer.Instance.Serialize (record)));
-						}
-					} catch {
-						return "<result status=\"ERROR\" code=\"0\" />";
-					}
-				}
-				return "<result status=\"EMPTY\" />";
-			}
-
-			List<MergeableFileRecord> records = _node.MMLC.GetRecords (header.Key, out header);
-			if (records == null)
-				throw new HttpException (HttpStatusCode.NotFound);
-
-			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
-			doc.DocumentElement.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header, records.ToArray ()));
-			return _xslTemplate.Render (req, res, doc, Path.Combine (DefaultTemplatePath, "bbs_view.xsl"));
-		}
 	}
 }
 
@@ -189,6 +127,26 @@ namespace p2pncs.BBS
 			get { return "bbs_new.xsl"; }
 		}
 
+		public IHashComputable ParseNewPostData (Dictionary<string, string> dic)
+		{
+			string name = Helpers.GetValueSafe (dic, "name").Trim ();
+			string body = Helpers.GetValueSafe (dic, "body").Trim ();
+			if (body.Length == 0)
+				throw new ArgumentException ("本文には文字を入力する必要があります");
+			return new SimpleBBSRecord (name, body);
+		}
+
 		#endregion
+
+		public object ProcessGetRequest (Node node, IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, string tail_url)
+		{
+			List<MergeableFileRecord> records = node.MMLC.GetRecords (header.Key, out header);
+			if (records == null)
+				throw new HttpException (HttpStatusCode.NotFound);
+
+			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
+			doc.DocumentElement.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header, records.ToArray ()));
+			return WebApp.Template.Render (req, res, doc, Path.Combine (WebApp.DefaultTemplatePath, "bbs_view.xsl"));
+		}
 	}
 }

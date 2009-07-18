@@ -42,107 +42,6 @@ namespace p2pncs
 			}
 			return _xslTemplate.Render (req, res, doc, Path.Combine (DefaultTemplatePath, "wiki_list.xsl"));
 		}
-
-		object ProcessWikiPage (IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, string url_tail)
-		{
-			string page_title = HttpUtility.UrlDecode (url_tail.Trim ().Trim ('/'), Encoding.UTF8);
-			if (page_title == "StartPage" || page_title == "FrontPage")
-				page_title = string.Empty;
-
-			List<MergeableFileRecord> records = _node.MMLC.GetRecords (header.Key, out header);
-			if (records == null)
-				throw new HttpException (HttpStatusCode.NotFound);
-
-			switch (GetSpecialPageType (page_title)) {
-				case SpecialPageType.None:
-					return ProcessWikiPage_Default (req, res, header, records, page_title);
-				case SpecialPageType.TitleIndex:
-					return ProcessWikiPage_TitleIndex (req, res, header, records);
-				default:
-					throw new HttpException (HttpStatusCode.InternalServerError);
-			}
-		}
-
-		object ProcessWikiPage_Default (IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, List<MergeableFileRecord> records, string page_title)
-		{
-			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
-			MergeableFileRecord record = GetLatestPage (records, page_title);
-			if (req.HttpMethod == HttpMethod.POST && req.HasContentBody ()) {
-				Dictionary<string, string> dic = HttpUtility.ParseUrlEncodedStringToDictionary (Encoding.ASCII.GetString (req.GetContentBody (MaxRequestBodySize)), Encoding.UTF8);
-				record = new MergeableFileRecord (
-						new WikiRecord (page_title, null, Helpers.GetValueSafe (dic, "name"), WikiMarkupType.PukiWiki,
-						Encoding.UTF8.GetBytes (Helpers.GetValueSafe (dic, "body")), WikiCompressType.None, WikiDiffType.None),
-						DateTime.UtcNow, header.LastManagedTime, null, null, null, 0, null);
-				if (dic.ContainsKey ("preview")) {
-					doc.DocumentElement.SetAttribute ("state", "preview");
-				} else if (dic.ContainsKey ("update")) {
-					_node.MMLC.AppendRecord (header.Key, record);
-					res[HttpHeaderNames.Location] = "/wiki/" + header.Key.ToUriSafeBase64String () + "/" + HttpUtility.UrlEncode (page_title, Encoding.UTF8);
-					throw new HttpException (req.HttpVersion == HttpVersion.Http10 ? HttpStatusCode.Found : HttpStatusCode.SeeOther);
-				} else {
-					throw new HttpException (HttpStatusCode.Forbidden);
-				}
-			}
-			if (record == null) {
-				doc.DocumentElement.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header));
-			} else {
-				doc.DocumentElement.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header, new MergeableFileRecord[] {record}));
-			}
-			doc.DocumentElement.AppendChild (doc.CreateElement ("page-title", null, new []{doc.CreateTextNode (page_title)}));
-			doc.DocumentElement.AppendChild (doc.CreateElement ("page-title-for-url", null, new[]{doc.CreateTextNode (WikiTitleToUrl (page_title))}));
-
-			string xsl = "wiki.xsl";
-			if (req.QueryData.ContainsKey ("edit"))
-				xsl = "wiki_edit.xsl";
-			return _xslTemplate.Render (req, res, doc, Path.Combine (DefaultTemplatePath, xsl));
-		}
-
-		object ProcessWikiPage_TitleIndex (IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, List<MergeableFileRecord> records)
-		{
-			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
-			Dictionary<string, MergeableFileRecord> dic = new Dictionary<string,MergeableFileRecord> ();
-			for (int i = 0; i < records.Count; i ++) {
-				WikiRecord wr = records[i].Content as WikiRecord;
-				MergeableFileRecord r;
-				if (!dic.TryGetValue (wr.PageName, out r) || r.CreatedTime < records[i].CreatedTime)
-					dic[wr.PageName] = records[i];
-			}
-
-			List<MergeableFileRecord> list = new List<MergeableFileRecord> (dic.Values);
-			doc.DocumentElement.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header, list.ToArray ()));
-			return _xslTemplate.Render (req, res, doc, Path.Combine (DefaultTemplatePath, "wiki_titleindex.xsl"));
-		}
-
-		SpecialPageType GetSpecialPageType (string page_title)
-		{
-			if (page_title == "TitleIndex")
-				return SpecialPageType.TitleIndex;
-			return SpecialPageType.None;
-		}
-
-		MergeableFileRecord GetLatestPage (List<MergeableFileRecord> records, string page_title)
-		{
-			MergeableFileRecord latest = null;
-			for (int i = 0; i < records.Count; i ++) {
-				WikiRecord r = records[i].Content as WikiRecord;
-				if (r.PageName == page_title && (latest == null || latest.CreatedTime < records[i].CreatedTime))
-					latest = records[i];
-			}
-			return latest;
-		}
-
-		public static string WikiTitleToUrl (string title)
-		{
-			title = Uri.EscapeUriString (title);
-			title = title.Replace ("/", "%2F");
-			return title;
-		}
-
-		enum SpecialPageType
-		{
-			None,
-			TitleIndex
-		}
 	}
 }
 namespace p2pncs.Wiki
@@ -197,6 +96,112 @@ namespace p2pncs.Wiki
 			get { return "wiki_new.xsl"; }
 		}
 
+		public IHashComputable ParseNewPostData (Dictionary<string, string> dic)
+		{
+			string title = Helpers.GetValueSafe (dic, "title").Trim ();
+			string name = Helpers.GetValueSafe (dic, "name").Trim ();
+			string body = Helpers.GetValueSafe (dic, "body").Trim ();
+			if (body.Length == 0)
+				throw new ArgumentException ("本文には文字を入力する必要があります");
+			return new WikiRecord (title, null, name, WikiMarkupType.PukiWiki,
+				Encoding.UTF8.GetBytes (body), WikiCompressType.None, WikiDiffType.None);
+		}
+
 		#endregion
+
+		public object ProcessGetRequest (Node node, IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, string url_tail)
+		{
+			string page_title = HttpUtility.UrlDecode (url_tail.Trim ().Trim ('/'), Encoding.UTF8);
+			if (page_title == "StartPage" || page_title == "FrontPage")
+				page_title = string.Empty;
+
+			List<MergeableFileRecord> records = node.MMLC.GetRecords (header.Key, out header);
+			if (records == null)
+				throw new HttpException (HttpStatusCode.NotFound);
+
+			switch (GetSpecialPageType (page_title)) {
+				case SpecialPageType.None:
+					return ProcessWikiPage_Default (node, req, res, header, records, page_title);
+				case SpecialPageType.TitleIndex:
+					return ProcessWikiPage_TitleIndex (req, res, header, records);
+				default:
+					throw new HttpException (HttpStatusCode.InternalServerError);
+			}
+		}
+
+		object ProcessWikiPage_Default (Node node, IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, List<MergeableFileRecord> records, string page_title)
+		{
+			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
+			MergeableFileRecord record = GetLatestPage (records, page_title);
+			if (req.HttpMethod == HttpMethod.POST && req.HasContentBody ()) {
+				Dictionary<string, string> dic = HttpUtility.ParseUrlEncodedStringToDictionary (Encoding.ASCII.GetString (req.GetContentBody (WebApp.MaxRequestBodySize)), Encoding.UTF8);
+				record = new MergeableFileRecord (ParseNewPostData (dic),
+						DateTime.UtcNow, header.LastManagedTime, null, null, null, 0, null);
+				if (dic.ContainsKey ("preview")) {
+					doc.DocumentElement.SetAttribute ("state", "preview");
+				} else {
+					throw new HttpException (HttpStatusCode.Forbidden);
+				}
+			}
+			if (record == null) {
+				doc.DocumentElement.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header));
+			} else {
+				doc.DocumentElement.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header, new MergeableFileRecord[] { record }));
+			}
+			doc.DocumentElement.AppendChild (doc.CreateElement ("page-title", null, new[] { doc.CreateTextNode (page_title) }));
+			doc.DocumentElement.AppendChild (doc.CreateElement ("page-title-for-url", null, new[] { doc.CreateTextNode (WikiTitleToUrl (page_title)) }));
+
+			string xsl = "wiki.xsl";
+			if (req.QueryData.ContainsKey ("edit"))
+				xsl = "wiki_edit.xsl";
+			return WebApp.Template.Render (req, res, doc, Path.Combine (WebApp.DefaultTemplatePath, xsl));
+		}
+
+		object ProcessWikiPage_TitleIndex (IHttpRequest req, HttpResponseHeader res, MergeableFileHeader header, List<MergeableFileRecord> records)
+		{
+			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
+			Dictionary<string, MergeableFileRecord> dic = new Dictionary<string, MergeableFileRecord> ();
+			for (int i = 0; i < records.Count; i++) {
+				WikiRecord wr = records[i].Content as WikiRecord;
+				MergeableFileRecord r;
+				if (!dic.TryGetValue (wr.PageName, out r) || r.CreatedTime < records[i].CreatedTime)
+					dic[wr.PageName] = records[i];
+			}
+
+			List<MergeableFileRecord> list = new List<MergeableFileRecord> (dic.Values);
+			doc.DocumentElement.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header, list.ToArray ()));
+			return WebApp.Template.Render (req, res, doc, Path.Combine (WebApp.DefaultTemplatePath, "wiki_titleindex.xsl"));
+		}
+
+		SpecialPageType GetSpecialPageType (string page_title)
+		{
+			if (page_title == "TitleIndex")
+				return SpecialPageType.TitleIndex;
+			return SpecialPageType.None;
+		}
+
+		MergeableFileRecord GetLatestPage (List<MergeableFileRecord> records, string page_title)
+		{
+			MergeableFileRecord latest = null;
+			for (int i = 0; i < records.Count; i++) {
+				WikiRecord r = records[i].Content as WikiRecord;
+				if (r.PageName == page_title && (latest == null || latest.CreatedTime < records[i].CreatedTime))
+					latest = records[i];
+			}
+			return latest;
+		}
+
+		public static string WikiTitleToUrl (string title)
+		{
+			title = Uri.EscapeUriString (title);
+			title = title.Replace ("/", "%2F");
+			return title;
+		}
+
+		enum SpecialPageType
+		{
+			None,
+			TitleIndex
+		}
 	}
 }

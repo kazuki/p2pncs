@@ -63,7 +63,7 @@ namespace p2pncs
 		{
 			int gw_port = _config.GetValue<int> (ConfigFields.GwBindTcp);
 
-			_network = new VirtualNetwork (LatencyTypes.Constant (20), 5, PacketLossType.Constant (0.05), Environment.ProcessorCount);
+			_network = new VirtualNetwork (LatencyTypes.Constant (20), 5, PacketLossType.Lossless (), Environment.ProcessorCount);
 
 			for (int i = 0; i < NODES; i++) {
 				AddNode (i % (NODES / 10) == 0 ? gw_port ++ : -1);

@@ -20,5 +20,7 @@ namespace p2pncs
 	interface IMergeableFile
 	{
 		IMergeableFileWebUIHelper WebUIHelper { get; }
+
+		WebApp.IMergeableFileCommonProcess WebUIMergeableFileCommon { get; }
 	}
 }

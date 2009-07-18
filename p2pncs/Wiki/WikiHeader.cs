@@ -63,6 +63,10 @@ namespace p2pncs.Wiki
 			get { return WikiWebUIHelper.Instance; }
 		}
 
+		public WebApp.IMergeableFileCommonProcess WebUIMergeableFileCommon {
+			get { return WikiWebApp.Instance; }
+		}
+
 		#endregion
 	}
 }
