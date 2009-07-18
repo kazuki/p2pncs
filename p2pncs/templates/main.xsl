@@ -13,30 +13,23 @@
 			<xsl:value-of select="@ver" />
 		</h1>
 		<p>左のメニューから行いたい操作を選んでください。</p>
-		<h2>メニューの詳細</h2>
+		<h2>ネットワークの状態</h2>
 		<ul>
 			<li>
-				<xsl:text>ネットワーク</xsl:text>
-				<dl>
-					<dt>初期ノードに接続</dt>
-					<dd>
-						<p>P2Pネットワークに参加するために、既に参加しているノードの情報を入力して、ネットワークへ参加します。</p>
-						<p>起動したら最初に1度だけ実行してください。</p>
-					</dd>
-					<dt>終了</dt>
-					<dd><p>プログラムを終了します。</p></dd>
-				</dl>
-			</li>
-			<li>
-				<xsl:text>BBS</xsl:text>
-				<dl>
-					<dt>新規作成</dt>
-					<dd><p>掲示板を新規作成します。</p></dd>
-					<dt>開く</dt>
-					<dd><p>BBSのIDを指定して掲示板を開きます。</p></dd>
-					<dt>一覧</dt>
-					<dd><p>キャッシュされた掲示板の一覧を表示します。</p></dd>
-				</dl>
+				<xsl:text>BBS/Wiki用 匿名ネットワーク: </xsl:text>
+				<xsl:choose>
+					<xsl:when test="/page/network-state/mmlc-mcr = 'Stable'">
+						<xsl:text>接続済み</xsl:text>
+					</xsl:when>
+					<xsl:when test="/page/network-state/mmlc-mcr = 'Unstable'">
+						<xsl:text>接続済み (不安定)</xsl:text>
+					</xsl:when>
+					<xsl:otherwise>
+						<xsl:text>接続されていません。</xsl:text>
+						<br/>
+						<xsl:text>初期ノードからノード情報を追加するか、ルータやファイアウォールの設定を見直してください。</xsl:text>
+					</xsl:otherwise>
+				</xsl:choose>
 			</li>
 		</ul>
 	</xsl:template>

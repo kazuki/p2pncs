@@ -88,7 +88,7 @@ namespace p2pncs
 
 		object ProcessMainPage (IHttpRequest req, HttpResponseHeader res)
 		{
-			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
+			XmlDocument doc = CreateDocumentWithNetworkState ();
 			doc.DocumentElement.SetAttribute ("ver", System.Reflection.Assembly.GetEntryAssembly ().GetName ().Version.ToString ());
 			return _xslTemplate.Render (req, res, doc, Path.Combine (DefaultTemplatePath, "main.xsl"));
 		}
@@ -129,6 +129,22 @@ namespace p2pncs
 
 		public static XslTemplateEngine Template {
 			get { return _xslTemplate; }
+		}
+
+		public XmlDocument CreateDocumentWithNetworkState ()
+		{
+			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
+			AddNetworkState (doc);
+			return doc;
+		}
+
+		void AddNetworkState (XmlDocument doc)
+		{
+			doc.DocumentElement.AppendChild (doc.CreateElement ("network-state", null, new XmlNode[] {
+				doc.CreateElement ("mmlc-mcr", null, new XmlNode[] {
+					doc.CreateTextNode (_node.MMLC.MCRInfo.Status.ToString ())
+				})
+			}));
 		}
 	}
 }

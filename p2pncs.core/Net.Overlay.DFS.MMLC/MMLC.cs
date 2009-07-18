@@ -829,6 +829,10 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			get { return _dht.KeyBasedRouter; }
 		}
 
+		public ISubscribeInfo MCRInfo {
+			get { return _uploadSide; }
+		}
+
 		public void Dispose ()
 		{
 			_ar.RemoveBoundaryNodeReceivedEventHandler (typeof (DHTLookupRequest));
