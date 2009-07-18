@@ -221,6 +221,8 @@ namespace p2pncs.Net.Overlay
 				if (firstHops == null || firstHops.Length == 0) {
 					if (_router.SelftNodeId.Equals (_dest)) {
 						nodes = _router.RoutingAlgorithm.GetRandomNodes (_numOfSimultaneous);
+						if (nodes == null || nodes.Length == 0)
+							isRoot = true;
 					} else {
 						nodes = _router.RoutingAlgorithm.GetNextHopNodes (_dest, _numOfSimultaneous, null);
 						if (nodes == null || nodes.Length == 0) {

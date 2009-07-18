@@ -18,7 +18,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace p2pncs.Simulation
+namespace p2pncs.Utility
 {
 	public class StandardDeviation
 	{

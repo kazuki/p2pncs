@@ -18,12 +18,9 @@
 using System;
 using System.Diagnostics;
 using System.Threading;
-using System.Net;
-using openCrypto.EllipticCurve;
 using p2pncs.Net;
-using p2pncs.Net.Overlay;
 using p2pncs.Net.Overlay.Anonymous;
-using p2pncs.Simulation;
+using p2pncs.Utility;
 
 namespace p2pncs.Evaluation
 {

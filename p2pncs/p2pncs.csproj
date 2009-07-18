@@ -43,7 +43,6 @@
     <Compile Include="BBS\BBSApp.cs" />
     <Compile Include="BBS\SimpleBBSWebUIHelper.cs" />
     <Compile Include="ConfigFields.cs" />
-    <Compile Include="DebugProgram.cs" />
     <Compile Include="EndPointObfuscator.cs" />
     <Compile Include="Helpers.cs" />
     <Compile Include="IMergeableFile.cs" />
@@ -105,10 +104,6 @@
     <ProjectReference Include="..\p2pncs.core\p2pncs.core.csproj">
       <Project>{40F04D04-CCA2-4B39-B521-2CDC20C20621}</Project>
       <Name>p2pncs.core</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\p2pncs.simulation\p2pncs.simulation.csproj">
-      <Project>{A7ABCCD1-20B9-41A7-8C54-7E2B4C958B23}</Project>
-      <Name>p2pncs.simulation</Name>
     </ProjectReference>
     <ProjectReference Include="..\XmlConfigLibrary\XmlConfigLibrary.csproj">
       <Project>{09DDD2D2-8810-4017-8C0A-FF7A5FED9235}</Project>

@@ -22,6 +22,7 @@ using System.Net;
 using System.Threading;
 using p2pncs.Net;
 using p2pncs.Threading;
+using p2pncs.Utility;
 
 namespace p2pncs.Simulation.VirtualNet
 {

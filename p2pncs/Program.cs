@@ -30,21 +30,13 @@ namespace p2pncs
 	class Program : IDisposable
 	{
 		const string CONFIG_PATH = "p2pncs.xml";
-#if !DEBUG
 		XmlConfig _config = new XmlConfig ();
-#endif
 
 		static void Main (string[] args)
 		{
-#if DEBUG
-			using (DebugProgram prog = new DebugProgram ()) {
-				prog.Run ();
-			}
-#else
 			using (Program prog = new Program ()) {
 				prog.Run ();
 			}
-#endif
 		}
 
 		public static bool LoadConfig (XmlConfig config)
@@ -64,7 +56,6 @@ namespace p2pncs
 			return exists;
 		}
 
-#if !DEBUG
 		public void Run ()
 		{
 			if (!LoadConfig (_config)) {
@@ -97,7 +88,6 @@ namespace p2pncs
 				app.CreateStatisticsXML ().Save ("statistics-" + DateTime.Now.ToString ("yyyyMMddHHmmss") + ".xml");
 			}
 		}
-#endif
 
 		public void Dispose ()
 		{

@@ -18,16 +18,11 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Net;
 using System.Threading;
 using openCrypto.EllipticCurve;
-using p2pncs.Net;
 using p2pncs.Net.Overlay;
 using p2pncs.Net.Overlay.Anonymous;
-using p2pncs.Security.Cryptography;
-using p2pncs.Simulation;
-using p2pncs.Simulation.VirtualNet;
-using p2pncs.Threading;
+using p2pncs.Utility;
 
 namespace p2pncs.Evaluation
 {

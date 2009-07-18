@@ -16,7 +16,10 @@
  */
 
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 [assembly: AssemblyTitle ("p2pncs")]
 [assembly: AssemblyDescription ("p2pncs")]
 [assembly: AssemblyProduct ("p2pncs")]
+
+[assembly: InternalsVisibleToAttribute ("p2pncs.debug")]

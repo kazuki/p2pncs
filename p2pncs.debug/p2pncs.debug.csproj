@@ -5,11 +5,11 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProductVersion>9.0.30729</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{A7ABCCD1-20B9-41A7-8C54-7E2B4C958B23}</ProjectGuid>
-    <OutputType>Library</OutputType>
+    <ProjectGuid>{7BC87E33-75D7-4003-BD55-8F4D41F4DC50}</ProjectGuid>
+    <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>p2pncs.Simulation</RootNamespace>
-    <AssemblyName>p2pncs.simulation</AssemblyName>
+    <RootNamespace>p2pncs.debug</RootNamespace>
+    <AssemblyName>p2pncs.debug</AssemblyName>
     <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>
@@ -37,19 +37,15 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="..\AssemblyVersionInfo.cs" />
     <Compile Include="AssemblyInfo.cs" />
-    <Compile Include="OSTimerPrecision.cs" />
-    <Compile Include="RandomIPAddressGenerator.cs" />
-    <Compile Include="VirtualNet\LatencyTypes.cs" />
-    <Compile Include="VirtualNet\ILatency.cs" />
-    <Compile Include="VirtualNet\IPacketLossRate.cs" />
-    <Compile Include="VirtualNet\PacketLossType.cs" />
-    <Compile Include="VirtualNet\VirtualDatagramEventSocket.cs" />
-    <Compile Include="VirtualNet\VirtualMessagingSocket.cs" />
-    <Compile Include="VirtualNet\VirtualNetwork.cs" />
+    <Compile Include="..\AssemblyVersionInfo.cs" />
+    <Compile Include="Program.cs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\HttpServer\HttpServer.csproj">
+      <Project>{F886911A-ACBD-40A0-8122-A9DD18122B65}</Project>
+      <Name>HttpServer</Name>
+    </ProjectReference>
     <ProjectReference Include="..\openCrypto.NET\openCrypto.NET.csproj">
       <Project>{59AD989B-7DD7-400B-B2D5-EFBD0004A749}</Project>
       <Name>openCrypto.NET</Name>
@@ -57,6 +53,14 @@
     <ProjectReference Include="..\p2pncs.core\p2pncs.core.csproj">
       <Project>{40F04D04-CCA2-4B39-B521-2CDC20C20621}</Project>
       <Name>p2pncs.core</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\p2pncs.simulation\p2pncs.simulation.csproj">
+      <Project>{A7ABCCD1-20B9-41A7-8C54-7E2B4C958B23}</Project>
+      <Name>p2pncs.simulation</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\p2pncs\p2pncs.csproj">
+      <Project>{C7128775-37B2-4DB3-8CCA-159C76F12CE1}</Project>
+      <Name>p2pncs</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

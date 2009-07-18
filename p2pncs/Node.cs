@@ -24,7 +24,6 @@ using p2pncs.Net.Overlay.Anonymous;
 using p2pncs.Net.Overlay.DFS.MMLC;
 using p2pncs.Net.Overlay.DHT;
 using p2pncs.Security.Cryptography;
-using p2pncs.Simulation.VirtualNet;
 
 namespace p2pncs
 {
@@ -37,7 +36,7 @@ namespace p2pncs
 
 		DateTime _start = DateTime.Now;
 		int _udpPort, _tcpPort;
-		IDatagramEventSocket _dgramSock;
+		protected IDatagramEventSocket _dgramSock;
 		ITcpListener _tcpListener;
 		IMessagingSocket _messagingSock;
 		IKeyBasedRouter _kbr;
@@ -117,12 +116,10 @@ namespace p2pncs
 			get { return _statistics; }
 		}
 
-		public IPAddress GetCurrentPublicIPAddress ()
+		public virtual IPAddress GetCurrentPublicIPAddress ()
 		{
 			if (_dgramSock is UdpSocket)
 				return (_dgramSock as UdpSocket).CurrentPublicIPAddress;
-			if (_dgramSock is VirtualDatagramEventSocket)
-				return (_dgramSock as VirtualDatagramEventSocket).PublicIPAddress;
 			throw new NotImplementedException ();
 		}
 
@@ -138,7 +135,7 @@ namespace p2pncs
 			get { return DateTime.Now.Subtract (_start).TotalSeconds; }
 		}
 
-		public void Dispose ()
+		public virtual void Dispose ()
 		{
 			_ints.KBRStabilizeInt.RemoveInterruption (Stabilize);
 			_localHT.Dispose ();
