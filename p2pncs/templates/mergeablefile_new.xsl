@@ -8,14 +8,19 @@
 			<xsl:with-param name="name">auth</xsl:with-param>
 		</xsl:call-template>
 		<xsl:if test="not($confirm_mode or $success_mode)">
-			<div>
-				<xsl:text>認証サーバは0〜4個程度指定できます。</xsl:text>
+			<p>
+				<xsl:text>認証サーバは各行に1つずつ、合計で0〜4個程度指定できます。</xsl:text>
 				<br/>
 				<xsl:text>(多く指定しすぎるとエラーになります)</xsl:text>
 				<br/>
 				<xsl:text>また、設定しない場合は認証サーバ無しになり、機械が大量の投稿を行える状態になります。</xsl:text>
-			</div>
+			</p>
 		</xsl:if>
+		<p>
+			<xsl:text>指定する情報がよくわからない場合や、認証サーバの設置方法に関しては</xsl:text>
+			<a href="http://kserver.panicode.com/software/p2pncs/auth-servers">ここ</a>
+			<xsl:text>を参照してください。</xsl:text>
+		</p>
 	</xsl:template>
 
 	<xsl:template match="validation/error[@type='header-size-over']">
