@@ -27,6 +27,9 @@
 								<xsl:when test="@type='simple-bbs'">
 									<xsl:value-of select="bbs/title" />
 								</xsl:when>
+								<xsl:when test="@type='wiki'">
+									<xsl:value-of select="wiki/title" />
+								</xsl:when>
 							</xsl:choose>
 						</xsl:element>
 					</td>
