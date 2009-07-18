@@ -52,7 +52,7 @@
 					<xsl:text>display:none</xsl:text>
 				</xsl:attribute>
 			</xsl:if>
-			<xsl:if test="$class or $x">
+			<xsl:if test="$class or ($x and $x/@status='error')">
 				<xsl:attribute name="class">
 					<xsl:value-of select="$class" />
 					<xsl:if test="$x and $x/@status='error'">
@@ -106,7 +106,7 @@
 					<xsl:text>display:none</xsl:text>
 				</xsl:attribute>
 			</xsl:if>
-			<xsl:if test="$class or $x">
+			<xsl:if test="$class or ($x and $x/@status='error')">
 				<xsl:attribute name="class">
 					<xsl:value-of select="$class" />
 					<xsl:if test="$x and $x/@status='error'">

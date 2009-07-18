@@ -5,6 +5,9 @@
 	<xsl:import href="mergeablefile_new.xsl" />
 
 	<xsl:template name="_title">新規作成 :: Wiki :: p2pncs</xsl:template>
+	<xsl:template name="_css">
+		<xsl:call-template name="create_validation_stylesheet" />
+	</xsl:template>
  
 	<xsl:template match="/page">
 		<h1>Wikiの新規作成</h1>
@@ -25,7 +28,9 @@
 			</p>
 		</xsl:if>
 		<form method="post" action="/wiki/new">
-			<xsl:call-template name="check_validation" />
+			<div>
+				<xsl:call-template name="check_validation" />
+			</div>
 			<table>
 				<tr>
 					<td class="header">タイトル: </td>

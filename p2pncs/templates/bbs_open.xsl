@@ -7,9 +7,11 @@
 	<xsl:template match="/page">
 		<h1>掲示板を開く</h1>
 		<form method="post" action="/bbs/open">
-			<xsl:text>掲示板ID: </xsl:text>
-			<input type="text" size="60" name="bbsid" />
-			<input type="submit" value="開く"/>
+			<div>
+				<xsl:text>掲示板ID: </xsl:text>
+				<input type="text" size="60" name="bbsid" />
+				<input type="submit" value="開く"/>
+			</div>
 		</form>
 	</xsl:template>
 </xsl:stylesheet>

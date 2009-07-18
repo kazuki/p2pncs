@@ -29,7 +29,9 @@
 			</p>
 		</xsl:if>
 		<form method="post" action="/bbs/new">
-			<xsl:call-template name="check_validation" />
+			<div>
+				<xsl:call-template name="check_validation" />
+			</div>
 			<table>
 				<tr>
 					<td class="header">タイトル: </td>
