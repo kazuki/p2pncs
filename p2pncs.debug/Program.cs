@@ -32,7 +32,7 @@ namespace p2pncs.debug
 {
 	class Program : IDisposable
 	{
-		const int NODES = 1;
+		const int NODES = 10;
 		VirtualNetwork _network;
 		Interrupters _ints;
 		IntervalInterrupter _churnInt;
@@ -60,11 +60,11 @@ namespace p2pncs.debug
 		{
 			int gw_port = 8080;
 
-			_network = new VirtualNetwork (LatencyTypes.Constant (20), 5, PacketLossType.Lossless (), Environment.ProcessorCount);
+			_network = new VirtualNetwork (LatencyTypes.Constant (20), 5, PacketLossType.Constant (0.05), Environment.ProcessorCount);
 
+			int step = Math.Max (1, NODES / 10);
 			for (int i = 0; i < NODES; i++) {
-				//AddNode (i % (NODES / 10) == 0 ? gw_port ++ : -1);
-				AddNode (gw_port);
+				AddNode ((i % step) == 0 ? gw_port++ : -1);
 				Thread.Sleep (100);
 			}
 			Console.WriteLine ("{0} Nodes Inserted", NODES);
