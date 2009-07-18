@@ -73,6 +73,8 @@
 					</xsl:if>
 				<input type="submit" name="preview" value="プレビュー" />
 				<button id="postButton">変更</button>
+				<input type="checkbox" name="lzma" value="use_lzma" />
+				<xsl:text>可能であれば圧縮を利用する</xsl:text>
 
 				<xsl:element name="input">
 					<xsl:attribute name="id">postKey</xsl:attribute>

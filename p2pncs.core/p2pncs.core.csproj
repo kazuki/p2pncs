@@ -49,6 +49,18 @@
     <Compile Include="..\AssemblyVersionInfo.cs" />
     <Compile Include="AssemblyInfo.cs" />
     <Compile Include="Logger.cs" />
+    <Compile Include="LZMA\Common\CRC.cs" />
+    <Compile Include="LZMA\Compress\LZMA\LzmaBase.cs" />
+    <Compile Include="LZMA\Compress\LZMA\LzmaDecoder.cs" />
+    <Compile Include="LZMA\Compress\LZMA\LzmaEncoder.cs" />
+    <Compile Include="LZMA\Compress\LZ\IMatchFinder.cs" />
+    <Compile Include="LZMA\Compress\LZ\LzBinTree.cs" />
+    <Compile Include="LZMA\Compress\LZ\LzInWindow.cs" />
+    <Compile Include="LZMA\Compress\LZ\LzOutWindow.cs" />
+    <Compile Include="LZMA\Compress\RangeCoder\RangeCoder.cs" />
+    <Compile Include="LZMA\Compress\RangeCoder\RangeCoderBit.cs" />
+    <Compile Include="LZMA\Compress\RangeCoder\RangeCoderBitTree.cs" />
+    <Compile Include="LZMA\ICoder.cs" />
     <Compile Include="Net.Overlay.Anonymous\AcceptedEventArgs.cs" />
     <Compile Include="Net.Overlay.Anonymous\AcceptedEventHandler.cs" />
     <Compile Include="Net.Overlay.Anonymous\AcceptingEventArgs.cs" />
@@ -133,6 +145,7 @@
     <Compile Include="SerializableTypeIdAttribute.cs" />
     <Compile Include="Serializer.cs" />
     <Compile Include="Utility\KeyValueCache.cs" />
+    <Compile Include="Utility\LzmaUtility.cs" />
     <Compile Include="Utility\SerializeHelper.cs" />
     <Compile Include="Utility\StandardDeviation.cs" />
     <Compile Include="Utility\UriSafeBase64.cs" />

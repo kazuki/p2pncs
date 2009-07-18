@@ -101,10 +101,19 @@ namespace p2pncs.Wiki
 			string title = Helpers.GetValueSafe (dic, "title").Trim ();
 			string name = Helpers.GetValueSafe (dic, "name").Trim ();
 			string body = Helpers.GetValueSafe (dic, "body").Trim ();
+			bool use_lzma = Helpers.GetValueSafe (dic, "lzma").Trim().Length > 0;
 			if (body.Length == 0)
 				throw new ArgumentException ("本文には文字を入力する必要があります");
-			return new WikiRecord (title, null, name, WikiMarkupType.PukiWiki,
-				Encoding.UTF8.GetBytes (body), WikiCompressType.None, WikiDiffType.None);
+			byte[] raw_body = Encoding.UTF8.GetBytes (body);
+			WikiCompressType ctype = WikiCompressType.None;
+			if (use_lzma) {
+				byte[] compressed = p2pncs.Utility.LzmaUtility.Compress (raw_body);
+				if (compressed.Length < raw_body.Length) {
+					raw_body = compressed;
+					ctype = WikiCompressType.LZMA;
+				}
+			}
+			return new WikiRecord (title, null, name, WikiMarkupType.PukiWiki, body, raw_body, ctype, WikiDiffType.None);
 		}
 
 		#endregion

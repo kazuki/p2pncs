@@ -58,7 +58,8 @@ namespace p2pncs.Wiki
 		{
 			return new WikiRecord (record.GetString (offset + 0),
 				record.IsDBNull (offset + 1) ? null : Key.FromBase64 (record.GetString (offset + 1)),
-				record.GetString (offset + 2), (WikiMarkupType)record.GetInt32 (offset + 5), (byte[])record.GetValue (offset + 4),
+				record.GetString (offset + 2), (WikiMarkupType)record.GetInt32 (offset + 5),
+				record.GetString (offset + 3), (byte[])record.GetValue (offset + 4),
 				(WikiCompressType)record.GetInt32 (offset + 6), (WikiDiffType)record.GetInt32 (offset + 7));
 		}
 
@@ -71,6 +72,7 @@ namespace p2pncs.Wiki
 		public void Insert (IDbTransaction transaction, long id, MergeableFileRecord record)
 		{
 			WikiRecord r = record.Content as WikiRecord;
+			r.SyncBodyAndRawBody ();
 			DatabaseUtility.ExecuteNonQuery (transaction, INSERT_RECORD_SQL, id, r.PageName,
 				r.ParentHash == null ? null : r.ParentHash.ToBase64String (), r.Name,
 				r.Body, r.RawBody, (int)r.MarkupType, (int)r.CompressType, (int)r.DiffType);

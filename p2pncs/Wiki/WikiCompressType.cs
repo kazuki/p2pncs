@@ -19,6 +19,7 @@ namespace p2pncs.Wiki
 {
 	enum WikiCompressType : byte
 	{
-		None = 0
+		None = 0,
+		LZMA = 1
 	}
 }

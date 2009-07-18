@@ -15,6 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+using System;
 using System.Security.Cryptography;
 using System.Text;
 using p2pncs.Net.Overlay;
@@ -48,7 +49,7 @@ namespace p2pncs.Wiki
 
 		string _body;
 
-		public WikiRecord (string pageName, Key parentHash, string name, WikiMarkupType markupType, byte[] raw_body, WikiCompressType compressType, WikiDiffType diffType)
+		public WikiRecord (string pageName, Key parentHash, string name, WikiMarkupType markupType, string body, byte[] raw_body, WikiCompressType compressType, WikiDiffType diffType)
 		{
 			_pageName = pageName;
 			_parentHash = parentHash;
@@ -57,7 +58,24 @@ namespace p2pncs.Wiki
 			_raw_body = raw_body;
 			_compressType = compressType;
 			_diffType = diffType;
-			_body = Encoding.UTF8.GetString (raw_body);
+			_body = body;
+			SyncBodyAndRawBody ();
+		}
+
+		public void SyncBodyAndRawBody ()
+		{
+			if (_body != null)
+				return;
+			switch (_compressType) {
+				case WikiCompressType.None:
+					_body = Encoding.UTF8.GetString (_raw_body);
+					break;
+				case WikiCompressType.LZMA:
+					_body = Encoding.UTF8.GetString (p2pncs.Utility.LzmaUtility.Decompress (_raw_body));
+					break;
+				default:
+					throw new FormatException ();
+			}
 		}
 
 		public string PageName {
