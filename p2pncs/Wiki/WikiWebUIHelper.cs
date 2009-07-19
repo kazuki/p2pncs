@@ -38,13 +38,7 @@ namespace p2pncs.Wiki
 		public XmlElement CreateHeaderElement (XmlDocument doc, MergeableFileHeader header)
 		{
 			WikiHeader content = header.Content as WikiHeader;
-			return doc.CreateElement ("wiki", new string[][] {
-				new string[] {"is-freeze", content.IsFreeze.ToString().ToLowerInvariant()}
-			}, new[] {
-				doc.CreateElement ("title", null, new[] {
-					doc.CreateTextNodeSafe (content.Title)
-				})
-			});
+			return doc.CreateElement ("wiki");
 		}
 
 		public XmlElement CreateRecordElement (XmlDocument doc, MergeableFileRecord record)
@@ -94,7 +88,7 @@ namespace p2pncs.Wiki
 
 		public IHashComputable CreateHeaderContent (NameValueCollection c)
 		{
-			return new WikiHeader (c["title"], c["freeze"] == null ? false : true);
+			return new WikiHeader ();
 		}
 
 		public string ContentType {

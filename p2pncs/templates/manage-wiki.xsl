@@ -3,7 +3,7 @@
 	<xsl:import href="base.xsl" />
 
 	<xsl:template name="_title">
-		<xsl:value-of select="/page/file/wiki/title" />
+		<xsl:value-of select="/page/file/title" />
 		<xsl:text> :: 管理 :: p2pncs</xsl:text>
 	</xsl:template>
 	<xsl:template name="_css">
@@ -29,7 +29,7 @@
 								<xsl:attribute name="size">80</xsl:attribute>
 								<xsl:attribute name="name">title</xsl:attribute>
 								<xsl:attribute name="value">
-									<xsl:value-of select="/page/file/wiki/title" />
+									<xsl:value-of select="/page/file/title" />
 								</xsl:attribute>
 							</xsl:element>
 						</td>

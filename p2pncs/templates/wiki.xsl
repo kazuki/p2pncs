@@ -6,7 +6,7 @@
 	<xsl:template name="_title">
 		<xsl:value-of select="$page_title" />		
 		<xsl:text> :: </xsl:text>
-		<xsl:value-of select="/page/file/wiki/title" />
+		<xsl:value-of select="/page/file/title" />
 		<xsl:text> :: wiki :: p2pncs</xsl:text>
 	</xsl:template>
 

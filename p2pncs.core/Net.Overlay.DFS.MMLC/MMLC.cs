@@ -84,7 +84,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.Serializable)) {
 				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS MMLC_Keys (id INTEGER PRIMARY KEY, key TEXT, type INTEGER, content_type INTEGER);");
 				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS MMLC_PrivateKeys (key TEXT PRIMARY KEY, private_key BLOB);");
-				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS MMLC_MergeableHeaders (id INTEGER PRIMARY KEY REFERENCES MMLC_Keys(id), created INTEGER, lastManaged INTEGER, authServers TEXT, sign BLOB, recordsetHash TEXT);");
+				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS MMLC_MergeableHeaders (id INTEGER PRIMARY KEY REFERENCES MMLC_Keys(id), title TEXT, flags INTEGER, created INTEGER, lastManaged INTEGER, authServers TEXT, sign BLOB, recordsetHash TEXT);");
 				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS MMLC_MergeableRecords (id INTEGER PRIMARY KEY, hash TEXT, header_id INTEGER REFERENCES MMLC_MergeableHeaders(id), created INTEGER, lastManaged INTEGER, publickey TEXT, sign BLOB, auth_idx INTEGER, auth BLOB);");
 				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE UNIQUE INDEX IF NOT EXISTS MMLC_Keys_Index ON MMLC_Keys(key);");
 				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE UNIQUE INDEX IF NOT EXISTS MMLC_MergeableRecords_Index ON MMLC_MergeableRecords (header_id, hash);");
@@ -180,9 +180,9 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				header.Key.ToBase64String (), parser.TypeId);
 			header_id = DatabaseUtility.GetLastInsertRowId (transaction);
 			DatabaseUtility.ExecuteNonQuery (transaction,
-				"INSERT INTO MMLC_MergeableHeaders (id, created, lastManaged, authServers, sign, recordsetHash) VALUES (?, ?, ?, ?, ?, ?);",
-				header_id, header.CreatedTime, header.LastManagedTime, AuthServerInfo.ToParsableString (header.AuthServers),
-				header.Signature, header.RecordsetHash.ToBase64String ());
+				"INSERT INTO MMLC_MergeableHeaders (id, title, flags, created, lastManaged, authServers, sign, recordsetHash) VALUES (?, ?, ?, ?, ?, ?, ?, ?);",
+				header_id, header.Title, header.Flags, header.CreatedTime, header.LastManagedTime,
+				AuthServerInfo.ToParsableString (header.AuthServers), header.Signature, header.RecordsetHash.ToBase64String ());
 			parser.Insert (transaction, header_id, header);
 		}
 
@@ -203,14 +203,20 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				return false;
 			return Update (transaction, header, parser, header_id, current);
 		}
+		
+		bool Update (IDbTransaction transaction, MergeableFileHeader new_header, IMergeableFileDatabaseParser parser, long header_id)
+		{
+			return Update (transaction, new_header, parser, header_id, null);
+		}
 
 		bool Update (IDbTransaction transaction, MergeableFileHeader new_header, IMergeableFileDatabaseParser parser, long header_id, MergeableFileHeader current_header)
 		{
-			if (current_header.LastManagedTime == new_header.LastManagedTime) {
+			if (current_header != null && current_header.LastManagedTime == new_header.LastManagedTime) {
 				DatabaseUtility.ExecuteNonQuery (transaction, "UPDATE MMLC_MergeableHeaders SET recordsetHash=? WHERE id=?",
 					new_header.RecordsetHash.ToBase64String (), header_id);
 			} else {
-				DatabaseUtility.ExecuteNonQuery (transaction, "UPDATE MMLC_MergeableHeaders SET lastManaged=?, authServers=?, sign=?, recordsetHash=? WHERE id=?",
+				DatabaseUtility.ExecuteNonQuery (transaction, "UPDATE MMLC_MergeableHeaders SET title=?, flags=?, lastManaged=?, authServers=?, sign=?, recordsetHash=? WHERE id=?",
+					new_header.Title, (long)new_header.Flags,
 					new_header.LastManagedTime, AuthServerInfo.ToParsableString (new_header.AuthServers),
 					new_header.Signature, new_header.RecordsetHash.ToBase64String (), header_id);
 				parser.Update (transaction, header_id, new_header);
@@ -241,17 +247,18 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					parser = GetMergeableParser (reader1.GetInt32 (2));
 					if (parser == null)
 						return null;
-					string sql = string.Format ("SELECT t1.created, t1.lastManaged, t1.authServers, t1.sign, t1.recordsetHash, {0} FROM MMLC_MergeableHeaders as t1,{1} as {2} WHERE t1.id=? AND t1.id={2}.id", parser.ParseHeaderFields, parser.HeaderTableName, parser.TableAlias);
+					string sql = string.Format ("SELECT t1.title, t1.flags, t1.created, t1.lastManaged, t1.authServers, t1.sign, t1.recordsetHash, {0} FROM MMLC_MergeableHeaders as t1,{1} as {2} WHERE t1.id=? AND t1.id={2}.id", parser.ParseHeaderFields, parser.HeaderTableName, parser.TableAlias);
 					using (IDataReader reader2 = DatabaseUtility.ExecuteReader (transaction, sql, header_id)) {
 						if (!reader2.Read ())
 							return null;
 						try {
 							header = new MergeableFileHeader (
-								key, reader2.GetUtcDateTime (0), reader2.GetUtcDateTime (1), null,
-								AuthServerInfo.ParseArray (reader2.GetString (2)),
-								(byte[])reader2.GetValue (3),
-								Key.FromBase64 (reader2.GetString (4)));
-							header.Content = parser.ParseHeader (reader2, 5);
+								key, reader2.GetString (0), (MergeableFileHeaderFlags)reader2.GetInt64 (1),
+								reader2.GetUtcDateTime (2), reader2.GetUtcDateTime (3), null,
+								AuthServerInfo.ParseArray (reader2.GetString (4)),
+								(byte[])reader2.GetValue (5),
+								Key.FromBase64 (reader2.GetString (6)));
+							header.Content = parser.ParseHeader (reader2, 7);
 						} catch {
 							return null;
 						}
@@ -429,12 +436,16 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		#endregion
 
 		#region Manipulating MergeableFile/MergeabileFileRecord
-		public MergeableFileHeader CreateNew (IHashComputable headerContent, AuthServerInfo[] authServers, MergeableFileRecord[] init_records)
+		public MergeableFileHeader CreateNew (MergeableFileHeader header, MergeableFileRecord[] init_records)
 		{
 			ECKeyPair privateKey = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
-			Key publicKey = Key.Create (privateKey);
 			DateTime now = DateTime.UtcNow;
-			MergeableFileHeader header = new MergeableFileHeader (privateKey, now, now, headerContent, authServers);
+
+			header.LastManagedTime = now;
+			header.LastModifiedTime = now;
+			header.CreatedTime = now;
+			header.Sign (privateKey);
+
 			if (Serializer.Instance.Serialize (header).Length > MergeableFileHeaderMaxSize)
 				throw new OutOfMemoryException ();
 			if (init_records != null && init_records.Length > 0) {
@@ -452,7 +463,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.Serializable)) {
 				IMergeableFileDatabaseParser parser = null;
 				long header_id;
-				Insert (transaction, publicKey, privateKey);
+				Insert (transaction, header.Key, privateKey);
 				Insert (transaction, header, ref parser, out header_id);
 				if (init_records != null && init_records.Length > 0) {
 					for (int i = 0; i < init_records.Length; i ++)
@@ -534,9 +545,9 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			}
 		}
 
-		public void Manage (Key key, IHashComputable new_header_content, AuthServerInfo[] authServers, Key[] keep_records, MergeableFileRecord[] append_records)
+		public void Manage (MergeableFileHeader new_header, Key[] keep_records, MergeableFileRecord[] append_records)
 		{
-			if (key == null)
+			if (new_header == null || new_header.Content == null)
 				throw new ArgumentNullException ();
 			if (keep_records == null)
 				keep_records = new Key[0];
@@ -545,7 +556,6 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 			IMergeableFileDatabaseParser parser;
 			long header_id;
-			MergeableFileHeader cur_header;
 			ECKeyPair privateKey;
 
 			HashSet<Key> keepSet = new HashSet<Key> (keep_records);
@@ -554,20 +564,19 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 			using (IDbConnection connection = CreateDBConnection ())
 			using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.ReadCommitted)) {
-				cur_header = SelectHeader (transaction, key, out parser, out header_id) as MergeableFileHeader;
+				MergeableFileHeader cur_header = SelectHeader (transaction, new_header.Key, out parser, out header_id) as MergeableFileHeader;
 				if (cur_header == null)
 					throw new KeyNotFoundException ();
 
 				// 秘密鍵を選択
 				privateKey = ECKeyPair.CreatePrivate (DefaultAlgorithm.ECDomainName,
-					(byte[])DatabaseUtility.ExecuteScalar (transaction, "SELECT private_key FROM MMLC_PrivateKeys WHERE key=?", key.ToBase64String ()));
+					(byte[])DatabaseUtility.ExecuteScalar (transaction, "SELECT private_key FROM MMLC_PrivateKeys WHERE key=?", cur_header.Key.ToBase64String ()));
 
 				old_records = SelectRecords (transaction, parser, header_id);
 			}
 
-			// ヘッダの内容を更新し、再署名
-			MergeableFileHeader new_header = new MergeableFileHeader (privateKey, cur_header.CreatedTime, DateTime.UtcNow,
-				new_header_content == null ? cur_header.Content : new_header_content, authServers);
+			// ヘッダの内容に対し再署名
+			new_header.Sign (privateKey);
 			
 			// 保持するレコードのみを抽出
 			for (int i = 0; i < old_records.Count; i ++)
@@ -580,7 +589,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 			// 管理更新日時を更新し、管理鍵で各レコードに署名
 			ECDSA ecdsa = new ECDSA (privateKey);
-			Key hash = new_header.RecordsetHash;
+			Key hash = new Key (new byte[DefaultAlgorithm.HashByteSize]);
 			for (int i = 0; i < new_records.Count; i ++) {
 				new_records[i].LastManagedTime = new_header.LastManagedTime;
 				new_records[i].AuthorityIndex = byte.MaxValue;
@@ -596,7 +605,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				RemoveRecords (transaction, header_id, parser);
 
 				// ヘッダを書き込み
-				Update (transaction, new_header, parser, header_id, cur_header);
+				Update (transaction, new_header, parser, header_id);
 
 				// レコードを追加
 				for (int i = 0; i < new_records.Count; i ++)

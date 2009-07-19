@@ -6,7 +6,7 @@
 		<html>
 			<head>
 				<title>
-					<xsl:value-of select="/page/file/bbs/title" />
+					<xsl:value-of select="/page/file/title" />
 					<xsl:text> :: BBS :: p2pncs</xsl:text>
 				</title>
 				<link type="text/css" rel="stylesheet" href="/css/ui-lightness/jquery-ui-1.7.2.custom.css" />
@@ -18,7 +18,7 @@
 				<link type="text/css" rel="stylesheet" href="/css/bbs.css" />
 			</head>
 			<body>
-				<h1><xsl:value-of select="/page/file/bbs/title" /></h1>
+				<h1><xsl:value-of select="/page/file/title" /></h1>
 				<div id="bbsinfo">
 					<div>
 						<xsl:text>ID: </xsl:text>

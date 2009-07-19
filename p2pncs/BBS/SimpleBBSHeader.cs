@@ -24,24 +24,14 @@ namespace p2pncs.BBS
 	[SerializableTypeId (0x1003)]
 	class SimpleBBSHeader : IHashComputable, IMergeableFile
 	{
-		[SerializableFieldId (0)]
-		string _title;
-
-		public SimpleBBSHeader (string title)
+		public SimpleBBSHeader ()
 		{
-			_title = title;
-		}
-
-		public string Title {
-			get { return _title; }
 		}
 
 		#region IHashComputable Members
 
 		public void ComputeHash (HashAlgorithm hash)
 		{
-			byte[] tmp = Encoding.UTF8.GetBytes (_title);
-			hash.TransformBlock (tmp, 0, tmp.Length, null, 0);
 		}
 
 		#endregion

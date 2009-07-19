@@ -94,7 +94,11 @@ namespace p2pncs
 				new[] {"lastManaged", header.LastManagedTime.ToLocalTime().ToString (DefaultDateFormat)},
 				new[] {"lastModified", header.LastModifiedTime.ToLocalTime().ToString (DefaultDateFormat)},
 				new[] {"records", header.NumberOfRecords.ToString ()},
-			}, null);
+			}, new [] {
+				doc.CreateElement ("title", null, new [] {
+					doc.CreateTextNode (header.Title)
+				})
+			});
 			XmlNode authServers = root.AppendChild (doc.CreateElement ("auth-servers"));
 			if (header.AuthServers != null && header.AuthServers.Length > 0) {
 				for (int i = 0; i < header.AuthServers.Length; i++) {

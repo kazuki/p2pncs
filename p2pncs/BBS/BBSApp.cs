@@ -73,27 +73,18 @@ namespace p2pncs.BBS
 
 		#region IMergeableFileCommonProcess Members
 
-		void ParseNewPagePostData (Dictionary<string, string> dic, out string title, out string fpname, out string fpbody, out bool title_check)
+		void ParseNewPagePostData (Dictionary<string, string> dic, out string fpname, out string fpbody)
 		{
-			title = Helpers.GetValueSafe (dic, "title").Trim ();
 			fpname = Helpers.GetValueSafe (dic, "fpname").Trim ();
 			fpbody = Helpers.GetValueSafe (dic, "fpbody").Trim ();
-			title_check = (title.Length > 0 && title.Length <= 64);
 		}
 
 		public bool ParseNewPagePostData (Dictionary<string, string> dic, out IHashComputable header, out IHashComputable[] records)
 		{
-			string title, fpname, fpbody;
-			bool title_check;
-			ParseNewPagePostData (dic, out title, out fpname, out fpbody, out title_check);
+			string fpname, fpbody;
+			ParseNewPagePostData (dic, out fpname, out fpbody);
 
-			if (!title_check) {
-				header = null;
-				records = null;
-				return false;
-			}
-
-			header = new SimpleBBSHeader (title);
+			header = new SimpleBBSHeader ();
 			if (fpbody.Length == 0) {
 				records = null;
 			} else {
@@ -107,14 +98,9 @@ namespace p2pncs.BBS
 		public void OutputNewPageData (Dictionary<string, string> dic, XmlElement validationRoot)
 		{
 			XmlDocument doc = validationRoot.OwnerDocument;
-			string title, fpname, fpbody;
-			bool title_check;
-			ParseNewPagePostData (dic, out title, out fpname, out fpbody, out title_check);
+			string fpname, fpbody;
+			ParseNewPagePostData (dic, out fpname, out fpbody);
 
-			validationRoot.AppendChild (doc.CreateElement ("data", new string[][] { new[] { "name", "title" }, new[] { "status", title_check ? "ok" : "error" } }, new[] {
-				doc.CreateElement ("value", null, new[]{doc.CreateTextNode (title)}),
-				title_check ? null : doc.CreateElement ("msg", null, new[]{doc.CreateTextNode ("タイトルは1文字～64文字に収まらなければいけません")})
-			}));
 			validationRoot.AppendChild (doc.CreateElement ("data", new string[][] { new[] { "name", "fpname" } }, new[] {
 				doc.CreateElement ("value", null, new[]{doc.CreateTextNode (fpname)})
 			}));

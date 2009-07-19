@@ -36,7 +36,7 @@
 			<body>
 				<div id="header">
 					<h1>
-						<xsl:value-of select="page/file/wiki/title" />
+						<xsl:value-of select="page/file/title" />
 					</h1>
 					<div id="header-menu">
 						<ul>

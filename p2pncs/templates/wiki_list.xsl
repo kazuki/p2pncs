@@ -27,7 +27,7 @@
 								<xsl:value-of select="@key" />
 							</xsl:attribute>
 							<xsl:attribute name="target">_blank</xsl:attribute>
-							<xsl:value-of select="wiki/title" />
+							<xsl:value-of select="title" />
 						</xsl:element>
 					</td>
 					<td><xsl:value-of select="@records" /></td>

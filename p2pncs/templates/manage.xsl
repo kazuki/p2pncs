@@ -23,14 +23,7 @@
 								<xsl:text>/manage/</xsl:text>
 								<xsl:value-of select="@key" />
 							</xsl:attribute>
-							<xsl:choose>
-								<xsl:when test="@type='simple-bbs'">
-									<xsl:value-of select="bbs/title" />
-								</xsl:when>
-								<xsl:when test="@type='wiki'">
-									<xsl:value-of select="wiki/title" />
-								</xsl:when>
-							</xsl:choose>
+							<xsl:value-of select="title" />
 						</xsl:element>
 					</td>
 					<td>

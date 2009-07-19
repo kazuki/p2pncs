@@ -16,37 +16,12 @@
  */
 
 using System;
-using System.Security.Cryptography;
-using System.Text;
-using p2pncs.Security.Cryptography;
 
-namespace p2pncs.Wiki
+namespace p2pncs.Net.Overlay.DFS.MMLC
 {
-	[SerializableTypeId (0x1008)]
-	class WikiHeader : IHashComputable, IMergeableFile
+	[Flags]
+	public enum MergeableFileHeaderFlags : long
 	{
-		public WikiHeader ()
-		{
-		}
-
-		#region IHashComputable Members
-
-		public void ComputeHash (HashAlgorithm hash)
-		{
-		}
-
-		#endregion
-
-		#region IMergeableFile Members
-
-		public IMergeableFileWebUIHelper WebUIHelper {
-			get { return WikiWebUIHelper.Instance; }
-		}
-
-		public WebApp.IMergeableFileCommonProcess WebUIMergeableFileCommon {
-			get { return WikiWebApp.Instance; }
-		}
-
-		#endregion
+		None = 0
 	}
 }

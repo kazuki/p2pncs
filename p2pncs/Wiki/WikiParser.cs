@@ -29,12 +29,12 @@ namespace p2pncs.Wiki
 	{
 		const string ALIAS = "w";
 		const string HEADER_TABLE_NAME = "Wiki_Headers";
-		const string HEADER_FIELDS = "w.title, w.freeze";
+		const string HEADER_FIELDS = "w.id";
 		const string RECORD_TABLE_NAME = "Wiki_Records";
 		const string RECORD_FIELDS = "w.page_name, w.parent, w.name, w.body, w.raw_body, w.markup, w.compress, w.diff";
 
-		static string INSERT_HEADER_SQL = string.Format ("INSERT INTO {0} (id, title, freeze) VALUES (?, ?, ?)", HEADER_TABLE_NAME);
-		static string UPDATE_HEADER_SQL = string.Format ("UPDATE {0} SET title=?, freeze=? WHERE id=?", HEADER_TABLE_NAME);
+		static string INSERT_HEADER_SQL = string.Format ("INSERT INTO {0} (id) VALUES (?)", HEADER_TABLE_NAME);
+		//static string UPDATE_HEADER_SQL = string.Format ("UPDATE {0} SET title=?, freeze=? WHERE id=?", HEADER_TABLE_NAME);
 		static string INSERT_RECORD_SQL = string.Format ("INSERT INTO {0} (id, page_name, parent, name, body, raw_body, markup, compress, diff) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", RECORD_TABLE_NAME);
 
 		static WikiParser _instance = new WikiParser ();
@@ -45,13 +45,13 @@ namespace p2pncs.Wiki
 
 		public void Init (IDbTransaction transaction)
 		{
-			DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS Wiki_Headers (id INTEGER PRIMARY KEY REFERENCES MMLC_MergeableHeaders(id), title TEXT, freeze INTEGER);");
+			DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS Wiki_Headers (id INTEGER PRIMARY KEY REFERENCES MMLC_MergeableHeaders(id));");
 			DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS Wiki_Records (id INTEGER PRIMARY KEY REFERENCES MMLC_MergeableRecords(id), page_name TEXT, parent TEXT, name TEXT, body TEXT, raw_body BLOB, markup INTEGER, compress INTEGER, diff INTEGER);");
 		}
 
 		public IHashComputable ParseHeader (IDataRecord record, int offset)
 		{
-			return new WikiHeader (record.GetString (offset + 0), record.GetBoolean (offset + 1));
+			return new WikiHeader ();
 		}
 
 		public IHashComputable ParseRecord (IDataRecord record, int offset)
@@ -66,7 +66,7 @@ namespace p2pncs.Wiki
 		public void Insert (IDbTransaction transaction, long id, MergeableFileHeader header)
 		{
 			WikiHeader h = header.Content as WikiHeader;
-			DatabaseUtility.ExecuteNonQuery (transaction, INSERT_HEADER_SQL, id, h.Title, h.IsFreeze);
+			DatabaseUtility.ExecuteNonQuery (transaction, INSERT_HEADER_SQL, id);
 		}
 
 		public void Insert (IDbTransaction transaction, long id, MergeableFileRecord record)
@@ -80,8 +80,8 @@ namespace p2pncs.Wiki
 
 		public void Update (IDbTransaction transaction, long id, MergeableFileHeader header)
 		{
-			WikiHeader h = header.Content as WikiHeader;
-			DatabaseUtility.ExecuteNonQuery (transaction, UPDATE_HEADER_SQL, h.Title, h.IsFreeze, id);
+			//WikiHeader h = header.Content as WikiHeader;
+			//DatabaseUtility.ExecuteNonQuery (transaction, UPDATE_HEADER_SQL, h.Title, h.IsFreeze, id);
 		}
 
 		public int TypeId {

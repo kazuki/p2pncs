@@ -31,56 +31,62 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		Key _key;
 
 		[SerializableFieldId (1)]
-		DateTime _created;
+		string _title;
 
 		[SerializableFieldId (2)]
-		DateTime _lastManaged;
+		MergeableFileHeaderFlags _flags;
 
 		[SerializableFieldId (3)]
-		IHashComputable _content;
+		DateTime _created;
 
 		[SerializableFieldId (4)]
-		AuthServerInfo[] _authServers;
+		DateTime _lastManaged;
 
 		[SerializableFieldId (5)]
-		byte[] _sign;
+		IHashComputable _content;
 
 		[SerializableFieldId (6)]
+		AuthServerInfo[] _authServers;
+
+		[SerializableFieldId (7)]
+		byte[] _sign;
+
+		[SerializableFieldId (8)]
 		Key _recordsetHash;
 
 		int _numOfRecords;
 		DateTime _lastModified;
 
-		public MergeableFileHeader (ECKeyPair privateKey, DateTime created, DateTime lastManaged, IHashComputable content, AuthServerInfo[] authServers)
+		public MergeableFileHeader (Key key, string title, MergeableFileHeaderFlags flags, IHashComputable content, AuthServerInfo[] authServers)
+			: this (key, title, flags, DateTime.UtcNow, DateTime.UtcNow, content, authServers, null, null)
 		{
-			if (created.Kind != DateTimeKind.Utc || lastManaged.Kind != DateTimeKind.Utc)
-				throw new ArgumentException ();
-			_created = created;
-			_lastManaged = lastManaged;
-			_content = content;
-			_authServers = authServers;
-			_recordsetHash = new Key (new byte[DefaultAlgorithm.HashByteSize]);
-			Sign (privateKey);
 		}
 
-		public MergeableFileHeader (Key key, DateTime created, DateTime lastManaged, IHashComputable content, AuthServerInfo[] authServers, byte[] sign, Key recordsetHash)
+		public MergeableFileHeader (string title, MergeableFileHeaderFlags flags, IHashComputable content, AuthServerInfo[] authServers)
+			: this (null, title, flags, DateTime.UtcNow, DateTime.UtcNow, content, authServers, null, null)
+		{
+		}
+
+		public MergeableFileHeader (Key key, string title, MergeableFileHeaderFlags flags, DateTime created, DateTime lastManaged, IHashComputable content, AuthServerInfo[] authServers, byte[] sign, Key recordsetHash)
 		{
 			if (created.Kind != DateTimeKind.Utc || lastManaged.Kind != DateTimeKind.Utc)
 				throw new ArgumentException ();
 			_key = key;
+			_title = title;
+			_flags = flags;
 			_created = created;
 			_lastManaged = lastManaged;
 			_content = content;
 			_authServers = authServers;
 			_sign = sign;
-			_recordsetHash = recordsetHash;
+			_recordsetHash = (recordsetHash != null ? recordsetHash : new Key (new byte[DefaultAlgorithm.HashByteSize]));
 			if (_recordsetHash.KeyBytes != DefaultAlgorithm.HashByteSize)
 				throw new FormatException ();
 		}
 
 		public MergeableFileHeader CopyBasisInfo ()
 		{
-			return new MergeableFileHeader (_key, _created, _lastManaged, _content, _authServers, _sign, new Key (new byte[DefaultAlgorithm.HashByteSize]));
+			return new MergeableFileHeader (_key, _title, _flags, _created, _lastManaged, _content, _authServers, _sign, null);
 		}
 
 		public void Sign (ECKeyPair privateKey)
@@ -103,6 +109,10 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			using (HashAlgorithm hash = DefaultAlgorithm.CreateHashAlgorithm ()) {
 				byte[] tmp = _key.GetByteArray ();
 				hash.TransformBlock (tmp, 0, tmp.Length, null, 0);
+				tmp = Encoding.UTF8.GetBytes (_title);
+				hash.TransformBlock (tmp, 0, tmp.Length, null, 0);
+				tmp = BitConverter.GetBytes ((long)_flags);
+				hash.TransformBlock (tmp, 0, tmp.Length, null, 0);
 				tmp = BitConverter.GetBytes (_created.ToUniversalTime ().Ticks);
 				hash.TransformBlock (tmp, 0, tmp.Length, null, 0);
 				tmp = BitConverter.GetBytes (_lastManaged.ToUniversalTime ().Ticks);
@@ -120,14 +130,25 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 		public Key Key {
 			get { return _key; }
+			internal set { _key = value; }
+		}
+
+		public string Title {
+			get { return _title; }
+		}
+
+		public MergeableFileHeaderFlags Flags {
+			get { return _flags; }
 		}
 
 		public DateTime CreatedTime {
 			get { return _created; }
+			internal set { _created = value; }
 		}
 
 		public DateTime LastManagedTime {
 			get { return _lastManaged; }
+			internal set { _lastManaged = value; }
 		}
 
 		public byte[] Signature {

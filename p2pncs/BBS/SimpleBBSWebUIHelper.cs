@@ -35,12 +35,7 @@ namespace p2pncs.BBS
 
 		public XmlElement CreateHeaderElement (XmlDocument doc, MergeableFileHeader header)
 		{
-			SimpleBBSHeader content = header.Content as SimpleBBSHeader;
-			return doc.CreateElement ("bbs", null, new[] {
-				doc.CreateElement ("title", null, new[] {
-					doc.CreateTextNodeSafe (content.Title)
-				})
-			});
+			return doc.CreateElement ("bbs");
 		}
 
 		public XmlElement CreateRecordElement (XmlDocument doc, MergeableFileRecord record)
@@ -60,7 +55,7 @@ namespace p2pncs.BBS
 
 		public IHashComputable CreateHeaderContent (NameValueCollection c)
 		{
-			return new SimpleBBSHeader (c["title"]);
+			return new SimpleBBSHeader ();
 		}
 
 		public string ContentType {

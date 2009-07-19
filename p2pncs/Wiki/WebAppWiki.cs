@@ -56,40 +56,15 @@ namespace p2pncs.Wiki
 
 		#region IMergeableFileCommonProcess Members
 
-		void ParseNewPagePostData (Dictionary<string, string> dic, out string title, out bool title_check)
-		{
-			title = Helpers.GetValueSafe (dic, "title").Trim ();
-			title_check = (title.Length > 0 && title.Length <= 64);
-		}
-
 		public bool ParseNewPagePostData (Dictionary<string, string> dic, out IHashComputable header, out IHashComputable[] records)
 		{
-			string title;
-			bool title_check;
-			ParseNewPagePostData (dic, out title, out title_check);
-			
-			if (!title_check) {
-				header = null;
-				records = null;
-				return false;
-			}
-
-			header = new WikiHeader (title, false);
+			header = new WikiHeader ();
 			records = null;
 			return true;
 		}
 
 		public void OutputNewPageData (Dictionary<string, string> dic, XmlElement validationRoot)
 		{
-			XmlDocument doc = validationRoot.OwnerDocument;
-			string title;
-			bool title_check;
-			ParseNewPagePostData (dic, out title, out title_check);
-
-			validationRoot.AppendChild (doc.CreateElement ("data", new string[][] { new[] { "name", "title" }, new[] { "status", title_check ? "ok" : "error" } }, new[] {
-				doc.CreateElement ("value", null, new[]{doc.CreateTextNode (title)}),
-				title_check ? null : doc.CreateElement ("msg", null, new[]{doc.CreateTextNode ("タイトルは1文字～64文字に収まらなければいけません")})
-			}));
 		}
 
 		public string NewPageXSL {

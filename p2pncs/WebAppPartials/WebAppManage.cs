@@ -73,7 +73,11 @@ namespace p2pncs
 					}
 				}
 				IHashComputable new_header_content = header_helper.CreateHeaderContent (c);
-				_node.MMLC.Manage (key, new_header_content, auth_servers, list.ToArray (), null);
+				string title = c["title"];
+				if (title == null || title.Length == 0 || title.Length > 64)
+					throw new HttpException (HttpStatusCode.InternalServerError);
+				MergeableFileHeader new_header = new MergeableFileHeader (key, title, header.Flags, new_header_content, auth_servers);
+				_node.MMLC.Manage (new_header, list.ToArray (), null);
 
 				res[HttpHeaderNames.Location] = header_helper.ViewUrl + key.ToUriSafeBase64String ();
 				throw new HttpException (req.HttpVersion == HttpVersion.Http10 ? HttpStatusCode.Found : HttpStatusCode.SeeOther);

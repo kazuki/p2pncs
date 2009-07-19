@@ -27,11 +27,11 @@ namespace p2pncs.BBS
 	{
 		const string ALIAS = "sbt";
 		const string HEADER_TABLE_NAME = "SimpleBBS_Headers";
-		const string HEADER_FIELDS = "sbt.title";
+		const string HEADER_FIELDS = "sbt.id";
 		const string RECORD_TABLE_NAME = "SimpleBBS_Records";
 		const string RECORD_FIELDS = "sbt.name, sbt.body";
-		static string INSERT_HEADER_SQL = string.Format ("INSERT INTO {0} (id, title) VALUES (?, ?)", HEADER_TABLE_NAME);
-		static string UPDATE_HEADER_SQL = string.Format ("UPDATE {0} SET title=? WHERE id=?", HEADER_TABLE_NAME);
+		static string INSERT_HEADER_SQL = string.Format ("INSERT INTO {0} (id) VALUES (?)", HEADER_TABLE_NAME);
+		//static string UPDATE_HEADER_SQL = string.Format ("UPDATE {0} SET title=? WHERE id=?", HEADER_TABLE_NAME);
 		static string INSERT_RECORD_SQL = string.Format ("INSERT INTO {0} (id, name, body) VALUES (?, ?, ?)", RECORD_TABLE_NAME);
 
 		static SimpleBBSParser _instance = new SimpleBBSParser ();
@@ -42,13 +42,13 @@ namespace p2pncs.BBS
 
 		public void Init (IDbTransaction transaction)
 		{
-			DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS SimpleBBS_Headers (id INTEGER PRIMARY KEY REFERENCES MMLC_MergeableHeaders(id), title TEXT);");
+			DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS SimpleBBS_Headers (id INTEGER PRIMARY KEY REFERENCES MMLC_MergeableHeaders(id));");
 			DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS SimpleBBS_Records (id INTEGER PRIMARY KEY REFERENCES MMLC_MergeableRecords(id), name TEXT, body TEXT);");
 		}
 
 		public IHashComputable ParseHeader (IDataRecord record, int offset)
 		{
-			return new SimpleBBSHeader (record.GetString (offset + 0));
+			return new SimpleBBSHeader ();
 		}
 
 		public IHashComputable ParseRecord (IDataRecord record, int offset)
@@ -61,7 +61,7 @@ namespace p2pncs.BBS
 		public void Insert (IDbTransaction transaction, long id, MergeableFileHeader header)
 		{
 			SimpleBBSHeader h = (SimpleBBSHeader)header.Content;
-			DatabaseUtility.ExecuteNonQuery (transaction, INSERT_HEADER_SQL, id, h.Title);
+			DatabaseUtility.ExecuteNonQuery (transaction, INSERT_HEADER_SQL, id);
 		}
 
 		public void Insert (IDbTransaction transaction, long id, MergeableFileRecord record)
@@ -72,8 +72,8 @@ namespace p2pncs.BBS
 
 		public void Update (IDbTransaction transaction, long id, MergeableFileHeader header)
 		{
-			SimpleBBSHeader h = (SimpleBBSHeader)header.Content;
-			DatabaseUtility.ExecuteNonQuery (transaction, UPDATE_HEADER_SQL, h.Title, id);
+			//SimpleBBSHeader h = (SimpleBBSHeader)header.Content;
+			//DatabaseUtility.ExecuteNonQuery (transaction, UPDATE_HEADER_SQL, h.Title, id);
 		}
 
 		public int TypeId {
