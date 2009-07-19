@@ -27,6 +27,14 @@ body {
   display: inline;
 }
 
+#header-menu li.right {
+  float: right;
+  margin-top: -0.2em;
+  border-right: 0;
+  border-left: 1px solid #666;
+  display: block;
+}
+
 a {
   text-decoration: none;
 }

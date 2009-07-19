@@ -68,7 +68,7 @@
 									</xsl:element>
 								</li>
 							</xsl:if>
-							<li>
+							<li class="tail">
 								<xsl:element name="a">
 									<xsl:attribute name="href">
 										<xsl:value-of select="$base_url" />
@@ -86,6 +86,9 @@
 									<xsl:text>全体の編集履歴</xsl:text>
 								</xsl:element>
 							</li>-->
+							<li class="right">
+								<a href="/">p2pncsのトップに戻る</a>
+							</li>
 						</ul>
 					</div>
 				</div>
