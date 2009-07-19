@@ -71,6 +71,8 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		{
 			if (created.Kind != DateTimeKind.Utc || lastManaged.Kind != DateTimeKind.Utc)
 				throw new ArgumentException ();
+			if (content == null)
+				throw new ArgumentNullException ();
 			_key = key;
 			_title = title;
 			_flags = flags;
@@ -117,8 +119,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				hash.TransformBlock (tmp, 0, tmp.Length, null, 0);
 				tmp = BitConverter.GetBytes (_lastManaged.ToUniversalTime ().Ticks);
 				hash.TransformBlock (tmp, 0, tmp.Length, null, 0);
-				if (_content != null)
-					_content.ComputeHash (hash);
+				_content.ComputeHash (hash);
 				if (_authServers != null) {
 					tmp = Encoding.ASCII.GetBytes (AuthServerInfo.ToParsableString (_authServers));
 					hash.TransformBlock (tmp, 0, tmp.Length, null, 0);

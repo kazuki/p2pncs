@@ -164,8 +164,9 @@ namespace p2pncs
 				string token = Helpers.GetValueSafe (dic, "token").Trim ();
 				string answer = Helpers.GetValueSafe (dic, "answer").Trim ();
 				string prev = Helpers.GetValueSafe (dic, "prev").Trim ();
-				if (header.AuthServers == null || header.AuthServers.Length == 0) {
-					_node.MMLC.AppendRecord (header.Key, new MergeableFileRecord (comm.ParseNewPostData (dic), DateTime.UtcNow, header.LastManagedTime, null, null, null, 0, null));
+				ECKeyPair privateKey = _node.MMLC.SelectPrivateKey (header.Key);
+				if (header.AuthServers == null || header.AuthServers.Length == 0 || privateKey != null) {
+					_node.MMLC.AppendRecord (header.Key, new MergeableFileRecord (comm.ParseNewPostData (dic), DateTime.UtcNow, header.LastManagedTime, null, null, null, 0, null), privateKey);
 					return "<result status=\"OK\" />";
 				} else {
 					byte auth_idx = byte.Parse (auth);
@@ -178,7 +179,7 @@ namespace p2pncs
 							record.AuthorityIndex = auth_idx;
 							record.Authentication = sign;
 							if (record.Verify (header)) {
-								_node.MMLC.AppendRecord (header.Key , record);
+								_node.MMLC.AppendRecord (header.Key , record, null);
 								return "<result status=\"OK\" />";
 							} else {
 								return "<result status=\"ERROR\" code=\"1\" />";

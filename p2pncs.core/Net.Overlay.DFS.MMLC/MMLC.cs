@@ -271,13 +271,13 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 						if (!reader2.Read ())
 							return null;
 						try {
+							IHashComputable content = parser.ParseHeader (reader2, 7);
 							header = new MergeableFileHeader (
 								key, reader2.GetString (0), (MergeableFileHeaderFlags)reader2.GetInt64 (1),
-								reader2.GetUtcDateTime (2), reader2.GetUtcDateTime (3), null,
+								reader2.GetUtcDateTime (2), reader2.GetUtcDateTime (3), content,
 								AuthServerInfo.ParseArray (reader2.GetString (4)),
 								(byte[])reader2.GetValue (5),
 								Key.FromBase64 (reader2.GetString (6)));
-							header.Content = parser.ParseHeader (reader2, 7);
 						} catch {
 							return null;
 						}
@@ -341,6 +341,18 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		bool HasHeader (IDbTransaction transaction, Key key)
 		{
 			 return ((long)DatabaseUtility.ExecuteScalar (transaction, "SELECT count(id) FROM MMLC_Keys WHERE key=?", key.ToBase64String ())) != 0;
+		}
+
+		ECKeyPair SelectPrivateKey (IDbTransaction transaction, Key key)
+		{
+			object ret = DatabaseUtility.ExecuteScalar (transaction, "SELECT private_key FROM MMLC_PrivateKeys WHERE key=?", key.ToBase64String ());
+			if (ret == null)
+				return null;
+			try {
+				return ECKeyPair.CreatePrivate (DefaultAlgorithm.ECDomainName, (byte[])ret);
+			} catch {
+				return null;
+			}
 		}
 		#endregion
 
@@ -534,10 +546,18 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			}
 		}
 
-		public void AppendRecord (Key key, MergeableFileRecord record)
+		public void AppendRecord (Key key, MergeableFileRecord record, ECKeyPair ownerPrivateKey)
 		{
 			if (key == null || record == null || record.Content == null)
 				throw new ArgumentNullException ();
+
+			if (ownerPrivateKey != null) {
+				// 所有者による投稿なので、所有者が持つ秘密鍵を利用してレコードを署名
+				record.UpdateHash ();
+				ECDSA ecdsa = new ECDSA (ownerPrivateKey);
+				record.Authentication = ecdsa.SignHash (record.Hash.GetByteArray ());
+				record.AuthorityIndex = byte.MaxValue;
+			}
 
 			using (IDbConnection connection = CreateDBConnection ())
 			using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.Serializable)) {
@@ -564,6 +584,14 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			}
 		}
 
+		public ECKeyPair SelectPrivateKey (Key key)
+		{
+			using (IDbConnection connection = CreateDBConnection ())
+			using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.ReadCommitted)) {
+				return SelectPrivateKey (transaction, key);
+			}
+		}
+
 		public void Manage (MergeableFileHeader new_header, Key[] keep_records, MergeableFileRecord[] append_records)
 		{
 			if (new_header == null || new_header.Content == null)
@@ -586,11 +614,9 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				MergeableFileHeader cur_header = SelectHeader (transaction, new_header.Key, out parser, out header_id) as MergeableFileHeader;
 				if (cur_header == null)
 					throw new KeyNotFoundException ();
-
-				// 秘密鍵を選択
-				privateKey = ECKeyPair.CreatePrivate (DefaultAlgorithm.ECDomainName,
-					(byte[])DatabaseUtility.ExecuteScalar (transaction, "SELECT private_key FROM MMLC_PrivateKeys WHERE key=?", cur_header.Key.ToBase64String ()));
-
+				privateKey = SelectPrivateKey (cur_header.Key);
+				if (privateKey == null)
+					throw new KeyNotFoundException ("指定されたキーに対応する秘密鍵が見つかりません");
 				old_records = SelectRecords (transaction, parser, header_id);
 			}
 
