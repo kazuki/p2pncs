@@ -35,29 +35,32 @@
 		<table>
 			<thead>
 				<tr>
-					<td />
+					<td colspan="3" />
 					<td>平均</td>
 					<td>合計</td>
 				</tr>
 			</thead>
 			<tbody>
 				<tr>
-					<th>受信バイト数: </th>
+					<th rowspan="4">UDP</th>
+					<th rowspan="2">受信</th>
+					<th>バイト数: </th>
 					<td><xsl:value-of select="floor(average/@recv-bytes * 8 div 100) div 10" />kbps</td>
 					<td><xsl:value-of select="total/@recv-bytes" /></td>
 				</tr>
 				<tr>
-					<th>受信パケット数: </th>
+					<th>パケット数: </th>
 					<td><xsl:value-of select="floor(average/@recv-packets)" />pps</td>
 					<td><xsl:value-of select="total/@recv-packets" /></td>
 				</tr>
 				<tr>
-					<th>送信バイト数: </th>
+					<th rowspan="2">送信</th>
+					<th>バイト数: </th>
 					<td><xsl:value-of select="floor(average/@send-bytes * 8 div 100) div 10" />kbps</td>
 					<td><xsl:value-of select="total/@send-bytes" /></td>
 				</tr>
 				<tr>
-					<th>送信パケット数: </th>
+					<th>パケット数: </th>
 					<td><xsl:value-of select="floor(average/@send-packets)" />pps</td>
 					<td><xsl:value-of select="total/@send-packets" /></td>
 				</tr>
