@@ -5,7 +5,8 @@ $(function() {
 			"body": $("#postBody").val(),
 			"title": $("#postPage").val(),
 			"auth": $("#authsvr").val(),
-			"lzma": $("#use_lzma").val()
+			"lzma": $("#use_lzma").val(),
+			"parent": $("#parentHash").val()
 		}, function () {
 			window.location = "/wiki/" + $("#postKey").val() + "/" + encodeURIComponent ($("#postPage").val());
 		}, function () {});

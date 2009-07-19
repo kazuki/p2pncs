@@ -77,8 +77,15 @@ namespace p2pncs.Wiki
 			string name = Helpers.GetValueSafe (dic, "name").Trim ();
 			string body = Helpers.GetValueSafe (dic, "body").Trim ();
 			bool use_lzma = Helpers.GetValueSafe (dic, "lzma").Trim().Length > 0;
+			string str_parent = Helpers.GetValueSafe (dic, "parent").Trim ();
 			if (body.Length == 0)
 				throw new ArgumentException ("本文には文字を入力する必要があります");
+			Key parentHash = null;
+			if (str_parent.Length > 0) {
+				try {
+					parentHash = Key.FromUriSafeBase64String (str_parent);
+				} catch {}
+			}
 			byte[] raw_body = Encoding.UTF8.GetBytes (body);
 			WikiCompressType ctype = WikiCompressType.None;
 			if (use_lzma) {
@@ -88,7 +95,7 @@ namespace p2pncs.Wiki
 					ctype = WikiCompressType.LZMA;
 				}
 			}
-			return new WikiRecord (title, null, name, WikiMarkupType.PukiWiki, body, raw_body, ctype, WikiDiffType.None);
+			return new WikiRecord (title, parentHash == null ? null : new Key[] {parentHash}, name, WikiMarkupType.PukiWiki, body, raw_body, ctype, WikiDiffType.None);
 		}
 
 		#endregion

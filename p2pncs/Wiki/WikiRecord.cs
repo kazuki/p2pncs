@@ -30,7 +30,7 @@ namespace p2pncs.Wiki
 		string _pageName;
 
 		[SerializableFieldId (1)]
-		Key _parentHash;
+		Key[] _parentHashList;
 
 		[SerializableFieldId (2)]
 		string _name;
@@ -49,10 +49,10 @@ namespace p2pncs.Wiki
 
 		string _body;
 
-		public WikiRecord (string pageName, Key parentHash, string name, WikiMarkupType markupType, string body, byte[] raw_body, WikiCompressType compressType, WikiDiffType diffType)
+		public WikiRecord (string pageName, Key[] parentHashList, string name, WikiMarkupType markupType, string body, byte[] raw_body, WikiCompressType compressType, WikiDiffType diffType)
 		{
 			_pageName = pageName;
-			_parentHash = parentHash;
+			_parentHashList = parentHashList;
 			_name = name;
 			_markupType = markupType;
 			_raw_body = raw_body;
@@ -82,8 +82,8 @@ namespace p2pncs.Wiki
 			get { return _pageName; }
 		}
 
-		public Key ParentHash {
-			get { return _parentHash; }
+		public Key[] ParentHashList {
+			get { return _parentHashList; }
 		}
 
 		public string Name {
@@ -118,8 +118,10 @@ namespace p2pncs.Wiki
 				byte[] tmp = Encoding.UTF8.GetBytes (_pageName);
 				hash.TransformBlock (tmp, 0, tmp.Length, null, 0);
 			}
-			if (_parentHash != null)
-				hash.TransformBlock (_parentHash.GetByteArray (), 0, _parentHash.KeyBytes, null, 0);
+			if (_parentHashList != null) {
+				for (int i = 0; i < _parentHashList.Length; i ++)
+					hash.TransformBlock (_parentHashList[i].GetByteArray (), 0, _parentHashList[i].KeyBytes, null, 0);
+			}
 			if (_name.Length > 0) {
 				byte[] tmp = Encoding.UTF8.GetBytes (_name);
 				hash.TransformBlock (tmp, 0, tmp.Length, null, 0);

@@ -57,7 +57,7 @@ namespace p2pncs.Wiki
 		public IHashComputable ParseRecord (IDataRecord record, int offset)
 		{
 			return new WikiRecord (record.GetString (offset + 0),
-				record.IsDBNull (offset + 1) ? null : Key.FromBase64 (record.GetString (offset + 1)),
+				ParseKeyList (record.IsDBNull (offset + 1) ? null : record.GetString (offset + 1)),
 				record.GetString (offset + 2), (WikiMarkupType)record.GetInt32 (offset + 5),
 				record.GetString (offset + 3), (byte[])record.GetValue (offset + 4),
 				(WikiCompressType)record.GetInt32 (offset + 6), (WikiDiffType)record.GetInt32 (offset + 7));
@@ -74,7 +74,7 @@ namespace p2pncs.Wiki
 			WikiRecord r = record.Content as WikiRecord;
 			r.SyncBodyAndRawBody ();
 			DatabaseUtility.ExecuteNonQuery (transaction, INSERT_RECORD_SQL, id, r.PageName,
-				r.ParentHash == null ? null : r.ParentHash.ToBase64String (), r.Name,
+				SerializeKeyList (r.ParentHashList), r.Name,
 				r.Body, r.RawBody, (int)r.MarkupType, (int)r.CompressType, (int)r.DiffType);
 		}
 
@@ -82,6 +82,32 @@ namespace p2pncs.Wiki
 		{
 			//WikiHeader h = header.Content as WikiHeader;
 			//DatabaseUtility.ExecuteNonQuery (transaction, UPDATE_HEADER_SQL, h.Title, h.IsFreeze, id);
+		}
+
+		Key[] ParseKeyList (string text)
+		{
+			if (text == null)
+				return null;
+			string[] items = text.Split (';');
+			if (items.Length == 0)
+				return null;
+			Key[] list = new Key[items.Length];
+			for (int i = 0; i < items.Length; i ++)
+				list[i] = Key.FromBase64 (items[i]);
+			return list;
+		}
+
+		string SerializeKeyList (Key[] keys)
+		{
+			if (keys == null || keys.Length == 0)
+				return null;
+			StringBuilder sb = new StringBuilder ();
+			for (int i = 0; i < keys.Length; i ++) {
+				sb.Append (keys[i].ToBase64String ());
+				if (i < keys.Length - 1)
+					sb.Append (';');
+			}
+			return sb.ToString ();
 		}
 
 		public int TypeId {

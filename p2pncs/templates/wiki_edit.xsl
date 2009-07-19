@@ -90,6 +90,13 @@
 						<xsl:value-of select="/page/page-title" />
 					</xsl:attribute>
 				</xsl:element>
+				<xsl:element name="input">
+					<xsl:attribute name="id">parentHash</xsl:attribute>
+					<xsl:attribute name="type">hidden</xsl:attribute>
+					<xsl:attribute name="value">
+						<xsl:value-of select="/page/file/records/record/@hash"/>
+					</xsl:attribute>
+				</xsl:element>
 			</div>
 		</xsl:element>
 	</xsl:template>
