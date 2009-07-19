@@ -70,6 +70,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		public event EventHandler<StatisticsNoticeEventArgs> MergeStatisticsNotice;
 
 		const int MaxDatagramSize = 500;
+		const int DatabaseVersion = 1;
 
 		public MMLC (IAnonymousRouter ar, IDistributedHashTable dht, IMassKeyDelivererLocalStore mkdStore, string db_path, IntervalInterrupter anonStrmSockInt, IntervalInterrupter reputInt)
 		{
@@ -79,15 +80,33 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			_int = reputInt;
 			_dht = dht;
 
+			if (File.Exists (db_path)) {
+				int current_version;
+				_db_connection_string = string.Format ("Data Source={0},DateTimeFormat=Ticks,Pooling=False", db_path);
+				using (IDbConnection connection = CreateDBConnection ())
+				using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.Serializable)) {
+					try {
+						current_version = int.Parse ((string)DatabaseUtility.ExecuteScalar (transaction, "SELECT value FROM Config WHERE name=?", "version"));
+					} catch {
+						current_version = 0;
+					}
+				}
+
+				if (current_version != DatabaseVersion)
+					File.Delete (db_path);
+			}
+
 			_db_connection_string = string.Format ("Data Source={0},DateTimeFormat=Ticks,Pooling=True", db_path);
 			using (IDbConnection connection = CreateDBConnection ())
 			using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.Serializable)) {
+				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS Config (name TEXT PRIMARY KEY, value TEXT);");
 				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS MMLC_Keys (id INTEGER PRIMARY KEY, key TEXT, type INTEGER, content_type INTEGER);");
 				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS MMLC_PrivateKeys (key TEXT PRIMARY KEY, private_key BLOB);");
 				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS MMLC_MergeableHeaders (id INTEGER PRIMARY KEY REFERENCES MMLC_Keys(id), title TEXT, flags INTEGER, created INTEGER, lastManaged INTEGER, authServers TEXT, owner_key TEXT, owner_sign BLOB, sign BLOB, recordsetHash TEXT);");
 				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS MMLC_MergeableRecords (id INTEGER PRIMARY KEY, hash TEXT, header_id INTEGER REFERENCES MMLC_MergeableHeaders(id), created INTEGER, lastManaged INTEGER, publickey TEXT, sign BLOB, auth_idx INTEGER, auth BLOB);");
 				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE UNIQUE INDEX IF NOT EXISTS MMLC_Keys_Index ON MMLC_Keys(key);");
 				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE UNIQUE INDEX IF NOT EXISTS MMLC_MergeableRecords_Index ON MMLC_MergeableRecords (header_id, hash);");
+				DatabaseUtility.ExecuteNonQuery (transaction, "INSERT OR REPLACE INTO Config (name, value) VALUES (?, ?)", "version", DatabaseVersion.ToString ());
 				transaction.Commit ();
 			}
 
