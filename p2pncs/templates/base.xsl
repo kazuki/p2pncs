@@ -25,20 +25,19 @@
 								<li><a href="/net/exit">終了</a></li>
 							</ul>
 						</li>
-						<li><a href="/manage/">管理</a></li>
 						<li>
-							<xsl:text>BBS</xsl:text>
+							<a href="/manage/">管理</a>
 							<ul>
-								<li><a href="/bbs/new">新規作成</a></li>
-								<li><a href="/bbs/open">開く</a></li>
-								<li><a href="/bbs">一覧</a></li>
+								<li><a href="/bbs/new">掲示板を新規作成</a></li>
+								<li><a href="/wiki/new">Wikiを新規作成</a></li>
 							</ul>
 						</li>
+						<li><a href="/open">IDを指定してファイルを開く</a></li>
 						<li>
-							<xsl:text>Wiki</xsl:text>
+							<xsl:text>ファイル一覧</xsl:text>
 							<ul>
-								<li><a href="/wiki/new">新規作成</a></li>
-								<li><a href="/wiki">一覧</a></li>
+								<li><a href="/list">キャッシュ済み</a></li>
+								<li><a href="/list?empty">全て</a></li>
 							</ul>
 						</li>
 					</ul>

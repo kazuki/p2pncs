@@ -51,24 +51,18 @@ namespace p2pncs
 			string absPath = req.Url.AbsolutePath;
 			if (absPath == "/")
 				return ProcessMainPage (req, res);
+			if (absPath == "/list")
+				return ProcessFileList (req, res);
+			if (absPath == "/open")
+				return ProcessFileOpen (req, res);
 			if (absPath == "/net/init")
 				return ProcessNetInitPage (req, res);
 			if (absPath == "/net/exit")
 				return ProcessNetExitPage (req, res);
-			if (absPath == "/bbs" || absPath == "/bbs/")
-				return ProcessBbsListPage (req, res);
 			if (absPath == "/bbs/new")
 				return Process_NewMergeableFilePage (req, res, BBS.BBSWebApp.Instance);
-			if (absPath == "/bbs/open")
-				return ProcessBbsOpenPage (req, res);
-			/*if (absPath.StartsWith ("/bbs/"))
-				return ProcessBBS (server, req, res, false);*/
-			if (absPath == "/wiki" || absPath == "/wiki/")
-				return ProcessWikiListPage (req, res);
 			if (absPath == "/wiki/new")
 				return Process_NewMergeableFilePage (req, res, Wiki.WikiWebApp.Instance);
-			/*if (absPath.StartsWith ("/wiki/"))
-				return ProcessWikiPage (server, req, res, false);*/
 			if (absPath == "/manage" || absPath == "/manage/")
 				return ProcessManageTop (req, res);
 			if (absPath.StartsWith ("/manage/"))

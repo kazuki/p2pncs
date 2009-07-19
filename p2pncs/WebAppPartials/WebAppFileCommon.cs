@@ -71,5 +71,34 @@ namespace p2pncs
 			MergeableFileHeader header = _node.MMLC.GetMergeableFileHeader (key);
 			return Process_ViewMergeableFilePage (req, res, key, header, tailurl);
 		}
+
+		object ProcessFileList (IHttpRequest req, HttpResponseHeader res)
+		{
+			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
+			XmlElement rootNode = doc.DocumentElement;
+			MergeableFileHeader[] headers = _node.MMLC.GetHeaderList ();
+
+			bool include_empty = req.QueryData.ContainsKey ("empty");
+			foreach (MergeableFileHeader header in headers) {
+				if (header.RecordsetHash.IsZero () && !include_empty)
+					continue;
+				rootNode.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header));
+			}
+			return _xslTemplate.Render (req, res, doc, Path.Combine (DefaultTemplatePath, "list.xsl"));
+		}
+
+		object ProcessFileOpen (IHttpRequest req, HttpResponseHeader res)
+		{
+			if (req.HttpMethod == HttpMethod.POST && req.HasContentBody ()) {
+				Dictionary<string, string> dic = HttpUtility.ParseUrlEncodedStringToDictionary (Encoding.ASCII.GetString (req.GetContentBody (MaxRequestBodySize)), Encoding.UTF8);
+				string key;
+				if (dic.TryGetValue ("id", out key)) {
+					res[HttpHeaderNames.Location] = key;
+					throw new HttpException (req.HttpVersion == HttpVersion.Http10 ? HttpStatusCode.Found : HttpStatusCode.SeeOther);
+				}
+			}
+			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
+			return _xslTemplate.Render (req, res, doc, Path.Combine (DefaultTemplatePath, "open.xsl"));
+		}
 	}
 }

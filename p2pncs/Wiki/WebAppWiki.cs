@@ -28,22 +28,6 @@ using p2pncs.Net.Overlay.DFS.MMLC;
 using p2pncs.Security.Cryptography;
 using p2pncs.Wiki;
 
-namespace p2pncs
-{
-	partial class WebApp
-	{
-		object ProcessWikiListPage (IHttpRequest req, HttpResponseHeader res)
-		{
-			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
-			XmlElement rootNode = doc.DocumentElement;
-			MergeableFileHeader[] headers = _node.MMLC.GetHeaderList ();
-			foreach (MergeableFileHeader header in headers) {
-				rootNode.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header));
-			}
-			return _xslTemplate.Render (req, res, doc, Path.Combine (DefaultTemplatePath, "wiki_list.xsl"));
-		}
-	}
-}
 namespace p2pncs.Wiki
 {
 	class WikiWebApp : WebApp.IMergeableFileCommonProcess

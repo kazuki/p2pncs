@@ -30,37 +30,6 @@ using p2pncs.Net.Overlay.DFS.MMLC;
 using p2pncs.Security.Captcha;
 using p2pncs.Security.Cryptography;
 
-namespace p2pncs
-{
-	partial class WebApp
-	{
-		object ProcessBbsOpenPage (IHttpRequest req, HttpResponseHeader res)
-		{
-			if (req.HttpMethod == HttpMethod.POST && req.HasContentBody ()) {
-				Dictionary<string, string> dic = HttpUtility.ParseUrlEncodedStringToDictionary (Encoding.ASCII.GetString (req.GetContentBody (MaxRequestBodySize)), Encoding.UTF8);
-				string key;
-				if (dic.TryGetValue ("bbsid", out key)) {
-					res[HttpHeaderNames.Location] = "/bbs/" + key;
-					throw new HttpException (req.HttpVersion == HttpVersion.Http10 ? HttpStatusCode.Found : HttpStatusCode.SeeOther);
-				}
-			}
-			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
-			return _xslTemplate.Render (req, res, doc, Path.Combine (DefaultTemplatePath, "bbs_open.xsl"));
-		}
-
-		object ProcessBbsListPage (IHttpRequest req, HttpResponseHeader res)
-		{
-			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
-			XmlElement rootNode = doc.DocumentElement;
-			MergeableFileHeader[] headers = _node.MMLC.GetHeaderList ();
-			foreach (MergeableFileHeader header in headers) {
-				rootNode.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header));
-			}
-			return _xslTemplate.Render (req, res, doc, Path.Combine (DefaultTemplatePath, "bbs.xsl"));
-		}
-	}
-}
-
 namespace p2pncs.BBS
 {
 	class BBSWebApp : WebApp.IMergeableFileCommonProcess
