@@ -84,7 +84,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 			using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.Serializable)) {
 				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS MMLC_Keys (id INTEGER PRIMARY KEY, key TEXT, type INTEGER, content_type INTEGER);");
 				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS MMLC_PrivateKeys (key TEXT PRIMARY KEY, private_key BLOB);");
-				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS MMLC_MergeableHeaders (id INTEGER PRIMARY KEY REFERENCES MMLC_Keys(id), title TEXT, flags INTEGER, created INTEGER, lastManaged INTEGER, authServers TEXT, sign BLOB, recordsetHash TEXT);");
+				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS MMLC_MergeableHeaders (id INTEGER PRIMARY KEY REFERENCES MMLC_Keys(id), title TEXT, flags INTEGER, created INTEGER, lastManaged INTEGER, authServers TEXT, owner_key TEXT, owner_sign BLOB, sign BLOB, recordsetHash TEXT);");
 				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS MMLC_MergeableRecords (id INTEGER PRIMARY KEY, hash TEXT, header_id INTEGER REFERENCES MMLC_MergeableHeaders(id), created INTEGER, lastManaged INTEGER, publickey TEXT, sign BLOB, auth_idx INTEGER, auth BLOB);");
 				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE UNIQUE INDEX IF NOT EXISTS MMLC_Keys_Index ON MMLC_Keys(key);");
 				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE UNIQUE INDEX IF NOT EXISTS MMLC_MergeableRecords_Index ON MMLC_MergeableRecords (header_id, hash);");
