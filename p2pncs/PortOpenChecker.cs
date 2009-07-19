@@ -37,6 +37,8 @@ namespace p2pncs
 		const int CheckRequestSendNodes = 3;
 		static readonly TimeSpan TIMEOUT = TimeSpan.FromSeconds (2);
 
+		public event EventHandler UdpPortError;
+
 		public PortOpenChecker (IKeyBasedRouter kbr)
 		{
 			_msock = kbr.MessagingSocket;
@@ -133,6 +135,11 @@ namespace p2pncs
 					TryNext ();
 				}
 				Logger.Log (LogLevel.Error, this, "UDPポートが適切に開放されていない可能性があります");
+				if (UdpPortError != null) {
+					try {
+						UdpPortError (this, EventArgs.Empty);
+					} catch {}
+				}
 				return;
 			}
 

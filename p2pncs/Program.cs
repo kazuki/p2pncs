@@ -18,11 +18,9 @@
 using System;
 using System.IO;
 using System.Net;
+using System.Threading;
 using Kazuki.Net.HttpServer;
-using openCrypto.EllipticCurve;
 using p2pncs.Net;
-using p2pncs.Net.Overlay;
-using p2pncs.Security.Cryptography;
 using XmlConfigLibrary;
 
 namespace p2pncs
@@ -31,11 +29,23 @@ namespace p2pncs
 	{
 		const string CONFIG_PATH = "p2pncs.xml";
 		XmlConfig _config = new XmlConfig ();
+		bool running = false;
+		ManualResetEvent _startupWaitHandle = new ManualResetEvent (false);
+		ManualResetEvent _waitHandle = new ManualResetEvent (false);
+		WebApp _app;
+		string _url;
+		Node _node;
 
+		[STAThread]
 		static void Main (string[] args)
 		{
 			using (Program prog = new Program ()) {
-				prog.Run ();
+				try {
+					SystemTray.Run (prog);
+				} catch {
+					if (!prog.running)
+						prog.Run ();
+				}
 			}
 		}
 
@@ -58,6 +68,7 @@ namespace p2pncs
 
 		public void Run ()
 		{
+			running = true;
 			if (!LoadConfig (_config)) {
 				Console.WriteLine ("設定ファイルを保存しました。");
 				Console.WriteLine ("README.txt を参考に設定ファイルを編集してください。");
@@ -69,6 +80,8 @@ namespace p2pncs
 
 			ushort bindUdp = (ushort)_config.GetValue<int> (ConfigFields.NetBindUdp);
 			ushort bindTcp = (ushort)_config.GetValue<int> (ConfigFields.NetBindTcp);
+			int gwBindTcp = _config.GetValue<int> (ConfigFields.GwBindTcp);
+			_url = string.Format ("http://127.0.0.1:{0}/", gwBindTcp);
 			IDatagramEventSocket dgramSock = UdpSocket.CreateIPv4 ();
 			dgramSock.Bind (new IPEndPoint (IPAddress.Any, bindUdp));
 			TcpListener listener = new TcpListener ();
@@ -77,16 +90,42 @@ namespace p2pncs
 			using (Interrupters ints = new Interrupters ())
 			using (Node node = new Node (ints, dgramSock, listener, "database.sqlite", bindUdp, bindTcp))
 			using (WebApp app = new WebApp (node))
-			using (HttpServer.CreateEmbedHttpServer (app, null, true, true, _config.GetValue<bool> (ConfigFields.GwBindAny), _config.GetValue<int> (ConfigFields.GwBindTcp), 16)) {
+			using (HttpServer.CreateEmbedHttpServer (app, null, true, true, _config.GetValue<bool> (ConfigFields.GwBindAny), gwBindTcp, 16)) {
+				_app = app;
+				_node = node;
+				_startupWaitHandle.Set ();
 				Console.WriteLine ("正常に起動しました。");
-				Console.WriteLine ("ブラウザで http://127.0.0.1:{0}/ を開いてください。", _config.GetValue<int> (ConfigFields.GwBindTcp));
+				Console.WriteLine ("ブラウザで {0} を開いてください。", _url);
 				Console.WriteLine ();
 				Console.WriteLine ("注意: このコマンドプロンプトウィンドウは閉じないでください。");
 				Console.WriteLine ("プログラムを終了するときは、左側のメニューから[ネットワーク]→[終了]を選ぶか、");
-				Console.WriteLine ("http://127.0.0.1:{0}/net/exit を開いて、\"終了する\"ボタンを押してください。", _config.GetValue<int> (ConfigFields.GwBindTcp));
+				Console.WriteLine ("{0}net/exit を開いて、\"終了する\"ボタンを押してください。", _url);
 				app.ExitWaitHandle.WaitOne ();
 				app.CreateStatisticsXML ().Save ("statistics-" + DateTime.Now.ToString ("yyyyMMddHHmmss") + ".xml");
+				_waitHandle.Set ();
 			}
+		}
+
+		public void Exit ()
+		{
+			if (_app != null)
+				_app.Exit ();
+		}
+
+		public WaitHandle WaitHandle {
+			get { return _waitHandle; }
+		}
+
+		public WaitHandle StartupWaitHandle {
+			get { return _startupWaitHandle; }
+		}
+
+		public Node Node {
+			get { return _node; }
+		}
+
+		public string Url {
+			get { return _url; }
 		}
 
 		public void Dispose ()

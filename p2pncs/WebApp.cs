@@ -132,6 +132,11 @@ namespace p2pncs
 			return doc;
 		}
 
+		public void Exit ()
+		{
+			_exitWaitHandle.Set ();
+		}
+
 		void AddNetworkState (XmlDocument doc)
 		{
 			doc.DocumentElement.AppendChild (doc.CreateElement ("network-state", null, new XmlNode[] {
