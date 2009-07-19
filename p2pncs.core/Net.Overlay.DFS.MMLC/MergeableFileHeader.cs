@@ -57,8 +57,8 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		int _numOfRecords;
 		DateTime _lastModified;
 
-		public MergeableFileHeader (Key key, string title, MergeableFileHeaderFlags flags, IHashComputable content, AuthServerInfo[] authServers)
-			: this (key, title, flags, DateTime.UtcNow, DateTime.UtcNow, content, authServers, null, null)
+		public MergeableFileHeader (Key key, string title, MergeableFileHeaderFlags flags, DateTime created, IHashComputable content, AuthServerInfo[] authServers)
+			: this (key, title, flags, created, DateTime.UtcNow, content, authServers, null, null)
 		{
 		}
 
