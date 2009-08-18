@@ -162,14 +162,16 @@ namespace p2pncs.Net
 
 		public void Dispose ()
 		{
-			_active = false;
-			using (_lock.EnterWriteLock ()) {
-				_handlers.Clear ();
+			if (_active) {
+				_active = false;
+				using (_lock.EnterWriteLock ()) {
+					_handlers.Clear ();
+				}
+				_lock.Dispose ();
+				try {
+					_listener.Close ();
+				} catch { }
 			}
-			_lock.Dispose ();
-			try {
-				_listener.Close ();
-			} catch {}
 		}
 
 		class SocketInfo
