@@ -31,6 +31,7 @@ namespace p2pncs.Net
 		bool _active = false;
 		Socket _listener;
 		Thread _recvThread;
+		long _recvBytes = 0, _sentBytes = 0;
 		ManualResetEvent _done = new ManualResetEvent (false);
 		List<Socket> _recvWaits = new List<Socket> ();
 		Dictionary<Socket, SocketInfo> _sockMap = new Dictionary<Socket,SocketInfo> ();
@@ -72,6 +73,7 @@ namespace p2pncs.Net
 					throw new System.Net.Sockets.SocketException ();
 				sent += sock.Send (data, sent, data.Length - sent, System.Net.Sockets.SocketFlags.None);
 			}
+			Interlocked.Add (ref _sentBytes, sent);
 		}
 
 		public object ReceiveMessage (Socket sock, int max_size)
@@ -94,7 +96,7 @@ namespace p2pncs.Net
 					throw new System.Net.Sockets.SocketException ();
 				recv += sock.Receive (data, recv, data.Length - recv, System.Net.Sockets.SocketFlags.None);
 			}
-
+			Interlocked.Add (ref _recvBytes, recv);
 			return Serializer.Instance.Deserialize (data);
 		}
 
@@ -114,7 +116,9 @@ namespace p2pncs.Net
 								_sockMap.Add (client, new SocketInfo (client));
 							} else {
 								SocketInfo info = _sockMap[list[i]];
-								info.Received += info.Socket.Receive (info.Buffer, info.Received, info.Buffer.Length - info.Received, System.Net.Sockets.SocketFlags.None);
+								int ret = info.Socket.Receive (info.Buffer, info.Received, info.Buffer.Length - info.Received, System.Net.Sockets.SocketFlags.None);
+								Interlocked.Add (ref _recvBytes, ret);
+								info.Received += ret;
 								if (info.Received == info.Buffer.Length) {
 									if (info.FirstMessageSize == -1) {
 										info.FirstMessageSize = (info.Buffer[0] << 24) | (info.Buffer[1] << 16) | (info.Buffer[2] << 8) | info.Buffer[3];
@@ -158,6 +162,14 @@ namespace p2pncs.Net
 			using (_lock.EnterWriteLock ()) {
 				_handlers.Remove (firstMessageType);
 			}
+		}
+
+		public long ReceivedBytes {
+			get { return _recvBytes; }
+		}
+
+		public long SentBytes {
+			get { return _sentBytes; }
 		}
 
 		public void Dispose ()

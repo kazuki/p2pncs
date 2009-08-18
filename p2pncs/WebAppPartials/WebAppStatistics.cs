@@ -56,12 +56,16 @@ namespace p2pncs
 						new string[] {"recv-packets", info.TotalReceivePackets.ToString ()},
 						new string[] {"send-bytes", info.TotalSendBytes.ToString ()},
 						new string[] {"send-packets", info.TotalSendPackets.ToString ()},
+						new string[] {"tcp-recv-bytes", info.TotalTcpReceiveBytes.ToString ()},
+						new string[] {"tcp-send-bytes", info.TotalTcpSendBytes.ToString ()},
 					}, null),
 					doc.CreateElement ("average", new string[][] {
 						new string[] {"recv-bytes", (info.TotalReceiveBytes / runningTime).ToString ()},
 						new string[] {"recv-packets", (info.TotalReceivePackets / runningTime).ToString ()},
 						new string[] {"send-bytes", (info.TotalSendBytes / runningTime).ToString ()},
 						new string[] {"send-packets", (info.TotalSendPackets / runningTime).ToString ()},
+						new string[] {"tcp-recv-bytes", (info.TotalReceiveBytes / runningTime).ToString ()},
+						new string[] {"tcp-send-bytes", (info.TotalTcpSendBytes / runningTime).ToString ()},
 					}, null)
 				}),
 				doc.CreateElement ("kbr", new string[][] {

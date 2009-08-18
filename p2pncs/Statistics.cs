@@ -28,6 +28,7 @@ namespace p2pncs
 {
 	class Statistics
 	{
+		ITcpListener _tcp;
 		IMessagingSocket _sock;
 		Dictionary<IPEndPoint, EndPointInfo> _messagingStatistics = new Dictionary<IPEndPoint, EndPointInfo> ();
 
@@ -46,9 +47,10 @@ namespace p2pncs
 		// MMLC
 		long _mmlcSuccess = 0, _mmlcFailures = 0;
 
-		public Statistics (AnonymousRouter anonRouter, MMLC mmlc)
+		public Statistics (AnonymousRouter anonRouter, MMLC mmlc, ITcpListener tcp)
 		{
 			_sock = anonRouter.KeyBasedRouter.MessagingSocket;
+			_tcp = tcp;
 			Setup (_sock);
 			Setup (anonRouter.KeyBasedRouter);
 			Setup (anonRouter);
@@ -161,6 +163,8 @@ namespace p2pncs
 			info.TotalReceivePackets = _sock.BaseSocket.ReceivedDatagrams;
 			info.TotalSendBytes = _sock.BaseSocket.SentBytes;
 			info.TotalSendPackets = _sock.BaseSocket.SentDatagrams;
+			info.TotalTcpReceiveBytes = _tcp.ReceivedBytes;
+			info.TotalTcpSendBytes = _tcp.SentBytes;
 			info.KBR_Success = _kbrSuccess;
 			info.KBR_Failures = _kbrFailures;
 			info.KBR_RTT = _kbrRTT;
@@ -183,6 +187,8 @@ namespace p2pncs
 			public long TotalReceivePackets;
 			public long TotalSendBytes;
 			public long TotalSendPackets;
+			public long TotalTcpReceiveBytes;
+			public long TotalTcpSendBytes;
 			public long KBR_Success;
 			public long KBR_Failures;
 			public StandardDeviation KBR_Hops;

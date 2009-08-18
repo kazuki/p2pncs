@@ -72,7 +72,7 @@ namespace p2pncs
 			_mkd = new MassKeyDeliverer (_dht, mkdLocalStore, ints.MassKeyDeliverTimerInt);
 			_mmlc = new MMLC (_anonymous, _dht, mkdLocalStore, db_path, ints.StreamSocketTimeoutInt, ints.DFSRePutTimerInt);
 			_crawler = new FileInfoCrawler (_tcpListener, _mmlc, _ints.CrawlingTimer);
-			_statistics = new Statistics ((AnonymousRouter)_anonymous, _mmlc);
+			_statistics = new Statistics ((AnonymousRouter)_anonymous, _mmlc, _tcpListener);
 		}
 
 		void Stabilize ()

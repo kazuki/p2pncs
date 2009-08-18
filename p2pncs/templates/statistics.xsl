@@ -64,6 +64,19 @@
 					<td><xsl:value-of select="floor(average/@send-packets)" />pps</td>
 					<td><xsl:value-of select="total/@send-packets" /></td>
 				</tr>
+				<tr>
+					<th rowspan="2">TCP</th>
+					<th>受信</th>
+					<th>バイト数: </th>
+					<td><xsl:value-of select="floor(average/@tcp-recv-bytes * 8 div 100) div 10" />kbps</td>
+					<td><xsl:value-of select="total/@tcp-recv-bytes" /></td>
+				</tr>
+				<tr>
+					<th>送信</th>
+					<th>バイト数: </th>
+					<td><xsl:value-of select="floor(average/@tcp-send-bytes * 8 div 100) div 10" />kbps</td>
+					<td><xsl:value-of select="total/@tcp-send-bytes" /></td>
+				</tr>
 			</tbody>
 		</table>
 	</xsl:template>

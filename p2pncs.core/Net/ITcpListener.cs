@@ -32,5 +32,8 @@ namespace p2pncs.Net
 
 		void SendMessage (Socket sock, object msg);
 		object ReceiveMessage (Socket sock, int max_size);
+
+		long ReceivedBytes { get; }
+		long SentBytes { get; }
 	}
 }
