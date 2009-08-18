@@ -38,7 +38,7 @@
 				<div id="bbsNavi">
 					<a href="/">トップページに戻る</a>
 					<xsl:text>, </xsl:text>
-					<a href="/bbs">掲示板一覧に戻る</a>
+					<a href="/list">一覧に戻る</a>
 				</div>
 				<div id="bbsBody">
 					<xsl:for-each select="/page/file/records/record">
