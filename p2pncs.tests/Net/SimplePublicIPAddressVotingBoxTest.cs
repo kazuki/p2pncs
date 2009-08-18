@@ -34,7 +34,7 @@ namespace p2pncs.tests.Net
 			IPAddress pubIP1 = IPAddress.Parse ("1.2.3.4");
 			IPAddress pubIP2 = IPAddress.Parse ("1.2.3.5");
 			IPAddress pubIP3 = IPAddress.Parse ("1.2.3.6");
-			Assert.AreEqual (IPAddress.Loopback, voting.CurrentPublicIPAddress, "#0");
+			Assert.AreEqual (IPAddress.None, voting.CurrentPublicIPAddress, "#0");
 			voting.Vote (new IPEndPoint (IPAddress.Parse ("1.1.1.1"), 1000), pubIP1);
 			Assert.AreEqual (pubIP1, voting.CurrentPublicIPAddress, "#1");
 			voting.Vote (new IPEndPoint (IPAddress.Parse ("1.1.1.2"), 1000), pubIP1);

@@ -15,7 +15,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+using System;
 using System.Net;
+using System.Net.Sockets;
 
 namespace p2pncs.Net
 {
@@ -35,6 +37,42 @@ namespace p2pncs.Net
 				return true;
 
 			return false;
+		}
+
+		public static IPAddress GetLoopbackAddress (AddressFamily family)
+		{
+			switch (family) {
+				case AddressFamily.InterNetwork:
+					return IPAddress.Loopback;
+				case AddressFamily.InterNetworkV6:
+					return IPAddress.IPv6Loopback;
+				default:
+					throw new NotSupportedException ();
+			}
+		}
+
+		public static IPAddress GetAnyAddress (AddressFamily family)
+		{
+			switch (family) {
+				case AddressFamily.InterNetwork:
+					return IPAddress.Any;
+				case AddressFamily.InterNetworkV6:
+					return IPAddress.IPv6Any;
+				default:
+					throw new NotSupportedException ();
+			}
+		}
+
+		public static IPAddress GetNoneAddress (AddressFamily family)
+		{
+			switch (family) {
+				case AddressFamily.InterNetwork:
+					return IPAddress.None;
+				case AddressFamily.InterNetworkV6:
+					return IPAddress.IPv6None;
+				default:
+					throw new NotSupportedException ();
+			}
 		}
 	}
 }

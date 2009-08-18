@@ -22,6 +22,8 @@ namespace p2pncs.Net
 	interface IPublicIPAddressVotingBox
 	{
 		void Vote (IPEndPoint voter, IPAddress ip);
+
+		// 初期値は IPAddress.None or IPAddress.IPv6None
 		IPAddress CurrentPublicIPAddress { get; }
 	}
 }

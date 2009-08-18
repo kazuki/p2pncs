@@ -29,7 +29,7 @@ namespace p2pncs.Net
 
 		public SimplePublicIPAddressVotingBox (AddressFamily family)
 		{
-			_cur = (family == AddressFamily.InterNetwork ? IPAddress.Loopback : IPAddress.IPv6Loopback);
+			_cur = IPAddressUtility.GetNoneAddress (family);
 		}
 
 		public void Vote (IPEndPoint voter, IPAddress ip)

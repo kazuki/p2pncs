@@ -29,7 +29,7 @@ namespace p2pncs
 	class Statistics
 	{
 		IMessagingSocket _sock;
-		Dictionary<IPAddress, EndPointInfo> _messagingStatistics = new Dictionary<IPAddress, EndPointInfo> ();
+		Dictionary<IPEndPoint, EndPointInfo> _messagingStatistics = new Dictionary<IPEndPoint, EndPointInfo> ();
 
 		// KBR
 		long _kbrSuccess = 0, _kbrFailures = 0;
@@ -64,9 +64,9 @@ namespace p2pncs
 
 				lock (_messagingStatistics) {
 					EndPointInfo info;
-					if (!_messagingStatistics.TryGetValue (ipep.Address, out info)) {
+					if (!_messagingStatistics.TryGetValue (ipep, out info)) {
 						info = new EndPointInfo ();
-						_messagingStatistics.Add (ipep.Address, info);
+						_messagingStatistics.Add (ipep, info);
 					}
 					info.SD.AddSample ((float)e.RTT.TotalMilliseconds);
 					info.Success ++;
@@ -79,9 +79,9 @@ namespace p2pncs
 					return;
 				lock (_messagingStatistics) {
 					EndPointInfo info;
-					if (!_messagingStatistics.TryGetValue (ipep.Address, out info)) {
+					if (!_messagingStatistics.TryGetValue (ipep, out info)) {
 						info = new EndPointInfo ();
-						_messagingStatistics.Add (ipep.Address, info);
+						_messagingStatistics.Add (ipep, info);
 					}
 					info.Fail ++;
 				}

@@ -29,7 +29,8 @@ namespace p2pncs.Net
 		const int MAX_DATAGRAM_SIZE = 1000;
 		int _max_datagram_size, _header_size;
 		Socket _sock;
-		IPAddress _receiveAdrs, _loopbackAdrs;
+		IPAddress _receiveAdrs, _loopbackAdrs, _noneAdrs;
+		ushort _bindPort;
 		long _recvBytes = 0, _sentBytes = 0, _recvDgrams = 0, _sentDgrams = 0;
 		IPublicIPAddressVotingBox _pubIpVotingBox;
 		byte[] _sendBuffer = new byte[MAX_DATAGRAM_SIZE];
@@ -41,9 +42,10 @@ namespace p2pncs.Net
 		#region Constructor
 		UdpSocket (AddressFamily addressFamily)
 		{
-			_receiveAdrs = (addressFamily == AddressFamily.InterNetwork ? IPAddress.Any : IPAddress.IPv6Any);
+			_receiveAdrs = IPAddressUtility.GetAnyAddress (addressFamily);
 			_pubIpVotingBox = new SimplePublicIPAddressVotingBox (addressFamily);
-			_loopbackAdrs = _pubIpVotingBox.CurrentPublicIPAddress; // SimplePublicIPAddressVotingBoxの初期値はループバック
+			_loopbackAdrs = IPAddressUtility.GetLoopbackAddress (addressFamily);
+			_noneAdrs = IPAddressUtility.GetNoneAddress (addressFamily);
 			_sock = new Socket (addressFamily, SocketType.Dgram, ProtocolType.Udp);
 			_header_size = (addressFamily == AddressFamily.InterNetwork ? 4 : 16) + 2;
 			_max_datagram_size = MAX_DATAGRAM_SIZE - _header_size;
@@ -95,13 +97,17 @@ namespace p2pncs.Net
 						try {
 							EndPoint remoteEP = new IPEndPoint (usock._receiveAdrs, 0);
 							int receiveSize = usock._sock.ReceiveFrom (recvBuffer, 0, recvBuffer.Length, SocketFlags.None, ref remoteEP);
-#if !DEBUG
-							// リリースビルド時には、プライベートアドレスからのパケットはパブリックIPに変換する
-							if (IPAddressUtility.IsPrivate (((IPEndPoint)remoteEP).Address)) {
+							IPEndPoint remoteIPEP = (IPEndPoint)remoteEP;
+							if (remoteIPEP.Port == usock._bindPort && usock._loopbackAdrs.Equals (remoteIPEP.Address)) {
 								IPAddress new_adrs = usock._pubIpVotingBox.CurrentPublicIPAddress;
-								if (usock._loopbackAdrs.Equals (new_adrs))
+								if (usock._noneAdrs.Equals (new_adrs))
 									continue; // パブリックIPが決定していないときはそのパケットを破棄
-								remoteEP = new IPEndPoint (new_adrs, ((IPEndPoint)remoteEP).Port);
+								remoteEP = new IPEndPoint (new_adrs, remoteIPEP.Port);
+							}
+#if !DEBUG
+							else if (IPAddressUtility.IsPrivate (remoteIPEP.Address)) {
+								// リリースビルド時はプライベートアドレスからのパケットを破棄
+								continue;
 							}
 #endif
 							usock._recvBytes += receiveSize;
@@ -145,6 +151,7 @@ namespace p2pncs.Net
 		public void Bind (EndPoint bindEP)
 		{
 			_sock.Bind (bindEP);
+			_bindPort = (ushort)((IPEndPoint)bindEP).Port;
 		}
 
 		public void Close ()
@@ -169,10 +176,15 @@ namespace p2pncs.Net
 				Logger.Log (LogLevel.Fatal, this, "Send data-size is too big. ({0} bytes)", size);
 				throw new SocketException ();
 			}
+			IPEndPoint remoteIPEP = (IPEndPoint)remoteEP;
+			if (remoteIPEP.Port == _bindPort && remoteIPEP.Address.Equals (_pubIpVotingBox.CurrentPublicIPAddress)) {
+				remoteEP = new IPEndPoint (_loopbackAdrs, _bindPort);
+			}
 #if !DEBUG
-			// リリースビルド時には、自分のパブリックIP宛のパケットをループバック宛へと変換する
-			if (((IPEndPoint)remoteEP).Address.Equals (_pubIpVotingBox.CurrentPublicIPAddress))
-				remoteEP = new IPEndPoint (_loopbackAdrs, ((IPEndPoint)remoteEP).Port);
+			else if (IPAddressUtility.IsPrivate (remoteIPEP.Address)) {
+				// リリースビルド時には、プライベートアドレス宛のパケットを破棄する
+				throw new Exception ("Destination address is private");
+			}
 #endif
 			if (!_sock.Poll (-1, SelectMode.SelectWrite))
 				throw new Exception ("Polling failed");
