@@ -25,7 +25,9 @@
 	<xsl:template match="record">
 		<li>
 			<xsl:value-of select="@created" />
-			<xsl:text> に編集</xsl:text>
+			<xsl:text> に </xsl:text>
+			<xsl:value-of select="wiki/name" />
+			<xsl:text> が編集</xsl:text>
 		</li>
 	</xsl:template>
 
