@@ -30,7 +30,7 @@
 			<xsl:attribute name="id">wiki-editform</xsl:attribute>
 			<xsl:attribute name="method">post</xsl:attribute>
 			<xsl:attribute name="action">
-				<xsl:text>/wiki/</xsl:text>
+				<xsl:text>/</xsl:text>
 				<xsl:value-of select="/page/file/@key" />
 				<xsl:text>/</xsl:text>
 				<xsl:value-of select="/page/page-title" />

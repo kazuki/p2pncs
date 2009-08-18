@@ -3,7 +3,7 @@
 	<xsl:output method="xml" encoding="utf-8" doctype-public="-//W3C//DTD XHTML 1.1//EN" doctype-system="http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd" />
 
 	<xsl:variable name="base_url">
-		<xsl:text>/wiki/</xsl:text>
+		<xsl:text>/</xsl:text>
 		<xsl:value-of select="/page/file/@key" />
 		<xsl:text>/</xsl:text>
 	</xsl:variable>

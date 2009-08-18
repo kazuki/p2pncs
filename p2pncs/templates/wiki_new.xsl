@@ -19,7 +19,7 @@
 			<p>
 				<xsl:element name="a">
 					<xsl:attribute name="href">
-						<xsl:text>/wiki/</xsl:text>
+						<xsl:text>/</xsl:text>
 						<xsl:value-of select="created/@key" />
 					</xsl:attribute>
 					<xsl:text>このリンク</xsl:text>
