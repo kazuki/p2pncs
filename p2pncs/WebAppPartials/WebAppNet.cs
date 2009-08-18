@@ -85,6 +85,8 @@ namespace p2pncs
 					string ip_dns = dic["ip"].Trim ();
 					string port = dic["port"].Trim ();
 					try {
+						if (ip_dns.Length == 0)
+							throw new FormatException ();
 						EndPoint ep = Helpers.Parse (ip_dns + ":" + port);
 						if (ep == null)
 							throw new FormatException ();
@@ -108,14 +110,18 @@ namespace p2pncs
 				}
 			}
 
+			string pub_ip = "";
+			XmlNode[] encoded_nodes = null;
 			if (!IPAddressUtility.IsPrivate (_node.GetCurrentPublicIPAddress ())) {
-				doc.DocumentElement.AppendChild (doc.CreateElement ("ipendpoint", new string[][] {
-					new [] {"ip", _node.GetCurrentPublicIPAddress().ToString ()},
-					new [] {"port", _node.BindUdpPort.ToString ()}
-				}, new[] {
+				pub_ip = _node.GetCurrentPublicIPAddress().ToString ();
+				encoded_nodes = new XmlNode[] {
 					doc.CreateTextNode (EndPointObfuscator.Encode (new IPEndPoint (_node.GetCurrentPublicIPAddress (), _node.BindUdpPort)))
-				}));
+				};
 			}
+			doc.DocumentElement.AppendChild (doc.CreateElement ("ipendpoint", new string[][] {
+					new [] {"ip", pub_ip},
+					new [] {"port", _node.BindUdpPort.ToString ()}
+				}, encoded_nodes));
 
 			return _xslTemplate.Render (req, res, doc, Path.Combine (DefaultTemplatePath, "net_init.xsl"));
 		}

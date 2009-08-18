@@ -28,11 +28,30 @@
 			<table>
 				<tr>
 					<td>IPアドレス/ドメイン名: </td>
-					<td><input type="text" size="30" name="ip"/></td>
+					<td>
+						<xsl:element name="input">
+							<xsl:attribute name="type">text</xsl:attribute>
+							<xsl:attribute name="size">30</xsl:attribute>
+							<xsl:attribute name="name">ip</xsl:attribute>
+							<xsl:attribute name="value">
+								<xsl:value-of select="ipendpoint/@ip" />
+							</xsl:attribute>
+						</xsl:element>
+					</td>
 				</tr>
 				<tr>
 					<td>ポート番号: </td>
-					<td><input type="text" size="30" name="port"/></td>
+					<td>
+						<xsl:element name="input">
+							<xsl:attribute name="type">text</xsl:attribute>
+							<xsl:attribute name="size">30</xsl:attribute>
+							<xsl:attribute name="name">port</xsl:attribute>
+							<xsl:attribute name="readonly">readonly</xsl:attribute>
+							<xsl:attribute name="value">
+								<xsl:value-of select="ipendpoint/@port" />
+							</xsl:attribute>
+						</xsl:element>
+					</td>
 				</tr>
 				<tr>
 					<td colspan="2">
@@ -58,7 +77,7 @@
 				</div>
 			</xsl:if>
 		</xsl:if>
-		<xsl:if test="ipendpoint">
+		<xsl:if test="ipendpoint/text() != ''">
 			<h1>自ノード情報</h1>
 			<table>
 				<tr>
