@@ -88,6 +88,7 @@ namespace p2pncs.Wiki
 
 		public string Name {
 			get { return _name; }
+			set { _name = value;}
 		}
 
 		public WikiMarkupType MarkupType {

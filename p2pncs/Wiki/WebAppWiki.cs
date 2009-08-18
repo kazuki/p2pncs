@@ -125,12 +125,15 @@ namespace p2pncs.Wiki
 			if (record == null && !history_mode)
 				record = GetLatestPage (records, page_title);
 			if (!history_mode) {
+				if (edit_mode) {
+					xsl = "wiki_edit.xsl";
+					if (req.HttpMethod == HttpMethod.GET && record != null)
+						(record.Content as WikiRecord).Name = "";
+				}
 				if (record == null)
 					doc.DocumentElement.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header));
 				else
 					doc.DocumentElement.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header, new MergeableFileRecord[] { record }));
-				if (edit_mode)
-					xsl = "wiki_edit.xsl";
 			} else if (history_mode) {
 				records.RemoveAll (delegate (MergeableFileRecord ri) {
 					WikiRecord wr = (WikiRecord)ri.Content;
