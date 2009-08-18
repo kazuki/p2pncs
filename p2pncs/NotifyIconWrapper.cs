@@ -18,19 +18,19 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Threading;
 using System.Windows.Forms;
 
 namespace p2pncs
 {
-	class SystemTray
+	class NotifyIconWrapper : IDisposable
 	{
-		public static void Run (Program prog)
-		{
-			Application.EnableVisualStyles ();
-			Application.SetCompatibleTextRenderingDefault (false);
+		NotifyIcon _notifyIcon;
 
+		public NotifyIconWrapper (Program prog)
+		{
 			NotifyIcon notify = new NotifyIcon ();
+			_notifyIcon = notify;
+
 			notify.Icon = new System.Drawing.Icon (new MemoryStream (Convert.FromBase64String (IconBase64)));
 			notify.Visible = true;
 			notify.ContextMenuStrip = new ContextMenuStrip ();
@@ -45,34 +45,21 @@ namespace p2pncs
 			notify.ContextMenuStrip.Items.Add ("終了(&X)", null, delegate (object sender, EventArgs args) {
 				prog.Exit ();
 			});
+		}
 
-			Thread thrd = new Thread (delegate () {
-				try {
-					prog.Run ();
-				} catch { }
-				Application.Exit ();
-			});
-			thrd.IsBackground = true;
-			thrd.Start ();
-			prog.StartupWaitHandle.WaitOne ();
+		public NotifyIcon NotifyIcon {
+			get { return _notifyIcon; }
+		}
 
-			try {
-				Process.Start (prog.Url);
-			} catch (Exception exception) {
-				MessageBox.Show ("エラー:\r\n" + exception.Message);
-			}
+		public void Run ()
+		{
+			Application.Run ();
+		}
 
-			prog.Node.PortOpenChecker.UdpPortError += new EventHandler(delegate (object sender, EventArgs args) {
-				notify.ShowBalloonTip (10000, "エラー", "UDPポートが開放されていない可能性があります", ToolTipIcon.Error);
-			});
-
-			try {
-				Application.Run ();
-			} catch {
-			} finally {
-				notify.Visible = false;
-				notify.Dispose ();
-			}
+		public void Dispose ()
+		{
+			_notifyIcon.Visible = false;
+			_notifyIcon.Dispose ();
 		}
 
 		const string IconBase64 = "AAABAAIAICAAAAEAIACoEAAAJgAAABAQAAABACAAaAQAAM4QAAAoAAAAIAAAAEAAAAABACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +

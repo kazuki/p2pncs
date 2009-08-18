@@ -47,12 +47,16 @@
     <Compile Include="BBS\BBSApp.cs" />
     <Compile Include="BBS\SimpleBBSWebUIHelper.cs" />
     <Compile Include="ConfigFields.cs" />
+    <Compile Include="ConsoleInterface.cs" />
     <Compile Include="EndPointObfuscator.cs" />
+    <Compile Include="Exceptions.cs" />
+    <Compile Include="GraphicalInterface.cs" />
     <Compile Include="Helpers.cs" />
     <Compile Include="IMergeableFile.cs" />
     <Compile Include="IMergeableFileWebUIHelper.cs" />
     <Compile Include="Interrupters.cs" />
     <Compile Include="Node.cs" />
+    <Compile Include="NotifyIconWrapper.cs" />
     <Compile Include="PortOpenChecker.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="AssemblyInfo.cs" />
@@ -60,7 +64,6 @@
     <Compile Include="BBS\SimpleBBSParser.cs" />
     <Compile Include="BBS\SimpleBBSRecord.cs" />
     <Compile Include="Statistics.cs" />
-    <Compile Include="SystemTray.cs" />
     <Compile Include="WebApp.cs" />
     <Compile Include="WebAppPartials\WebAppFileCommon.cs" />
     <Compile Include="WebAppPartials\WebAppManage.cs" />

@@ -29,22 +29,23 @@ namespace p2pncs
 	{
 		const string CONFIG_PATH = "p2pncs.xml";
 		XmlConfig _config = new XmlConfig ();
-		bool running = false;
 		ManualResetEvent _startupWaitHandle = new ManualResetEvent (false);
 		ManualResetEvent _waitHandle = new ManualResetEvent (false);
 		WebApp _app;
+		bool _running = false;
 		string _url;
 		Node _node;
+
+		public event EventHandler Started;
 
 		[STAThread]
 		static void Main (string[] args)
 		{
 			using (Program prog = new Program ()) {
-				try {
-					SystemTray.Run (prog);
-				} catch {
-					if (!prog.running)
-						prog.Run ();
+				if (GraphicalInterface.Check ()) {
+					new GraphicalInterface ().Run (prog);
+				} else {
+					new ConsoleInterface ().Run (prog);
 				}
 			}
 		}
@@ -68,41 +69,41 @@ namespace p2pncs
 
 		public void Run ()
 		{
-			running = true;
-			if (!LoadConfig (_config)) {
-				Console.WriteLine ("設定ファイルを保存しました。");
-				Console.WriteLine ("README.txt を参考に設定ファイルを編集してください。");
-				Console.WriteLine ();
-				Console.WriteLine ("エンターキーを押すと終了します");
-				Console.ReadLine ();
-				return;
-			}
+			_running = true;
+			try {
+				if (!LoadConfig (_config)) {
+					throw new ConfigFileInitializedException ();
+				}
 
-			ushort bindUdp = (ushort)_config.GetValue<int> (ConfigFields.NetBindUdp);
-			ushort bindTcp = (ushort)_config.GetValue<int> (ConfigFields.NetBindTcp);
-			int gwBindTcp = _config.GetValue<int> (ConfigFields.GwBindTcp);
-			_url = string.Format ("http://127.0.0.1:{0}/", gwBindTcp);
-			IDatagramEventSocket dgramSock = UdpSocket.CreateIPv4 ();
-			dgramSock.Bind (new IPEndPoint (IPAddress.Any, bindUdp));
-			TcpListener listener = new TcpListener ();
-			listener.Bind (new IPEndPoint (IPAddress.Any, bindTcp));
-			listener.ListenStart ();
-			using (Interrupters ints = new Interrupters ())
-			using (Node node = new Node (ints, dgramSock, listener, "database.sqlite", bindUdp, bindTcp))
-			using (WebApp app = new WebApp (node))
-			using (HttpServer.CreateEmbedHttpServer (app, null, true, true, _config.GetValue<bool> (ConfigFields.GwBindAny), gwBindTcp, 16)) {
-				_app = app;
-				_node = node;
+				ushort bindUdp = (ushort)_config.GetValue<int> (ConfigFields.NetBindUdp);
+				ushort bindTcp = (ushort)_config.GetValue<int> (ConfigFields.NetBindTcp);
+				int gwBindTcp = _config.GetValue<int> (ConfigFields.GwBindTcp);
+				_url = string.Format ("http://127.0.0.1:{0}/", gwBindTcp);
+				using (IDatagramEventSocket dgramSock = UdpSocket.CreateIPv4 ())
+				using (TcpListener listener = new TcpListener ()) {
+					dgramSock.Bind (new IPEndPoint (IPAddress.Any, bindUdp));
+					listener.Bind (new IPEndPoint (IPAddress.Any, bindTcp));
+					listener.ListenStart ();
+					using (Interrupters ints = new Interrupters ())
+					using (Node node = new Node (ints, dgramSock, listener, "database.sqlite", bindUdp, bindTcp))
+					using (WebApp app = new WebApp (node))
+					using (HttpServer.CreateEmbedHttpServer (app, null, true, true, _config.GetValue<bool> (ConfigFields.GwBindAny), gwBindTcp, 16)) {
+						_app = app;
+						_node = node;
+						_startupWaitHandle.Set ();
+						if (Started != null) {
+							try {
+								Started (this, EventArgs.Empty);
+							} catch {}
+						}
+						app.ExitWaitHandle.WaitOne ();
+						app.CreateStatisticsXML ().Save ("statistics-" + DateTime.Now.ToString ("yyyyMMddHHmmss") + ".xml");
+						_waitHandle.Set ();
+					}
+				}
+			} finally {
+				_running = false;
 				_startupWaitHandle.Set ();
-				Console.WriteLine ("正常に起動しました。");
-				Console.WriteLine ("ブラウザで {0} を開いてください。", _url);
-				Console.WriteLine ();
-				Console.WriteLine ("注意: このコマンドプロンプトウィンドウは閉じないでください。");
-				Console.WriteLine ("プログラムを終了するときは、左側のメニューから[ネットワーク]→[終了]を選ぶか、");
-				Console.WriteLine ("{0}net/exit を開いて、\"終了する\"ボタンを押してください。", _url);
-				app.ExitWaitHandle.WaitOne ();
-				app.CreateStatisticsXML ().Save ("statistics-" + DateTime.Now.ToString ("yyyyMMddHHmmss") + ".xml");
-				_waitHandle.Set ();
 			}
 		}
 
@@ -126,6 +127,10 @@ namespace p2pncs
 
 		public string Url {
 			get { return _url; }
+		}
+
+		public bool Running {
+			get { return _running; }
 		}
 
 		public void Dispose ()
