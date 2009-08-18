@@ -21,6 +21,7 @@ using System.IO;
 using System.Net;
 using System.Threading;
 using Kazuki.Net.HttpServer;
+using Kazuki.Net.HttpServer.Middlewares;
 using openCrypto.EllipticCurve;
 using p2pncs.Net;
 using p2pncs.Net.Overlay;
@@ -139,6 +140,7 @@ namespace p2pncs.debug
 			string _name;
 			IHttpServer _server = null;
 			WebApp _app;
+			SessionMiddleware _sessionMiddleware;
 			int _idx;
 			bool _is_gw;
 			IPEndPoint _bindTcpEP;
@@ -162,8 +164,10 @@ namespace p2pncs.debug
 				_name = "Node-" + idx.ToString ("x");
 				_app = new WebApp (this);
 				_is_gw = gw_port > 0;
-				if (_is_gw)
-					_server = HttpServer.CreateEmbedHttpServer (_app, null, true, true, false, gw_port, 16);
+				if (_is_gw) {
+					_sessionMiddleware = new SessionMiddleware (MMLC.CreateDBConnection, _app);
+					_server = HttpServer.CreateEmbedHttpServer (_sessionMiddleware, null, true, true, false, gw_port, 16);
+				}
 			}
 
 			public void WaitOne ()
@@ -188,8 +192,10 @@ namespace p2pncs.debug
 					base.Dispose ();
 					if (_server != null) _server.Dispose ();
 					if (_app != null) _app.Dispose ();
+					if (_sessionMiddleware != null) _sessionMiddleware.Dispose ();
 					_server = null;
 					_app = null;
+					_sessionMiddleware = null;
 				}
 			}
 		}

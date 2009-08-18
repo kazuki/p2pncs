@@ -16,10 +16,12 @@
  */
 
 using System;
+using System.Data;
 using System.IO;
 using System.Net;
 using System.Threading;
 using Kazuki.Net.HttpServer;
+using Kazuki.Net.HttpServer.Middlewares;
 using p2pncs.Net;
 using XmlConfigLibrary;
 
@@ -84,10 +86,17 @@ namespace p2pncs
 					dgramSock.Bind (new IPEndPoint (IPAddress.Any, bindUdp));
 					listener.Bind (new IPEndPoint (IPAddress.Any, bindTcp));
 					listener.ListenStart ();
+					CreateDatabaseConnectionDelegate create_session_db = delegate () {
+						IDbConnection connection = new Mono.Data.Sqlite.SqliteConnection ();
+						connection.ConnectionString = "Data Source=http-session.sqlite,DateTimeFormat=Ticks,Pooling=True";
+						connection.Open ();
+						return connection;
+					};
 					using (Interrupters ints = new Interrupters ())
 					using (Node node = new Node (ints, dgramSock, listener, "database.sqlite", bindUdp, bindTcp))
 					using (WebApp app = new WebApp (node))
-					using (HttpServer.CreateEmbedHttpServer (app, null, true, true, _config.GetValue<bool> (ConfigFields.GwBindAny), gwBindTcp, 16)) {
+					using (SessionMiddleware mid1 = new SessionMiddleware (create_session_db, app))
+					using (HttpServer.CreateEmbedHttpServer (mid1, null, true, true, _config.GetValue<bool> (ConfigFields.GwBindAny), gwBindTcp, 16)) {
 						_app = app;
 						_node = node;
 						_startupWaitHandle.Set ();

@@ -140,7 +140,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 		}
 
 		#region SQL Helpers
-		IDbConnection CreateDBConnection ()
+		internal IDbConnection CreateDBConnection ()
 		{
 			IDbConnection connection = _db_factory.CreateConnection ();
 			connection.ConnectionString = _db_connection_string;

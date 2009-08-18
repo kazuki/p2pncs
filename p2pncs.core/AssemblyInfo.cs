@@ -16,7 +16,10 @@
  */
 
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 [assembly: AssemblyTitle ("p2pncs.core")]
 [assembly: AssemblyDescription ("p2pncs core library")]
 [assembly: AssemblyProduct ("p2pncs.core")]
+
+[assembly: InternalsVisibleToAttribute ("p2pncs.debug")]
