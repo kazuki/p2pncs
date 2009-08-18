@@ -87,3 +87,13 @@ span.bold {
 span.italic {
   font-style: italic;
 }
+
+#footer-id {
+  font-size: x-small;
+  font-weight: bold;
+}
+
+#footer-hash {
+  font-size: x-small;
+  color: #666;
+}

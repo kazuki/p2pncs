@@ -97,10 +97,22 @@
 				</div>
 				<div id="footer">
 					<xsl:if test="count(/page/file/records/record)=1">
-						<xsl:value-of select="/page/file/records/record/wiki/name" />
-						<xsl:text> : </xsl:text>
-						<xsl:value-of select="/page/file/records/record/@created" />
+						<div id="footer-last-editor">
+							<xsl:text>最終編集: </xsl:text>
+							<xsl:value-of select="/page/file/records/record/wiki/name" />
+							<xsl:text> (</xsl:text>
+							<xsl:value-of select="/page/file/records/record/@created" />
+							<xsl:text>)</xsl:text>
+						</div>
 					</xsl:if>
+					<div id="footer-id">
+						<xsl:text>ID: </xsl:text>
+						<xsl:value-of select="/page/file/@key" />
+					</div>
+					<div id="footer-hash">
+						<xsl:text>Hash: </xsl:text>
+						<xsl:value-of select="/page/file/@recordset" />
+					</div>
 				</div>
 			</body>
 		</html>
