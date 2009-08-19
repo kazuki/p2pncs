@@ -35,6 +35,8 @@ namespace p2pncs.Net
 				return true;
 			else if (x[0] == 192 && x[1] == 168)
 				return true;
+			else if (x[0] >= 224) // Class D & E
+				return true;
 
 			return false;
 		}
