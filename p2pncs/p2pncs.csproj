@@ -58,6 +58,7 @@
     <Compile Include="Helpers.cs" />
     <Compile Include="IMergeableFile.cs" />
     <Compile Include="IMergeableFileWebUIHelper.cs" />
+    <Compile Include="InitNodeList.cs" />
     <Compile Include="Interrupters.cs" />
     <Compile Include="Node.cs" />
     <Compile Include="NotifyIconWrapper.cs" />
