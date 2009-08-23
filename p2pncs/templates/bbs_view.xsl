@@ -43,10 +43,18 @@
 				<div id="bbsBody">
 					<xsl:for-each select="/page/file/records/record">
 						<xsl:sort select="@created" order="ascending" />
-						<div>
+						<xsl:element name="div">
+							<xsl:attribute name="class">
+								<xsl:text>bbsPost </xsl:text>
+								<xsl:if test="bbs/@is-new='true'">
+									<xsl:text>unread </xsl:text>
+								</xsl:if>
+							</xsl:attribute>
 							<div class="postName">
 								<xsl:text>[</xsl:text>
-								<xsl:value-of select="bbs/@short-id"/>
+								<span class="postShortId">
+									<xsl:value-of select="bbs/@short-id"/>
+								</span>
 								<xsl:text>] </xsl:text>
 								<xsl:value-of select="bbs/name" />
 								<xsl:text>: </xsl:text>
@@ -55,7 +63,7 @@
 							<div class="postBody">
 								<xsl:value-of select="bbs/body" />
 							</div>
-						</div>
+						</xsl:element>
 					</xsl:for-each>
 				</div>
 				<hr />

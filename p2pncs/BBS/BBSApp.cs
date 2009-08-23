@@ -99,6 +99,24 @@ namespace p2pncs.BBS
 			if (records == null)
 				throw new HttpException (HttpStatusCode.NotFound);
 
+			using (ISessionTransaction transaction = req.Session.BeginTransaction (System.Data.IsolationLevel.Serializable)) {
+				string session_state_key = header.Key.ToBase64String () + "/read";
+				Key[] keys = transaction.ReadState (session_state_key) as Key[];
+				HashSet<Key> readSet = (keys == null ? new HashSet<Key> () : new HashSet<Key> (keys));
+				List<Key> currentSet = new List<Key> (records.Count);
+				for (int i = 0; i < records.Count; i ++) {
+					SimpleBBSRecord content = records[i].Content as SimpleBBSRecord;
+					if (content == null) continue;
+					content.IsNew = readSet.Add (records[i].Hash);
+					currentSet.Add (records[i].Hash);
+				}
+				readSet.IntersectWith (currentSet);
+				keys = new Key[readSet.Count];
+				readSet.CopyTo (keys);
+				transaction.UpdateState (session_state_key, keys);
+				transaction.Commit ();
+			}
+
 			XmlDocument doc = XmlHelper.CreateEmptyDocument ();
 			doc.DocumentElement.AppendChild (XmlHelper.CreateMergeableFileElement (doc, header, records.ToArray ()));
 			return WebApp.Template.Render (req, res, doc, Path.Combine (WebApp.DefaultTemplatePath, "bbs_view.xsl"));

@@ -42,7 +42,8 @@ namespace p2pncs.BBS
 		{
 			SimpleBBSRecord record_content = record.Content as SimpleBBSRecord;
 			return doc.CreateElement ("bbs", new string[][] {
-				new string[] {"short-id", record_content.GetShortId (record)}
+				new string[] {"short-id", record_content.GetShortId (record)},
+				new string[] {"is-new", record_content.IsNew ? "true" : "false"}
 			}, new[] {
 				doc.CreateElement ("name", null, new[] {
 					doc.CreateTextNodeSafe (record_content.Name)

@@ -18,3 +18,7 @@ div.postBody {
   white-space: pre-wrap;
   word-wrap: break-word;
 }
+
+div.unread span.postShortId {
+  font-weight: bold;
+}

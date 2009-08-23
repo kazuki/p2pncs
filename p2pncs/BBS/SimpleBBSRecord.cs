@@ -31,6 +31,8 @@ namespace p2pncs.BBS
 		[SerializableFieldId (1)]
 		string _body;
 
+		bool _new_flag = true;
+
 		public SimpleBBSRecord (string name, string body)
 		{
 			_name = name;
@@ -43,6 +45,11 @@ namespace p2pncs.BBS
 
 		public string Body {
 			get { return _body; }
+		}
+
+		public bool IsNew {
+			get { return _new_flag; }
+			set { _new_flag = value;}
 		}
 
 		const string TABLE = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
