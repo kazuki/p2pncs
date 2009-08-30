@@ -196,6 +196,10 @@ namespace p2pncs
 			}
 		}
 
+		public IKeyBasedRouter KeyBasedRouter {
+			get { return _kbr; }
+		}
+
 		[SerializableTypeId (0x1005)]
 		class PortCheckStartMessage
 		{

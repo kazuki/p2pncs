@@ -25,13 +25,13 @@ namespace p2pncs
 {
 	class InitNodeList
 	{
-		IKeyBasedRouter _kbr;
 		const int MaxNodeListSize = 64;
 		const string NodeListFileName = "nodelist.txt";
+		PortOpenChecker _checker;
 
-		public InitNodeList (IKeyBasedRouter kbr)
+		public InitNodeList (PortOpenChecker checker)
 		{
-			_kbr = kbr;
+			_checker = checker;
 		}
 
 		public void Load ()
@@ -49,13 +49,13 @@ namespace p2pncs
 						} catch { }
 					}
 				}
-				_kbr.Join (list.ToArray ());
+				_checker.Join (list.ToArray ());
 			} catch {}
 		}
 
 		public void Save ()
 		{
-			NodeHandle[] nodes = _kbr.RoutingAlgorithm.GetRandomNodes (MaxNodeListSize);
+			NodeHandle[] nodes = _checker.KeyBasedRouter.RoutingAlgorithm.GetRandomNodes (MaxNodeListSize);
 			using (StreamWriter writer = new StreamWriter (NodeListFileName, false, Encoding.ASCII)) {
 				for (int i = 0; i < nodes.Length; i ++) {
 					writer.WriteLine (EndPointObfuscator.Encode (nodes[i].EndPoint));

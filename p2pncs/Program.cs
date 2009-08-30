@@ -97,7 +97,7 @@ namespace p2pncs
 					using (WebApp app = new WebApp (node))
 					using (SessionMiddleware mid1 = new SessionMiddleware (create_session_db, app))
 					using (HttpServer.CreateEmbedHttpServer (mid1, null, true, true, _config.GetValue<bool> (ConfigFields.GwBindAny), gwBindTcp, 16)) {
-						InitNodeList initNodeList = new InitNodeList (node.KeyBasedRouter);
+						InitNodeList initNodeList = new InitNodeList (node.PortOpenChecker);
 						_app = app;
 						_node = node;
 						_startupWaitHandle.Set ();
