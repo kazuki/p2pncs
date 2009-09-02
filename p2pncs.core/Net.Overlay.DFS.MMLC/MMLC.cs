@@ -442,6 +442,8 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					int received = 0;
 					while (received < buffer.Length) {
 						int ret = strm.Read (buffer, received, buffer.Length - received);
+						if (ret == 0)
+							throw new SocketException ();
 						received += ret;
 					}
 				}
