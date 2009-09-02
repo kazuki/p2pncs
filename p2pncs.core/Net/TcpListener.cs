@@ -21,6 +21,7 @@ using System.Net;
 using System.Threading;
 using p2pncs.Threading;
 using Socket = System.Net.Sockets.Socket;
+using SocketException = System.Net.Sockets.SocketException;
 
 namespace p2pncs.Net
 {
@@ -70,7 +71,7 @@ namespace p2pncs.Net
 			int sent = 0;
 			while (sent < data.Length) {
 				if (!sock.Poll (-1, System.Net.Sockets.SelectMode.SelectWrite))
-					throw new System.Net.Sockets.SocketException ();
+					throw new SocketException ();
 				sent += sock.Send (data, sent, data.Length - sent, System.Net.Sockets.SocketFlags.None);
 			}
 			Interlocked.Add (ref _sentBytes, sent);
@@ -82,9 +83,14 @@ namespace p2pncs.Net
 			int recv = 0;
 			while (recv < data.Length) {
 				if (!sock.Poll (-1, System.Net.Sockets.SelectMode.SelectRead))
-					throw new System.Net.Sockets.SocketException ();
-				recv += sock.Receive (data, recv, data.Length - recv, System.Net.Sockets.SocketFlags.None);
+					throw new SocketException ();
+				int ret = sock.Receive (data, recv, data.Length - recv, System.Net.Sockets.SocketFlags.None);
+				if (ret == 0)
+					break;
+				recv += ret;
 			}
+			if (recv != data.Length)
+				throw new SocketException ();
 
 			int size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
 			if (size > max_size)
@@ -93,9 +99,14 @@ namespace p2pncs.Net
 			recv = 0;
 			while (recv < data.Length) {
 				if (!sock.Poll (-1, System.Net.Sockets.SelectMode.SelectRead))
-					throw new System.Net.Sockets.SocketException ();
-				recv += sock.Receive (data, recv, data.Length - recv, System.Net.Sockets.SocketFlags.None);
+					throw new SocketException ();
+				int ret = sock.Receive (data, recv, data.Length - recv, System.Net.Sockets.SocketFlags.None);
+				if (ret == 0)
+					break;
+				ret += ret;
 			}
+			if (recv != data.Length)
+				throw new SocketException ();
 			Interlocked.Add (ref _recvBytes, recv);
 			return Serializer.Instance.Deserialize (data);
 		}
@@ -117,6 +128,8 @@ namespace p2pncs.Net
 							} else {
 								SocketInfo info = _sockMap[list[i]];
 								int ret = info.Socket.Receive (info.Buffer, info.Received, info.Buffer.Length - info.Received, System.Net.Sockets.SocketFlags.None);
+								if (ret == 0)
+									throw new SocketException ();
 								Interlocked.Add (ref _recvBytes, ret);
 								info.Received += ret;
 								if (info.Received == info.Buffer.Length) {
