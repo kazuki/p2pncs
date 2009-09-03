@@ -96,7 +96,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					File.Delete (db_path);
 			}
 
-			_db_connection_string = string.Format ("Data Source={0},DateTimeFormat=Ticks,Pooling=True", db_path);
+			_db_connection_string = string.Format ("Data Source={0},DateTimeFormat=Ticks,Pooling=False", db_path);
 			using (IDbConnection connection = CreateDBConnection ())
 			using (IDbTransaction transaction = connection.BeginTransaction (IsolationLevel.Serializable)) {
 				DatabaseUtility.ExecuteNonQuery (transaction, "CREATE TABLE IF NOT EXISTS Config (name TEXT PRIMARY KEY, value TEXT);");

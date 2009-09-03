@@ -88,7 +88,7 @@ namespace p2pncs
 					listener.ListenStart ();
 					CreateDatabaseConnectionDelegate create_session_db = delegate () {
 						IDbConnection connection = new Mono.Data.Sqlite.SqliteConnection ();
-						connection.ConnectionString = "Data Source=http-session.sqlite,DateTimeFormat=Ticks,Pooling=True";
+						connection.ConnectionString = "Data Source=http-session.sqlite,DateTimeFormat=Ticks,Pooling=False";
 						connection.Open ();
 						return connection;
 					};
