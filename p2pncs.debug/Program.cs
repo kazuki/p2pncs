@@ -45,6 +45,7 @@ namespace p2pncs.debug
 
 		static void Main ()
 		{
+			p2pncs.Simulation.OSTimerPrecision.SetCurrentThreadToHighPrecision ();
 			using (Program prog = new Program ()) {
 				prog.Run ();
 			}
