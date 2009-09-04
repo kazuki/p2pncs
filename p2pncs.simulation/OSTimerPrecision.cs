@@ -33,22 +33,30 @@ namespace p2pncs.Simulation
 		[ThreadStatic]
 		static IntPtr ThreadState;
 
+		[DllImport ("winmm.dll")]
+		public static extern uint timeBeginPeriod (uint uMilliseconds);
+
+		[DllImport ("winmm.dll")]
+		public static extern uint timeEndPeriod (uint uMilliseconds);
+
 		public static void SetCurrentThreadToHighPrecision ()
 		{
-			int index = 0;
+			timeBeginPeriod (1);
+			/*int index = 0;
 			try {
 				ThreadState = AvSetMmThreadCharacteristics ("Simulation", ref index);
-			} catch {}
+			} catch {}*/
 		}
 
 		public static void RevertCurrentThreadPrecision ()
 		{
-			if (ThreadState != IntPtr.Zero) {
+			timeEndPeriod (1);
+			/*if (ThreadState != IntPtr.Zero) {
 				try {
 					AvRevertMmThreadCharacteristics (ThreadState);
 					ThreadState = IntPtr.Zero;
 				} catch {}
-			}
+			}*/
 		}
 	}
 }
