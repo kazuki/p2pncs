@@ -98,13 +98,13 @@ namespace p2pncs.Net
 							EndPoint remoteEP = new IPEndPoint (usock._receiveAdrs, 0);
 							int receiveSize = usock._sock.ReceiveFrom (recvBuffer, 0, recvBuffer.Length, SocketFlags.None, ref remoteEP);
 							IPEndPoint remoteIPEP = (IPEndPoint)remoteEP;
+#if !DEBUG
 							if (remoteIPEP.Port == usock._bindPort && usock._loopbackAdrs.Equals (remoteIPEP.Address)) {
 								IPAddress new_adrs = usock._pubIpVotingBox.CurrentPublicIPAddress;
 								if (usock._noneAdrs.Equals (new_adrs))
 									continue; // パブリックIPが決定していないときはそのパケットを破棄
 								remoteEP = new IPEndPoint (new_adrs, remoteIPEP.Port);
 							}
-#if !DEBUG
 							else if (IPAddressUtility.IsPrivate (remoteIPEP.Address)) {
 								// リリースビルド時はプライベートアドレスからのパケットを破棄
 								continue;
