@@ -34,18 +34,22 @@ namespace p2pncs.Evaluation
 			}
 
 			p2pncs.Simulation.OSTimerPrecision.SetCurrentThreadToHighPrecision ();
-			Console.WriteLine ("p2pncs Evalution Program");
-			options.WriteOptions (Console.Out, "  ");
+			try {
+				Console.WriteLine ("p2pncs Evalution Program");
+				options.WriteOptions (Console.Out, "  ");
 
-			Dictionary<EvaluationTypes, IEvaluator> evalutions = new Dictionary<EvaluationTypes,IEvaluator> () {
-				{EvaluationTypes.AR, new AnonymousRouterEvaluation ()},
-				{EvaluationTypes.AR_SimCom, new AnonymousRouterSimultaneouslyCommunicationEvaluator ()},
-				{EvaluationTypes.AR_Throughput, new AnonymousHighThroughputEvaluator ()},
-				{EvaluationTypes.KBR1, new KBREval1 ()},
-				{EvaluationTypes.DHT1, new DHTEval1 ()},
-				{EvaluationTypes.MASSKEY1, new MassKeyEval1 ()},
-			};
-			evalutions[options.EvalutionType].Evaluate (options);
+				Dictionary<EvaluationTypes, IEvaluator> evalutions = new Dictionary<EvaluationTypes,IEvaluator> () {
+					{EvaluationTypes.AR, new AnonymousRouterEvaluation ()},
+					{EvaluationTypes.AR_SimCom, new AnonymousRouterSimultaneouslyCommunicationEvaluator ()},
+					{EvaluationTypes.AR_Throughput, new AnonymousHighThroughputEvaluator ()},
+					{EvaluationTypes.KBR1, new KBREval1 ()},
+					{EvaluationTypes.DHT1, new DHTEval1 ()},
+					{EvaluationTypes.MASSKEY1, new MassKeyEval1 ()},
+				};
+				evalutions[options.EvalutionType].Evaluate (options);
+			} finally {
+				p2pncs.Simulation.OSTimerPrecision.RevertCurrentThreadPrecision ();
+			}
 		}
 	}
 }

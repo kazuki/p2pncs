@@ -51,7 +51,7 @@ namespace p2pncs.Evaluation
 		public static int DefaultMessagingRetryBufferSize = 1024;
 		public static int DefaultMessagingDupCheckSize = 512;
 		public static TimeSpan DefaultACMessagingTimeout = TimeSpan.FromSeconds (3);
-		public static int DefaultACMessagingRetries = 2;
+		public static int DefaultACMessagingRetries = 0;
 		public static int DefaultACMessagingRetryBufferSize = 1024;
 		public static int DefaultACMessagingDupCheckSize = 512;
 		static RandomIPAddressGenerator _ipGenerator = new RandomIPAddressGenerator ();

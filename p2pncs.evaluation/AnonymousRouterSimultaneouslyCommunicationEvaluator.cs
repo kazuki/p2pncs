@@ -49,7 +49,7 @@ namespace p2pncs.Evaluation
 				List<Info> subscribedList = new List<Info> ();
 				HashSet<Key> aliveRecipients = new HashSet<Key> ();
 				Dictionary<VirtualNode, Info> mapping = new Dictionary<VirtualNode,Info> ();
-				int simultaneouslyProcess = 32;
+				int simultaneouslyProcess = 2;
 				int px, py;
 
 				Console.Write ("Subscribe ALL Nodes...");

@@ -48,20 +48,24 @@ namespace p2pncs.Evaluation
 				bool routeEstablished = false;
 				do {
 					try {
-						IAnonymousSocket sock1 = env.Nodes[0].AnonymousRouter.EndConnect (env.Nodes[0].AnonymousRouter.BeginConnect (subscribeInfo1.Key, subscribeInfo2.Key, AnonymousConnectionType.LowLatency, null, null, null));
-						if (env.Nodes[1].AnonymousSocketInfoList.Count == 0)
+						IAsyncResult ar = env.Nodes[0].AnonymousRouter.BeginConnect (subscribeInfo1.Key, subscribeInfo2.Key, AnonymousConnectionType.LowLatency, null, null, null);
+						Stopwatch sw = Stopwatch.StartNew ();
+						IAnonymousSocket sock1 = env.Nodes[0].AnonymousRouter.EndConnect (ar);
+						sw.Stop ();
+						if (env.Nodes[1].AnonymousSocketInfoList.Count == 0) {
 							throw new System.Net.Sockets.SocketException ();
+						}
+						Logger.Log (LogLevel.Info, this, "Connected: {0}ms", sw.ElapsedMilliseconds);
 
 						msock1 = env.Nodes[0].CreateAnonymousSocket (sock1);
 						msock2 = env.Nodes[1].AnonymousSocketInfoList[env.Nodes[1].AnonymousSocketInfoList.Count - 1].MessagingSocket;
 						routeEstablished = true;
 
 						DateTime dt = DateTime.Now;
-						Stopwatch sw = new Stopwatch ();
 						StandardDeviation rtt_sd = new StandardDeviation (false);
 						int tests = 0, success = 0;
 						for (int i = 0; i < opt.Tests; i ++) {
-							IAsyncResult ar; string ret;
+							string ret;
 
 							tests ++;
 							string msg = "Hello-" + strKey1 + "-" + i.ToString ();
@@ -102,7 +106,8 @@ namespace p2pncs.Evaluation
 						Logger.Log (LogLevel.Info, this, "Time: {0:f2}sec, Jitter: {1}/{2:f1}({3:f1})/{4}, DeliverSuccess={5:p}, RTT: Avg={6:f1}({7:f1})",
 							DateTime.Now.Subtract (dt).TotalSeconds, minJitter, avgJitter, sdJitter, maxJitter, (double)success / (double)tests, rtt_sd.Average, rtt_sd.ComputeStandardDeviation ());
 					} catch {
-						Console.WriteLine ("Establish Failed. Retry...");
+						Logger.Log (LogLevel.Info, this, "Establish Failed. Retry...");
+						return;
 					} finally {
 						if (msock1 != null) msock1.Dispose ();
 						if (msock2 != null) msock2.Dispose ();
