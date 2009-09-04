@@ -131,13 +131,13 @@ namespace p2pncs.Evaluation
 			return new VirtualNode (this, _network, _opt, _msgInt1, _kbrInt, _anonInt, _dhtInt);
 		}
 
-		public IMessagingSocket CreateMessagingSocket (IDatagramEventSocket sock, TimeSpan timeout, int retries, int retryBufferSize, int dupCheckSize)
+		public IMessagingSocket CreateMessagingSocket (IDatagramEventSocket sock, IRTOAlgorithm rtoAlgo, int retries, int retryBufferSize, int dupCheckSize)
 		{
 			VirtualDatagramEventSocket vsock = sock as VirtualDatagramEventSocket;
 			if (_opt.BypassMessagingSerializer && vsock != null)
-				return new VirtualMessagingSocket (vsock, true, _msgInt2, timeout, retries, retryBufferSize, dupCheckSize);
+				return new VirtualMessagingSocket (vsock, true, _msgInt2, rtoAlgo, retries, retryBufferSize, dupCheckSize);
 			else
-				return new MessagingSocket (sock, true, SymmetricKey.NoneKey, Serializer.Instance, null, _msgInt2, timeout, retries, retryBufferSize, dupCheckSize);
+				return new MessagingSocket (sock, true, SymmetricKey.NoneKey, Serializer.Instance, null, _msgInt2, rtoAlgo, retries, retryBufferSize, dupCheckSize);
 		}
 
 		public VirtualNetwork Network {

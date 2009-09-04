@@ -81,7 +81,9 @@
     <Compile Include="Net.Overlay.DFS.MMLC\FileInfoCrawler.cs" />
     <Compile Include="Net.Overlay.DFS.MMLC\MergeableFileHeaderFlags.cs" />
     <Compile Include="Net\DnsEndPoint.cs" />
+    <Compile Include="Net\IRTOAlgorithm.cs" />
     <Compile Include="Net\ITcpListener.cs" />
+    <Compile Include="Net\RFC2988BasedRTOCalculator.cs" />
     <Compile Include="Net\TcpListener.cs" />
     <Compile Include="Net\TcpListenerAcceptedEventArgs.cs" />
     <Compile Include="ProtocolVersion.cs" />

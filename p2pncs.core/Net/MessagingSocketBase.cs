@@ -30,7 +30,6 @@ namespace p2pncs.Net
 {
 	public abstract class MessagingSocketBase : IMessagingSocket
 	{
-		TimeSpan _inquiryTimeout;
 		int _maxRetries, _retryListSize;
 		protected IDatagramEventSocket _sock;
 		bool _ownSocket, _active = true;
@@ -47,18 +46,20 @@ namespace p2pncs.Net
 		ReaderWriterLockWrapper _receivedHandlersLock = new ReaderWriterLockWrapper ();
 		Dictionary<Type, ReceivedEventHandler> _receivedHandlers = new Dictionary<Type, ReceivedEventHandler> ();
 
+		protected IRTOAlgorithm _rtoAlgo;
+
 		public event ReceivedEventHandler ReceivedUnknownMessage;
 		public event InquiredEventHandler InquiredUnknownMessage;
 		public event InquiredEventHandler InquirySuccess;
 		public event InquiredEventHandler InquiryFailure;
 
 		protected MessagingSocketBase (IDatagramEventSocket sock, bool ownSocket, IntervalInterrupter interrupter,
-			TimeSpan defaultInquiryTimeout, int defaultMaxRetries, int retryListSize, int inquiryDupCheckSize)
+			IRTOAlgorithm rtoAlgo, int defaultMaxRetries, int retryListSize, int inquiryDupCheckSize)
 		{
 			_sock = sock;
 			_ownSocket = ownSocket;
 			_interrupter = interrupter;
-			_inquiryTimeout = defaultInquiryTimeout;
+			_rtoAlgo = rtoAlgo;
 			_maxRetries = defaultMaxRetries;
 			_retryListSize = retryListSize;
 			_inquiryDupCheckCache = new KeyValueCache<MessageIdentity,object> (inquiryDupCheckSize);
@@ -72,10 +73,10 @@ namespace p2pncs.Net
 
 		public IAsyncResult BeginInquire (object obj, EndPoint remoteEP, AsyncCallback callback, object state)
 		{
-			return BeginInquire (obj, remoteEP, _inquiryTimeout, _maxRetries, callback, state);
+			return BeginInquire (obj, remoteEP, _rtoAlgo.GetRTO (remoteEP), _maxRetries, callback, state);
 		}
 
-		public virtual IAsyncResult BeginInquire (object obj, EndPoint remoteEP, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state)
+		protected virtual IAsyncResult BeginInquire (object obj, EndPoint remoteEP, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state)
 		{
 			MsgLabel id = CreateMessageID ();
 			InquiredAsyncResultBase ar = CreateInquiredAsyncResult (id, obj, remoteEP, timeout, maxRetry, callback, state);
@@ -308,6 +309,8 @@ namespace p2pncs.Net
 
 		protected void InvokeInquirySuccess (object sender, InquiredEventArgs e)
 		{
+			if (e.Retries == 0)
+				_rtoAlgo.AddSample (e.EndPoint, e.RTT);
 			if (InquirySuccess != null) {
 				try {
 					InquirySuccess (sender, e);

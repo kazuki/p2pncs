@@ -48,18 +48,6 @@ namespace p2pncs.Net
 		IAsyncResult BeginInquire (object obj, EndPoint remoteEP, AsyncCallback callback, object state);
 
 		/// <summary>
-		/// 非同期問い合わせを開始します
-		/// </summary>
-		/// <param name="obj">リクエストとなるメッセージ</param>
-		/// <param name="remoteEP">問い合わせ先のエンドポイント</param>
-		/// <param name="timeout">再送までのタイムアウト時間</param>
-		/// <param name="maxRetry">最大再送数</param>
-		/// <param name="callback">問い合わせ完了時に呼び出す<see cref="System.AsyncCallback"/>デリゲート</param>
-		/// <param name="state">コールバック時に渡される状態を表す<see cref="System.Object"/></param>
-		/// <returns>この非同期問い合わせの状態を表す<see cref="System.IAsyncResult"/></returns>
-		IAsyncResult BeginInquire (object obj, EndPoint remoteEP, TimeSpan timeout, int maxRetry, AsyncCallback callback, object state);
-
-		/// <summary>
 		/// 非同期問い合わせを終了します
 		/// </summary>
 		/// <param name="ar">この非同期問い合わせの状態を表す<see cref="System.IAsyncResult"/></param>

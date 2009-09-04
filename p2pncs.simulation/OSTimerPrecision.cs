@@ -23,7 +23,7 @@ namespace p2pncs.Simulation
 {
 	public static class OSTimerPrecision
 	{
-		[DllImport ("Avrt.dll"), SuppressUnmanagedCodeSecurity]
+		/*[DllImport ("Avrt.dll"), SuppressUnmanagedCodeSecurity]
 		extern static IntPtr AvSetMmThreadCharacteristics (string task, ref int index);
 
 		[DllImport ("Avrt.dll"), SuppressUnmanagedCodeSecurity]
@@ -31,7 +31,7 @@ namespace p2pncs.Simulation
 		extern static bool AvRevertMmThreadCharacteristics (IntPtr handle);
 
 		[ThreadStatic]
-		static IntPtr ThreadState;
+		static IntPtr ThreadState;*/
 
 		[DllImport ("winmm.dll")]
 		public static extern uint timeBeginPeriod (uint uMilliseconds);

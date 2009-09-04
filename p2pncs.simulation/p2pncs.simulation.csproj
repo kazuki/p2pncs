@@ -39,6 +39,7 @@
   <ItemGroup>
     <Compile Include="..\AssemblyVersionInfo.cs" />
     <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="ConstantRTO.cs" />
     <Compile Include="OSTimerPrecision.cs" />
     <Compile Include="RandomIPAddressGenerator.cs" />
     <Compile Include="VirtualNet\LatencyTypes.cs" />

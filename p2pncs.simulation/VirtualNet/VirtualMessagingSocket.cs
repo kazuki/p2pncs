@@ -25,8 +25,8 @@ namespace p2pncs.Simulation.VirtualNet
 	public class VirtualMessagingSocket : MessagingSocketBase
 	{
 		public VirtualMessagingSocket (VirtualDatagramEventSocket baseSock, bool ownSocket,
-			IntervalInterrupter interrupter, TimeSpan timeout, int maxRetry, int retryBufferSize, int inquiryDupCheckSize)
-			: base (baseSock, ownSocket, interrupter, timeout, maxRetry, retryBufferSize, inquiryDupCheckSize)
+			IntervalInterrupter interrupter, IRTOAlgorithm rtoAlgo, int maxRetry, int retryBufferSize, int inquiryDupCheckSize)
+			: base (baseSock, ownSocket, interrupter, rtoAlgo, maxRetry, retryBufferSize, inquiryDupCheckSize)
 		{
 			baseSock.VirtualNetwork.AddVirtualMessagingSocketToVirtualNode (baseSock, this);
 		}

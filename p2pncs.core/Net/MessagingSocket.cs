@@ -35,8 +35,8 @@ namespace p2pncs.Net
 
 		public MessagingSocket (IDatagramEventSocket sock, bool ownSocket, SymmetricKey key,
 			IFormatter formatter, object nullObject, IntervalInterrupter interrupter,
-			TimeSpan timeout, int maxRetry, int retryBufferSize, int inquiryDupCheckSize)
-			: base (sock, ownSocket, interrupter, timeout, maxRetry, retryBufferSize, inquiryDupCheckSize)
+			IRTOAlgorithm rtoAlgo, int maxRetry, int retryBufferSize, int inquiryDupCheckSize)
+			: base (sock, ownSocket, interrupter, rtoAlgo, maxRetry, retryBufferSize, inquiryDupCheckSize)
 		{
 			_key = (key != null ? key : SymmetricKey.NoneKey);
 			_formatter = formatter;

@@ -46,12 +46,12 @@ namespace p2pncs.Evaluation
 
 		public static ECDomainNames DefaultECDomain = DefaultAlgorithm.ECDomainName;
 		static Random _rnd = new Random ();
-		public static TimeSpan DefaultMessagingTimeout = TimeSpan.FromMilliseconds (200);
+		public static IRTOAlgorithm DefaultMessagingRTO = new RFC2988BasedRTOCalculator (TimeSpan.FromSeconds(1), TimeSpan.FromMilliseconds(100), 50, false);
 		public static int DefaultMessagingRetries = 2;
 		public static int DefaultMessagingRetryBufferSize = 1024;
 		public static int DefaultMessagingDupCheckSize = 512;
-		public static TimeSpan DefaultACMessagingTimeout = TimeSpan.FromSeconds (3);
-		public static int DefaultACMessagingRetries = 0;
+		public static TimeSpan DefaultACMessagingRTO = TimeSpan.FromSeconds (16);
+		public static int DefaultACMessagingRetries = 2;
 		public static int DefaultACMessagingRetryBufferSize = 1024;
 		public static int DefaultACMessagingDupCheckSize = 512;
 		static RandomIPAddressGenerator _ipGenerator = new RandomIPAddressGenerator ();
@@ -70,8 +70,8 @@ namespace p2pncs.Evaluation
 			VirtualDatagramEventSocket sock = new VirtualDatagramEventSocket (network, pubAdrs);
 			sock.Bind (new IPEndPoint (IPAddress.Any, bindPort));
 			_msock = opt.BypassMessagingSerializer
-				? (IMessagingSocket)new VirtualMessagingSocket (sock, true, messagingInt, DefaultMessagingTimeout, DefaultMessagingRetries, DefaultMessagingRetryBufferSize, DefaultMessagingDupCheckSize)
-				: (IMessagingSocket)new MessagingSocket (sock, true, SymmetricKey.NoneKey, Serializer.Instance, null, messagingInt, DefaultMessagingTimeout, DefaultMessagingRetries, DefaultMessagingRetryBufferSize, DefaultMessagingDupCheckSize);
+				? (IMessagingSocket)new VirtualMessagingSocket (sock, true, messagingInt, DefaultMessagingRTO, DefaultMessagingRetries, DefaultMessagingRetryBufferSize, DefaultMessagingDupCheckSize)
+				: (IMessagingSocket)new MessagingSocket (sock, true, SymmetricKey.NoneKey, Serializer.Instance, null, messagingInt, DefaultMessagingRTO, DefaultMessagingRetries, DefaultMessagingRetryBufferSize, DefaultMessagingDupCheckSize);
 			_kbr = new SimpleIterativeRouter2 (_nodeId, 0, _msock, new SimpleRoutingAlgorithm (), Serializer.Instance, opt.NewKBRStrictMode);
 			_localDHT = new OnMemoryLocalHashTable (_kbr, dhtInt);
 			_dht = new SimpleDHT (_kbr, _msock, _localDHT);
@@ -117,7 +117,9 @@ namespace p2pncs.Evaluation
 		{
 			IMessagingSocket msock = null;
 			if (sock.ConnectionType == AnonymousConnectionType.LowLatency) {
-				msock = _env.CreateMessagingSocket (sock, DefaultACMessagingTimeout, DefaultACMessagingRetries,
+				IRTOAlgorithm rtoAlgo = new RFC2988BasedRTOCalculator (DefaultACMessagingRTO,
+					TimeSpan.FromMilliseconds (100), 50, true);
+				msock = _env.CreateMessagingSocket (sock, rtoAlgo, DefaultACMessagingRetries,
 					DefaultACMessagingRetryBufferSize, DefaultACMessagingDupCheckSize);
 				msock.AddInquiredHandler (typeof (string), InquiredStringMessage);
 			}

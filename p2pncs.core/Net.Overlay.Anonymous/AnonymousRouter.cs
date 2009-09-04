@@ -55,28 +55,22 @@ namespace p2pncs.Net.Overlay.Anonymous
 		public static int DefaultSubscribeRoutes = 2;
 		const float DefaultSubscribeRouteFactor = 1.0F;
 
-		static TimeSpan Messaging_Timeout = TimeSpan.FromMilliseconds (200);
-		const int Messaging_MaxRetry = 2;
-		static TimeSpan DisconnectMessaging_Timeout = Messaging_Timeout;
-		const int DisconnectMessaging_MaxRetry = Messaging_MaxRetry;
-
 		// Static parameters for DHT
 		static TimeSpan DHT_GetTimeout = TimeSpan.FromSeconds (5);
 		static TimeSpan DHT_PutInterval = TimeSpan.FromSeconds (60);
 		static TimeSpan DHT_Lifetime = DHT_PutInterval + DHT_GetTimeout;
 
 		// Static parameters for Multiple Cipher Route (MCR)
-		static TimeSpan MCR_EstablishingTimeout = TimeSpan.FromSeconds (DefaultRelayNodes * 2 * Messaging_Timeout.TotalSeconds);
-		static TimeSpan MCR_MaxMessageInterval = TimeSpan.FromSeconds (10);
-		static TimeSpan MCR_AliveCheckScheduleInterval = MCR_MaxMessageInterval - TimeSpan.FromSeconds (0.5);
-		static TimeSpan MCR_MaxMessageIntervalWithMargin = MCR_MaxMessageInterval + new TimeSpan (Messaging_Timeout.Ticks * Messaging_MaxRetry);
+		static TimeSpan MCR_MaxMessageInterval = TimeSpan.FromSeconds (30);
+		static TimeSpan MCR_AliveCheckScheduleInterval = MCR_MaxMessageInterval - TimeSpan.FromSeconds (1);
+		static TimeSpan MCR_MaxMessageIntervalWithMargin = MCR_MaxMessageInterval + TimeSpan.FromSeconds (8);
 
 		// Static parameters for Anonymous Connection (AC)
 		public static int AC_DefaultUseSubscribeRoutes = DefaultSubscribeRoutes;
-		static TimeSpan AC_EstablishTimeout = new TimeSpan (MCR_EstablishingTimeout.Ticks * 2) + DHT_GetTimeout;
+		static TimeSpan AC_EstablishTimeout = TimeSpan.FromSeconds (30);
 		static TimeSpan AC_MaxMessageInterval = MCR_MaxMessageInterval;
 		static TimeSpan AC_AliveCheckScheduleInterval = MCR_AliveCheckScheduleInterval;
-		static TimeSpan AC_MaxMessageIntervalWithMargin = TimeSpan.FromDays (1); //new TimeSpan (AC_MaxMessageInterval.Ticks * 3);
+		static TimeSpan AC_MaxMessageIntervalWithMargin = new TimeSpan (AC_MaxMessageInterval.Ticks * 3);
 
 		static object AckMessage = "ACK";
 
@@ -380,7 +374,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					byte[] payload = MultipleCipherHelper.DecryptRoutedPayload (routeInfo.Key, msg.Payload);
 					RoutedMessage new_msg = new RoutedMessage (routeInfo.Next.Label, payload);
 					if (e != null) {
-						_sock.BeginInquire (new_msg, routeInfo.Next.EndPoint, Messaging_Timeout, Messaging_MaxRetry,
+						_sock.BeginInquire (new_msg, routeInfo.Next.EndPoint,
 							Messaging_Inquired_RoutedMessage_Callback, new object[] { routeInfo, routeInfo.Next });
 					} else {
 						_sock.Send (new_msg, routeInfo.Next.EndPoint);
@@ -401,7 +395,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					byte[] payload = MultipleCipherHelper.EncryptRoutedPayload (routeInfo.Key, msg.Payload);
 					RoutedMessage new_msg = new RoutedMessage (routeInfo.Previous.Label, payload);
 					if (e != null) {
-						_sock.BeginInquire (new_msg, routeInfo.Previous.EndPoint, Messaging_Timeout, Messaging_MaxRetry,
+						_sock.BeginInquire (new_msg, routeInfo.Previous.EndPoint,
 							Messaging_Inquired_RoutedMessage_Callback, new object[] { routeInfo, routeInfo.Previous });
 					} else {
 						_sock.Send (new_msg, routeInfo.Previous.EndPoint);
@@ -875,6 +869,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			HashSet<StartPointInfo> _establishedList = new HashSet<StartPointInfo> ();
 			HashSet<StartPointInfo> _establishingList = new HashSet<StartPointInfo> ();
 			MessagingObjectSocket _msock = null;
+			IRTOAlgorithm _rtoAlgo;
 
 			public event AcceptingEventHandler Accepting;
 			public event AcceptedEventHandler Accepted;
@@ -888,8 +883,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_numOfRelays = numOfRelays;
 				_factor = factor;
 
-				TimeSpan timeout = p2pncs.Net.Overlay.Anonymous.AnonymousRouter.MCR_EstablishingTimeout + p2pncs.Net.Overlay.Anonymous.AnonymousRouter.DHT_GetTimeout;
-				_msock = new MessagingObjectSocket (this, router._interrupter, timeout, 2, 128, 16);
+				_rtoAlgo = new RFC2988BasedRTOCalculator (new TimeSpan (numOfRelays * TimeSpan.TicksPerSecond),
+					TimeSpan.FromMilliseconds (100), 50, true);
+				_msock = new MessagingObjectSocket (this, router._interrupter, _rtoAlgo, 2, 128, 16);
 			}
 
 			public void Start ()
@@ -928,8 +924,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 							}
 							_establishingList.Add (info);
 							EstablishRouteMessage msg = new EstablishRouteMessage (info.Label, payload);
-							_router.KeyBasedRouter.MessagingSocket.BeginInquire (msg, info.RelayNodes[0].EndPoint,
-								Messaging_Timeout, Messaging_MaxRetry, EstablishRoute_Callback, info);
+							_router.KeyBasedRouter.MessagingSocket.BeginInquire (msg,
+								info.RelayNodes[0].EndPoint, EstablishRoute_Callback, info);
 						}
 					}
 				}
@@ -1043,6 +1039,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_msock.Dispose ();
 			}
 
+			public IRTOAlgorithm RTOAlgorithm {
+				get { return _rtoAlgo; }
+			}
+
 			#region ISubscribeInfo Members
 
 			public Key Key {
@@ -1073,8 +1073,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 				SubscribeInfo _info;
 
 				public MessagingObjectSocket (SubscribeInfo info, IntervalInterrupter insideTimeoutTimer,
-					TimeSpan timeout, int maxRetry, int retryBufferSize, int inquiryDupCheckSize)
-					: base (null, true, insideTimeoutTimer, timeout, maxRetry, retryBufferSize, inquiryDupCheckSize)
+					IRTOAlgorithm rtoAlgo, int maxRetry, int retryBufferSize, int inquiryDupCheckSize)
+					: base (null, true, insideTimeoutTimer, rtoAlgo, maxRetry, retryBufferSize, inquiryDupCheckSize)
 				{
 					_info = info;
 				}
@@ -1185,7 +1185,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				byte[] payload = MultipleCipherHelper.CreateRoutedPayload (_relayKeys, msg, (_subscribe.AnonymousRouter as AnonymousRouter).PayloadFixedSize);
 				RoutedMessage rmsg = new RoutedMessage (_routeInfo.Next.Label, payload);
 				if (useInquiry) {
-					sock.BeginInquire (rmsg, _routeInfo.Next.EndPoint, Messaging_Timeout, Messaging_MaxRetry, SendMessage_Callback, sock);
+					sock.BeginInquire (rmsg, _routeInfo.Next.EndPoint, SendMessage_Callback, sock);
 				} else {
 					sock.Send (rmsg, _routeInfo.Next.EndPoint);
 				}
@@ -1257,7 +1257,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				byte[] payload = MultipleCipherHelper.CreateRoutedPayload (_routeInfo.Key, msg, _router.PayloadFixedSize);
 				RoutedMessage rmsg = new RoutedMessage (_routeInfo.Previous.Label, payload);
 				if (useInquery) {
-					sock.BeginInquire (rmsg, _routeInfo.Previous.EndPoint, Messaging_Timeout, Messaging_MaxRetry, SendMessage_Callback, sock);
+					sock.BeginInquire (rmsg, _routeInfo.Previous.EndPoint, SendMessage_Callback, sock);
 				} else {
 					sock.Send (rmsg, _routeInfo.Previous.EndPoint);
 				}
@@ -1373,7 +1373,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 				if (startPoint != null) {
 					startPoint.RouteInfo = this;
-					_nextExpiry = DateTime.Now + MCR_EstablishingTimeout;
+					_nextExpiry = DateTime.Now + startPoint.SubscribeInfo.RTOAlgorithm.GetRTO (null);
 				} else {
 					_nextExpiry = (next == null ? DateTime.MaxValue : DateTime.Now + MCR_MaxMessageIntervalWithMargin);
 				}
@@ -1401,8 +1401,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_nextExpiry = DateTime.MinValue;
 				_prevExpiry = DateTime.MinValue;
 				if (sock != null && _prevEP != null)
-					sock.BeginInquire (new DisconnectMessage (_prevEP.Label), _prevEP.EndPoint,
-						DisconnectMessaging_Timeout, DisconnectMessaging_MaxRetry, null, null);
+					sock.BeginInquire (new DisconnectMessage (_prevEP.Label), _prevEP.EndPoint, null, null);
 			}
 
 			public AnonymousEndPoint Previous {

@@ -29,7 +29,6 @@ namespace p2pncs
 {
 	class Node : IDisposable
 	{
-		public static readonly TimeSpan DefaultMessagingTimeout = TimeSpan.FromMilliseconds (200);
 		public const int DefaultMessagingRetry = 2;
 		public const int DefaultMessagingRetryBufferSize = 8192;
 		public const int DefaultMessagingDuplicationCheckBufferSize = 1024;
@@ -38,6 +37,7 @@ namespace p2pncs
 		int _udpPort, _tcpPort;
 		protected IDatagramEventSocket _dgramSock;
 		ITcpListener _tcpListener;
+		IRTOAlgorithm _rtoAlgo;
 		IMessagingSocket _messagingSock;
 		IKeyBasedRouter _kbr;
 		IDistributedHashTable _dht;
@@ -59,8 +59,9 @@ namespace p2pncs
 			_ints = ints;
 			_dgramSock = bindedDgramSock;
 			_tcpListener = tcpListener;
+			_rtoAlgo = new RFC2988BasedRTOCalculator (TimeSpan.FromSeconds (1), TimeSpan.FromMilliseconds (100), 50, false);
 			_messagingSock = new MessagingSocket (_dgramSock, true, SymmetricKey.NoneKey, p2pncs.Serializer.Instance,
-				null, ints.MessagingInt, DefaultMessagingTimeout, DefaultMessagingRetry, DefaultMessagingRetryBufferSize, DefaultMessagingDuplicationCheckBufferSize);
+				null, ints.MessagingInt, _rtoAlgo, DefaultMessagingRetry, DefaultMessagingRetryBufferSize, DefaultMessagingDuplicationCheckBufferSize);
 			_kbrPrivateKey = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 			_kbr = new SimpleIterativeRouter2 (Key.Create (_kbrPrivateKey), bindTcpPort, _messagingSock, new SimpleRoutingAlgorithm (), p2pncs.Serializer.Instance, true);
 			_portChecker = new PortOpenChecker (_kbr);

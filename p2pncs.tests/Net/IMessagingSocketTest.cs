@@ -22,6 +22,7 @@ using NUnit.Framework;
 using p2pncs.Net;
 using p2pncs.Security.Cryptography;
 using p2pncs.Threading;
+using p2pncs.Simulation;
 
 namespace p2pncs.tests.Net
 {
@@ -29,7 +30,7 @@ namespace p2pncs.tests.Net
 	{
 		protected System.Runtime.Serialization.IFormatter _formatter;
 		protected IntervalInterrupter _interrupter;
-		protected static TimeSpan DefaultTimeout = TimeSpan.FromSeconds (0.5);
+		protected static IRTOAlgorithm DefaultRTO = new ConstantRTO (TimeSpan.FromSeconds (0.5));
 		protected static int DefaultRetryCount = 2;
 
 		public virtual void Init ()
