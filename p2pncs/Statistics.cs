@@ -73,7 +73,7 @@ namespace p2pncs
 				lock (_messagingStatistics) {
 					EndPointInfo info;
 					if (!_messagingStatistics.TryGetValue (ipep, out info)) {
-						info = new EndPointInfo ();
+						info = new EndPointInfo (ipep);
 						_messagingStatistics.Add (ipep, info);
 					}
 					info.SD.AddSample ((float)e.RTT.TotalMilliseconds);
@@ -88,7 +88,7 @@ namespace p2pncs
 				lock (_messagingStatistics) {
 					EndPointInfo info;
 					if (!_messagingStatistics.TryGetValue (ipep, out info)) {
-						info = new EndPointInfo ();
+						info = new EndPointInfo (ipep);
 						_messagingStatistics.Add (ipep, info);
 					}
 					info.Fail ++;
@@ -246,6 +246,12 @@ namespace p2pncs
 			public long Success = 0;
 			public long Fail = 0;
 			public long Retries = 0;
+			public EndPoint EndPoint;
+
+			public EndPointInfo (EndPoint ep)
+			{
+				EndPoint = ep;
+			}
 		}
 	}
 }

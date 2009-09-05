@@ -117,6 +117,10 @@ namespace p2pncs
 			get { return _statistics; }
 		}
 
+		public IRTOAlgorithm RTOAlgorithm {
+			get { return _rtoAlgo; }
+		}
+
 		public virtual IPAddress GetCurrentPublicIPAddress ()
 		{
 			if (_dgramSock is UdpSocket)

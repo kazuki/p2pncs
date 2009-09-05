@@ -88,6 +88,7 @@
 				<tr>
 					<td rowspan="2" />
 					<td colspan="2">RTT</td>
+					<td rowspan="2">RTO</td>
 					<td colspan="4">問い合わせ</td>
 				</tr>
 				<tr>
@@ -105,6 +106,7 @@
 						<td><xsl:value-of select="position()" /></td>
 						<td><xsl:value-of select="floor(@rtt-avg)" />ms</td>
 						<td>±<xsl:value-of select="floor(@rtt-sd)" />ms</td>
+						<td><xsl:value-of select="@rto" />ms</td>
 						<td><xsl:value-of select="@success" /></td>
 						<td><xsl:value-of select="@fail" /></td>
 						<td><xsl:value-of select="floor(@success * 100 div (@success + @fail))" /> %</td>

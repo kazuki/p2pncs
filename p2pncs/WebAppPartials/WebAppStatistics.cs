@@ -60,6 +60,7 @@ namespace p2pncs
 					new string[] {"retries", info.MessagingStatistics[i].Retries.ToString () },
 					new string[] {"rtt-avg", info.MessagingStatistics[i].SD.Average.ToString () },
 					new string[] {"rtt-sd", info.MessagingStatistics[i].SD.ComputeStandardDeviation ().ToString () },
+					new string[] {"rto", ((int)_node.RTOAlgorithm.GetRTO (info.MessagingStatistics[i].EndPoint).TotalMilliseconds).ToString () }
 				}, null));
 			}
 
@@ -93,7 +94,7 @@ namespace p2pncs
 						new string[] {"recv-packets", info.AvgReceivePackets.ToString ()},
 						new string[] {"send-bytes", info.AvgSendBytes.ToString ()},
 						new string[] {"send-packets", info.AvgSendPackets.ToString ()},
-						new string[] {"tcp-recv-bytes", info.AvgReceiveBytes.ToString ()},
+						new string[] {"tcp-recv-bytes", info.AvgTcpReceiveBytes.ToString ()},
 						new string[] {"tcp-send-bytes", info.AvgTcpSendBytes.ToString ()},
 					}, null)
 				}),
