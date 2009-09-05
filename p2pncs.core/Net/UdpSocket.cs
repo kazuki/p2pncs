@@ -54,8 +54,7 @@ namespace p2pncs.Net
 				_sockets.Add (_sock);
 				_socketMap.Add (_sock, this);
 				if (_receiveThread == null) {
-					_receiveThread = new Thread (ReceiveThread);
-					_receiveThread.Name = "UdpSocket.ReceiveThread";
+					_receiveThread = p2pncs.Threading.ThreadTracer.CreateThread (ReceiveThread, "UdpSocket.ReceiveThread");
 					_receiveThread.Start ();
 				}
 			}

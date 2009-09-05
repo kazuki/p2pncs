@@ -63,14 +63,12 @@ namespace p2pncs.Simulation.VirtualNet
 			for (int i = 0; i < _dgramRingBuffer.Length; i ++)
 				_dgramRingBuffer[i] = new List<DatagramInfo> (1 << 14);
 
-			_managementThread = new Thread (ManagementThread);
-			_managementThread.Name = "VirtualNetwork.ManagementThread";
+			_managementThread = ThreadTracer.CreateThread (ManagementThread, "VirtualNetwork.ManagementThread");
 			_invokeThreads = new Thread[invokeThreads];
 			_invokeStartHandles = new AutoResetEvent[_invokeThreads.Length];
 			_invokeEndHandles = new AutoResetEvent[_invokeThreads.Length];
 			for (int i = 0; i < _invokeThreads.Length; i ++) {
-				_invokeThreads[i] = new Thread (InvokeThread);
-				_invokeThreads[i].Name = "VirtualNetwork.InvokeThread" + i.ToString ();
+				_invokeThreads[i] = p2pncs.Threading.ThreadTracer.CreateThread (InvokeThread, "VirtualNetwork.InvokeThread" + i.ToString ());
 				_invokeStartHandles[i] = new AutoResetEvent (false);
 				_invokeEndHandles[i] = new AutoResetEvent (false);
 			}

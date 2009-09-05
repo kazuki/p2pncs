@@ -141,6 +141,8 @@
     <Compile Include="Threading\InterruptHandler.cs" />
     <Compile Include="Threading\IntervalInterrupter.cs" />
     <Compile Include="Threading\ReaderWriterLockWrapper.cs" />
+    <Compile Include="Threading\ThreadTraceInfo.cs" />
+    <Compile Include="Threading\ThreadTracer.cs" />
     <Compile Include="Utility\ArrayExtensions.cs" />
     <Compile Include="Utility\DatabaseUtility.cs" />
     <Compile Include="Utility\DuplicationChecker.cs" />

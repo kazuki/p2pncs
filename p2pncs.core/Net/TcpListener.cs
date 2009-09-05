@@ -54,7 +54,7 @@ namespace p2pncs.Net
 			if (_active)
 				return;
 			_active = true;
-			_recvThread = new Thread (RecvThread);
+			_recvThread = ThreadTracer.CreateThread (RecvThread, "TcpListener ReceiveThread");
 			_listener.Listen (16);
 			_recvThread.Start ();
 		}

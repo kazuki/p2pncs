@@ -389,7 +389,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 		void CaptchaContainer_Handler (object sender, BoundaryNodeReceivedEventArgs args)
 		{
-			new Thread (CaptchaContainer_Thread).Start (args);
+			ThreadTracer.CreateThread (CaptchaContainer_Thread, "MMLC Inquiring to CAPTCHA Server Thread").Start (args);
 		}
 
 		void CaptchaChallengeSegment_Received (object sender, ReceivedEventArgs args)
@@ -1002,7 +1002,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					_key = null;
 				_forseFastPut = forseFastPut;
 				_isInitiator = true;
-				_thrd = new Thread (Process);
+				_thrd = ThreadTracer.CreateThread (Process, "MMLC MergeProcess (initiator side)");
 				_callbacks = new List<EventHandler<MergeDoneCallbackArgs>> (1);
 				_states = new List<object> (1);
 				if (callback != null) {
@@ -1019,7 +1019,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				_header_id = header_id;
 				_accepterSideValues = new object[] {sock, other_header};
 				_isInitiator = false;
-				_thrd = new Thread (Process);
+				_thrd = ThreadTracer.CreateThread (Process, "MMLC MergeProcess (accepter side)");
 			}
 
 			public bool AddNewCallback (EventHandler<MergeDoneCallbackArgs> callback, object state)
@@ -1094,7 +1094,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 						mergingHashSet.Add (dhtres.Values[i].Hash);
 						ManualResetEvent done = new ManualResetEvent (false);
 						parallelMergeThreads.Add (done);
-						new Thread (InitiatorSideMergeProcess).Start (new object[] {done, ar});
+						ThreadTracer.CreateThread (InitiatorSideMergeProcess, "MMLC Initiator Side Merge Process").Start (new object[] {done, ar});
 					} catch {}
 				}
 				if (parallelMergeThreads.Count == 0) {

@@ -32,7 +32,7 @@ namespace p2pncs
 		{
 			ManualResetEvent startupDone = new ManualResetEvent (false);
 			using (NotifyIconWrapper tray = new NotifyIconWrapper (prog)) {
-				Thread thrd = new Thread (delegate () {
+				Thread thrd = p2pncs.Threading.ThreadTracer.CreateThread (delegate () {
 					try {
 						prog.Run ();
 					} catch (ConfigFileInitializedException) {
@@ -45,7 +45,7 @@ namespace p2pncs
 					startupDone.Set ();
 					Application.Exit ();
 					return;
-				});
+				}, "GUI Background Thread");
 				thrd.IsBackground = true;
 				thrd.Start ();
 				prog.StartupWaitHandle.WaitOne ();

@@ -55,7 +55,7 @@ namespace p2pncs
 						}
 					}
 					if (list.Count > 0) {
-						new Thread (delegate () {
+						p2pncs.Threading.ThreadTracer.CreateThread (delegate () {
 							for (int i = 0; i < list.Count; i++) {
 								if (list[i] is IPEndPoint) {
 									if ((list[i] as IPEndPoint).Address.Equals (_node.GetCurrentPublicIPAddress ()))
@@ -73,7 +73,7 @@ namespace p2pncs
 									}
 								}
 							}
-						}).Start ();
+						}, "WebApp Join Thread").Start ();
 						XmlNode root = doc.DocumentElement.AppendChild (doc.CreateElement ("connected"));
 						for (int i = 0; i < list.Count; i++) {
 							XmlElement element = doc.CreateElement ("endpoint");

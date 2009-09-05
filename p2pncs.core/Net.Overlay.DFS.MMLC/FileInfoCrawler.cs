@@ -49,7 +49,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					return;
 				_crawling = true;
 			}
-			Thread thrd = new Thread (CrawlingThread);
+			Thread thrd = ThreadTracer.CreateThread (CrawlingThread, "FileInfoCrawler.CrawlingThread");
 			thrd.Start ();
 		}
 
@@ -88,7 +88,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 
 		void Accepted (object sender, TcpListenerAcceptedEventArgs args)
 		{
-			Thread thrd = new Thread (Accepted_Request);
+			Thread thrd = ThreadTracer.CreateThread (Accepted_Request, "FileInfoCrawler Send Thread");
 			ThreadInfo ti = new ThreadInfo (true, args.Socket, thrd);
 			lock (_connections) {
 				_connections.Add (ti);

@@ -118,7 +118,7 @@ namespace p2pncs
 				if (response is PortCheckResponse) {
 					Success ();
 				} else {
-					_thrd = new Thread (CallbackWaitThread);
+					_thrd = p2pncs.Threading.ThreadTracer.CreateThread (CallbackWaitThread, "PortOpenCheck CallbackWaitThread");
 					_thrd.Start ();
 				}
 			}

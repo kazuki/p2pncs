@@ -44,8 +44,7 @@ namespace p2pncs.Threading
 				Stop ();
 
 			_active = true;
-			_thread = new Thread (Worker);
-			_thread.Name = _name;
+			_thread = ThreadTracer.CreateThread (Worker, _name);
 			_thread.Start ();
 		}
 
@@ -76,6 +75,7 @@ namespace p2pncs.Threading
 				bool equalizingSleep = (_loadEqualizing && equaWait != TimeSpan.Zero);
 				for (int i = 0; i < list.Count; i ++) {
 					try {
+						ThreadTracer.UpdateThreadName (_name + ":" + list[i].Method.ToString ());
 						list[i] ();
 					} catch {}
 					if (equalizingSleep)
