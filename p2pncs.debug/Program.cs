@@ -163,7 +163,7 @@ namespace p2pncs.debug
 				_imPrivateKey = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
 				_imPublicKey = Key.Create (_imPrivateKey);
 				_name = "Node-" + idx.ToString ("x");
-				_app = new WebApp (this);
+				_app = new WebApp (this, ints);
 				_is_gw = gw_port > 0;
 				if (_is_gw) {
 					_sessionMiddleware = new SessionMiddleware (MMLC.CreateDBConnection, _app);

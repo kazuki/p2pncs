@@ -36,7 +36,7 @@
 			<thead>
 				<tr>
 					<td colspan="3" />
-					<td>平均</td>
+					<td>帯域</td>
 					<td>合計</td>
 				</tr>
 			</thead>
@@ -212,6 +212,40 @@
 					<td><xsl:value-of select="@fail" /></td>
 					<td><xsl:value-of select="floor(@success * 100 div (@success + @fail))"/> %</td>
 				</tr>
+			</tbody>
+		</table>
+	</xsl:template>
+
+	<xsl:template match="threads">
+		<h2>スレッド</h2>
+		<table>
+			<thead>
+				<tr>
+					<td>ID</td>
+					<td>%</td>
+					<td>Total</td>
+					<td>Name</td>
+				</tr>
+			</thead>
+			<tbody>
+				<xsl:for-each select="thread">
+					<xsl:sort select="@cpu" data-type="number" order="descending" />
+					<tr>
+						<td><xsl:value-of select="@id" /></td>
+						<td><xsl:value-of select="@cpu" /></td>
+						<td>
+							<xsl:choose>
+								<xsl:when test="contains(@total-cpu-time, '.')">
+									<xsl:value-of select="substring-before(@total-cpu-time,'.')" />
+								</xsl:when>
+								<xsl:otherwise>
+									<xsl:value-of select="@total-cpu-time" />
+								</xsl:otherwise>
+							</xsl:choose>
+						</td>
+						<td><xsl:value-of select="@name" /></td>
+					</tr>
+				</xsl:for-each>
 			</tbody>
 		</table>
 	</xsl:template>

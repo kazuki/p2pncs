@@ -19,6 +19,7 @@ using System;
 using System.IO;
 using System.Xml;
 using Kazuki.Net.HttpServer;
+using p2pncs.Threading;
 
 namespace p2pncs
 {
@@ -26,7 +27,22 @@ namespace p2pncs
 	{
 		object ProcessStatistics (IHttpRequest req, HttpResponseHeader res)
 		{
+			if (req.QueryData.ContainsKey ("xml")) {
+				res[HttpHeaderNames.ContentType] = "text/xml";
+				return CreateStatisticsXML ().OuterXml;
+			}
 			return _xslTemplate.Render (req, res, CreateStatisticsXML (), Path.Combine (DefaultTemplatePath, "statistics.xsl"));
+		}
+
+		void UpdateStatistics ()
+		{
+			_node.Statistics.UpdateDelta ();
+		}
+
+		static ThreadTraceInfo[] _threadInfoArray = null;
+		static void UpdateThreadStatistics ()
+		{
+			_threadInfoArray = ThreadTracer.GetThreadInfo ();
 		}
 
 		public XmlDocument CreateStatisticsXML ()
@@ -47,6 +63,19 @@ namespace p2pncs
 				}, null));
 			}
 
+			XmlElement threads = doc.CreateElement ("threads");
+			if (_threadInfoArray != null) {
+				ThreadTraceInfo[] tiList = _threadInfoArray;
+				for (int i = 0; i < tiList.Length; i++) {
+					threads.AppendChild (doc.CreateElement ("thread", new string[][] {
+						new string[] {"id", tiList[i].ID.ToString ()},
+						new string[] {"cpu", (tiList[i].CpuUsage * 100.0F).ToString ("f2")},
+						new string[] {"total-cpu-time", tiList[i].TotalCpuUsageTime.ToString ()},
+						new string[] {"name", tiList[i].Name}
+					}, null));
+				}
+			}
+
 			doc.DocumentElement.AppendChild (doc.CreateElement ("statistics", new string[][] {
 				new string[] {"running-time", Math.Floor (runningTime).ToString ()}
 			}, new[] {
@@ -60,12 +89,12 @@ namespace p2pncs
 						new string[] {"tcp-send-bytes", info.TotalTcpSendBytes.ToString ()},
 					}, null),
 					doc.CreateElement ("average", new string[][] {
-						new string[] {"recv-bytes", (info.TotalReceiveBytes / runningTime).ToString ()},
-						new string[] {"recv-packets", (info.TotalReceivePackets / runningTime).ToString ()},
-						new string[] {"send-bytes", (info.TotalSendBytes / runningTime).ToString ()},
-						new string[] {"send-packets", (info.TotalSendPackets / runningTime).ToString ()},
-						new string[] {"tcp-recv-bytes", (info.TotalReceiveBytes / runningTime).ToString ()},
-						new string[] {"tcp-send-bytes", (info.TotalTcpSendBytes / runningTime).ToString ()},
+						new string[] {"recv-bytes", info.AvgReceiveBytes.ToString ()},
+						new string[] {"recv-packets", info.AvgReceivePackets.ToString ()},
+						new string[] {"send-bytes", info.AvgSendBytes.ToString ()},
+						new string[] {"send-packets", info.AvgSendPackets.ToString ()},
+						new string[] {"tcp-recv-bytes", info.AvgReceiveBytes.ToString ()},
+						new string[] {"tcp-send-bytes", info.AvgTcpSendBytes.ToString ()},
 					}, null)
 				}),
 				doc.CreateElement ("kbr", new string[][] {
@@ -90,7 +119,7 @@ namespace p2pncs
 					new string[] {"success", info.MMLC_Success.ToString ()},
 					new string[] {"fail", info.MMLC_Failures.ToString ()}
 				}, null),
-				messaging
+				threads, messaging
 			}));
 			return doc;
 		}

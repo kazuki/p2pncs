@@ -94,7 +94,7 @@ namespace p2pncs
 					};
 					using (Interrupters ints = new Interrupters ())
 					using (Node node = new Node (ints, dgramSock, listener, "database.sqlite", bindUdp, bindTcp))
-					using (WebApp app = new WebApp (node))
+					using (WebApp app = new WebApp (node, ints))
 					using (SessionMiddleware mid1 = new SessionMiddleware (create_session_db, app))
 					using (HttpServer.CreateEmbedHttpServer (mid1, null, true, true, _config.GetValue<bool> (ConfigFields.GwBindAny), gwBindTcp, 16)) {
 						InitNodeList initNodeList = new InitNodeList (node.PortOpenChecker);

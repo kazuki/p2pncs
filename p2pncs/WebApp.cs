@@ -21,6 +21,7 @@ using System.Threading;
 using System.Xml;
 using Kazuki.Net.HttpServer;
 using Kazuki.Net.HttpServer.TemplateEngines;
+using p2pncs.Threading;
 
 namespace p2pncs
 {
@@ -34,16 +35,26 @@ namespace p2pncs
 		ManualResetEvent _exitWaitHandle = new ManualResetEvent (false);
 		static XslTemplateEngine _xslTemplate = new XslTemplateEngine ();
 		bool _fastView = true;
+		IntervalInterrupter _statInt;
 
-		public WebApp (Node node)
+		public WebApp (Node node, Interrupters ints)
 		{
 			_node = node;
 			node.MMLC.Register (BBS.SimpleBBSParser.Instance);
 			node.MMLC.Register (Wiki.WikiParser.Instance);
+			_statInt = ints.StatisticsTimer;
+			lock (_xslTemplate) {
+				if (_threadInfoArray == null) {
+					_statInt.AddInterruption (UpdateThreadStatistics);
+					UpdateThreadStatistics ();
+				}
+			}
+			_statInt.AddInterruption (UpdateStatistics);
 		}
 
 		public void Dispose ()
 		{
+			_statInt.RemoveInterruption (UpdateStatistics);
 		}
 
 		public object Process (IHttpServer server, IHttpRequest req, HttpResponseHeader res)

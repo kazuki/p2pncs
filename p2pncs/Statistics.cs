@@ -15,6 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Threading;
@@ -46,6 +47,11 @@ namespace p2pncs
 
 		// MMLC
 		long _mmlcSuccess = 0, _mmlcFailures = 0;
+
+		// delta
+		DateTime _lastCheck = DateTime.Now;
+		long _udpRb = 0, _udpRp = 0, _udpSb = 0, _udpSp = 0, _tcpS = 0, _tcpR = 0;
+		float _udpRbA = 0, _udpRpA = 0, _udpSbA = 0, _udpSpA = 0, _tcpSA = 0, _tcpRA = 0;
 
 		public Statistics (AnonymousRouter anonRouter, MMLC mmlc, ITcpListener tcp)
 		{
@@ -152,6 +158,26 @@ namespace p2pncs
 			};
 		}
 
+		public void UpdateDelta ()
+		{
+			DateTime now = DateTime.Now;
+			float delta = (float)now.Subtract (_lastCheck).TotalSeconds;
+			long tmp;
+			tmp = _sock.BaseSocket.ReceivedBytes;
+			_udpRbA = (tmp - _udpRb) / delta; _udpRb = tmp;
+			tmp = _sock.BaseSocket.ReceivedDatagrams;
+			_udpRpA = (tmp - _udpRp) / delta; _udpRp = tmp;
+			tmp = _sock.BaseSocket.SentBytes;
+			_udpSbA = (tmp - _udpSb) / delta; _udpSb = tmp;
+			tmp = _sock.BaseSocket.SentDatagrams;
+			_udpSpA = (tmp - _udpSp) / delta; _udpSp = tmp;
+			tmp = _tcp.SentBytes;
+			_tcpSA = (tmp - _tcpS) / delta; _tcpS = tmp;
+			tmp = _tcp.ReceivedBytes;
+			_tcpRA = (tmp - _tcpR) / delta; _tcpR = tmp;
+			_lastCheck = now;
+		}
+
 		public Info GetInfo ()
 		{
 			Info info = new Info ();
@@ -165,6 +191,12 @@ namespace p2pncs
 			info.TotalSendPackets = _sock.BaseSocket.SentDatagrams;
 			info.TotalTcpReceiveBytes = _tcp.ReceivedBytes;
 			info.TotalTcpSendBytes = _tcp.SentBytes;
+			info.AvgReceiveBytes = _udpRbA;
+			info.AvgReceivePackets = _udpRpA;
+			info.AvgSendBytes = _udpSbA;
+			info.AvgSendPackets = _udpSpA;
+			info.AvgTcpReceiveBytes = _tcpRA;
+			info.AvgTcpSendBytes = _tcpSA;
 			info.KBR_Success = _kbrSuccess;
 			info.KBR_Failures = _kbrFailures;
 			info.KBR_RTT = _kbrRTT;
@@ -189,6 +221,12 @@ namespace p2pncs
 			public long TotalSendPackets;
 			public long TotalTcpReceiveBytes;
 			public long TotalTcpSendBytes;
+			public float AvgReceiveBytes;
+			public float AvgReceivePackets;
+			public float AvgSendBytes;
+			public float AvgSendPackets;
+			public float AvgTcpReceiveBytes;
+			public float AvgTcpSendBytes;
 			public long KBR_Success;
 			public long KBR_Failures;
 			public StandardDeviation KBR_Hops;
