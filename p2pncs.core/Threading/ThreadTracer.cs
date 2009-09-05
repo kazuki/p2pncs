@@ -31,7 +31,6 @@ namespace p2pncs.Threading
 		static bool _supported = false;
 		static Dictionary<uint, ThreadInfo> _threads = null;
 		static ReaderWriterLockWrapper _lock = new ReaderWriterLockWrapper ();
-		static Process _curProc = Process.GetCurrentProcess ();
 
 		static ThreadTracer ()
 		{
@@ -42,12 +41,7 @@ namespace p2pncs.Threading
 				_supported = false;
 				return;
 			}
-
-			using (_lock.EnterWriteLock ()) {
-				if (_threads != null)
-					return;
-				_threads = new Dictionary<uint, ThreadInfo> ();
-			}
+			_threads = new Dictionary<uint, ThreadInfo> ();
 		}
 
 		public static Thread CreateThread (ThreadStart start, string name)
@@ -95,10 +89,13 @@ namespace p2pncs.Threading
 
 		public static ThreadTraceInfo[] GetThreadInfo ()
 		{
+			if (!_supported)
+				return new ThreadTraceInfo[0];
+
 			List<ThreadTraceInfo> list = new List<ThreadTraceInfo> ();
 			using (_lock.EnterUpgradeableReadLock ()) {
 				HashSet<uint> threadIds = new HashSet<uint> (_threads.Keys);
-				foreach (ProcessThread pt in _curProc.Threads) {
+				foreach (ProcessThread pt in Process.GetCurrentProcess().Threads) {
 					ThreadInfo ti;
 					if (!_threads.TryGetValue ((uint)pt.Id, out ti))
 						continue;
@@ -109,11 +106,11 @@ namespace p2pncs.Threading
 					TimeSpan deltaCpuTime = lastCheckCpu - ti.LastCheckTotalCpuTime;
 					ti.LastCheckTime = lastCheck;
 					ti.LastCheckTotalCpuTime = lastCheckCpu;
+					if (deltaTime.TotalMilliseconds < 1.0)
+						deltaTime = TimeSpan.FromSeconds (1);
 					list.Add (new ThreadTraceInfo (ti.ID, ti.Name, ti.StartDateTime,
 						(float)(deltaCpuTime.TotalMilliseconds / deltaTime.TotalMilliseconds), lastCheckCpu));
 					threadIds.Remove ((uint)pt.Id);
-					/*if (deltaTime.TotalMilliseconds < 100)
-						Console.WriteLine ("delta={0}, TotalCPUTime={1}", deltaTime.TotalMilliseconds, deltaCpuTime.TotalMilliseconds);*/
 				}
 				if (threadIds.Count > 0) {
 					using (_lock.EnterWriteLock ()) {
