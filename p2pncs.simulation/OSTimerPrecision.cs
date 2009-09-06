@@ -41,7 +41,9 @@ namespace p2pncs.Simulation
 
 		public static void SetCurrentThreadToHighPrecision ()
 		{
-			timeBeginPeriod (1);
+			try {
+				timeBeginPeriod (1);
+			} catch {}
 			/*int index = 0;
 			try {
 				ThreadState = AvSetMmThreadCharacteristics ("Simulation", ref index);
@@ -50,7 +52,9 @@ namespace p2pncs.Simulation
 
 		public static void RevertCurrentThreadPrecision ()
 		{
-			timeEndPeriod (1);
+			try {
+				timeEndPeriod (1);
+			} catch {}
 			/*if (ThreadState != IntPtr.Zero) {
 				try {
 					AvRevertMmThreadCharacteristics (ThreadState);
