@@ -67,8 +67,13 @@ namespace p2pncs.Utility
 			}
 
 			double avg = _total / _count;
-			if (_values == null)
-				return Math.Sqrt ((_total2 / _count) - (avg * avg));
+			if (_values == null) {
+				double x1 = _total2 / _count;
+				double x2 = avg * avg;
+				if (x1 > x2)
+					return Math.Sqrt (x1 - x2);
+				return 0.0;
+			}
 
 			double tmp = 0.0;
 			for (int i = 0; i < _count; i++)
