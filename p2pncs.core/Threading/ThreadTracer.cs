@@ -18,35 +18,37 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Threading;
+using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
 
 namespace p2pncs.Threading
 {
 	public static class ThreadTracer
 	{
-		[DllImport ("kernel32.dll")]
-		static extern uint GetCurrentThreadId ();
-
-		static bool _supported = false;
-		static Dictionary<uint, ThreadInfo> _threads = null;
+		static IThreadManager _threadMgr = null;
+		static Dictionary<int, ThreadInfo> _threads = null;
 		static ReaderWriterLockWrapper _lock = new ReaderWriterLockWrapper ();
 
 		static ThreadTracer ()
 		{
 			try {
-				GetCurrentThreadId ();
-				_supported = true;
+				_threadMgr = new ManagedThread ();
 			} catch {
-				_supported = false;
-				return;
+				try {
+					_threadMgr = new LinuxThread ();
+				} catch {
+					_threadMgr = null;
+					return;
+				}
 			}
-			_threads = new Dictionary<uint, ThreadInfo> ();
+			_threads = new Dictionary<int, ThreadInfo> ();
 		}
 
 		public static Thread CreateThread (ThreadStart start, string name)
 		{
-			if (_supported) {
+			if (_threadMgr != null) {
 				return new ThreadInfo (start, name).Thread;
 			} else {
 				Thread thrd = new Thread (start);
@@ -57,7 +59,7 @@ namespace p2pncs.Threading
 
 		public static Thread CreateThread (ParameterizedThreadStart start, string name)
 		{
-			if (_supported) {
+			if (_threadMgr != null) {
 				return new ThreadInfo (start, name).Thread;
 			} else {
 				Thread thrd = new Thread (start);
@@ -66,19 +68,40 @@ namespace p2pncs.Threading
 			}
 		}
 
+		public static void QueueToThreadPool (WaitCallback callback, string name)
+		{
+			QueueToThreadPool (callback, null, name);
+		}
+
+		public static void QueueToThreadPool (WaitCallback callback, object state, string name)
+		{
+			if (_threadMgr != null) {
+				new ThreadInfo (callback, state, name);
+			} else {
+				ThreadPool.QueueUserWorkItem (callback, state);
+			}
+		}
+
 		static void Register (ThreadInfo ti)
 		{
 			using (_lock.EnterWriteLock ()) {
-				_threads[ti.NativeThreadId] = ti;
+				_threads[ti.ID] = ti;
+			}
+		}
+
+		static void Unregister (ThreadInfo ti)
+		{
+			using (_lock.EnterWriteLock ()) {
+				_threads.Remove (ti.ID);
 			}
 		}
 
 		public static void UpdateThreadName (string new_name)
 		{
-			if (!_supported)
+			if (_threadMgr == null)
 				return;
 
-			uint tid = GetCurrentThreadId ();
+			int tid = _threadMgr.GetCurrentThreadId ();
 			ThreadInfo ti;
 			using (_lock.EnterReadLock ()) {
 				if (!_threads.TryGetValue (tid, out ti))
@@ -89,15 +112,17 @@ namespace p2pncs.Threading
 
 		public static ThreadTraceInfo[] GetThreadInfo ()
 		{
-			if (!_supported)
+			if (_threadMgr == null)
 				return new ThreadTraceInfo[0];
 
 			List<ThreadTraceInfo> list = new List<ThreadTraceInfo> ();
 			using (_lock.EnterUpgradeableReadLock ()) {
-				HashSet<uint> threadIds = new HashSet<uint> (_threads.Keys);
-				foreach (ProcessThread pt in Process.GetCurrentProcess().Threads) {
+				HashSet<int> threadIds = new HashSet<int> (_threads.Keys);
+				ProcessThreadInfo[] threads = _threadMgr.GetThreads ();
+				for (int i = 0; i < threads.Length; i ++) {
+					ProcessThreadInfo pt = threads[i];
 					ThreadInfo ti;
-					if (!_threads.TryGetValue ((uint)pt.Id, out ti))
+					if (!_threads.TryGetValue (pt.ID, out ti))
 						continue;
 
 					DateTime lastCheck = DateTime.Now;
@@ -110,11 +135,11 @@ namespace p2pncs.Threading
 						deltaTime = TimeSpan.FromSeconds (1);
 					list.Add (new ThreadTraceInfo (ti.ID, ti.Name, ti.StartDateTime,
 						(float)(deltaCpuTime.TotalMilliseconds / deltaTime.TotalMilliseconds), lastCheckCpu));
-					threadIds.Remove ((uint)pt.Id);
+					threadIds.Remove (pt.ID);
 				}
 				if (threadIds.Count > 0) {
 					using (_lock.EnterWriteLock ()) {
-						foreach (uint id in threadIds)
+						foreach (int id in threadIds)
 							_threads.Remove (id);
 					}
 				}
@@ -126,9 +151,10 @@ namespace p2pncs.Threading
 		{
 			Thread _thrd = null;
 			ThreadStart _start1 = null;
-			ParameterizedThreadStart _start2;
+			ParameterizedThreadStart _start2 = null;
+			WaitCallback _start3 = null;
 			string _name;
-			uint _id;
+			int _id;
 			DateTime _startDT;
 
 			ThreadInfo (string name)
@@ -150,12 +176,18 @@ namespace p2pncs.Threading
 				_start2 = start;
 			}
 
+			public ThreadInfo (WaitCallback callback, object state, string name) : this (name)
+			{
+				_start3 = callback;
+				ThreadPool.QueueUserWorkItem (Start3, state);
+			}
+
 			void Start ()
 			{
 				_startDT = DateTime.Now;
 				LastCheckTime = _startDT;
 				LastCheckTotalCpuTime = TimeSpan.Zero;
-				_id = GetCurrentThreadId ();
+				_id = ThreadTracer._threadMgr.GetCurrentThreadId ();
 				ThreadTracer.Register (this);
 			}
 
@@ -171,16 +203,22 @@ namespace p2pncs.Threading
 				_start2 (obj);
 			}
 
-			public uint ID {
+			void Start3 (object state)
+			{
+				Start ();
+				try {
+					_start3 (state);
+				} finally {
+					ThreadTracer.Unregister (this);
+				}
+			}
+
+			public int ID {
 				get { return _id; }
 			}
 
 			public Thread Thread {
 				get { return _thrd; }
-			}
-
-			public uint NativeThreadId {
-				get { return _id; }
 			}
 
 			public string Name {
@@ -194,6 +232,117 @@ namespace p2pncs.Threading
 
 			public DateTime LastCheckTime { get; set; }
 			public TimeSpan LastCheckTotalCpuTime { get; set; }
+		}
+
+		public interface IThreadManager
+		{
+			ProcessThreadInfo[] GetThreads ();
+
+			int GetCurrentThreadId ();
+		}
+
+		public class ProcessThreadInfo
+		{
+			int _id;
+			TimeSpan _totalProcessorTime;
+
+			public ProcessThreadInfo (int id, TimeSpan totalProcessorTime)
+			{
+				_id = id;
+				_totalProcessorTime = totalProcessorTime;
+			}
+
+			public int ID {
+				get { return _id; }
+			}
+
+			public TimeSpan TotalProcessorTime {
+				get { return _totalProcessorTime; }
+			}
+		}
+
+		public class ManagedThread : IThreadManager
+		{
+			[DllImport ("kernel32.dll", EntryPoint = "GetCurrentThreadId")]
+			static extern int GetCurrentThreadId_Internal ();
+
+			public ManagedThread ()
+			{
+				if (Process.GetCurrentProcess ().Threads.Count == 0)
+					throw new NotSupportedException ();
+			}
+
+			public ProcessThreadInfo[] GetThreads ()
+			{
+				Process proc = Process.GetCurrentProcess ();
+				List<ProcessThreadInfo> list = new List<ProcessThreadInfo> (proc.Threads.Count);
+				foreach (ProcessThread pt in proc.Threads) {
+					list.Add (new ProcessThreadInfo (pt.Id, pt.TotalProcessorTime));
+				}
+				return list.ToArray ();
+			}
+
+			public int GetCurrentThreadId ()
+			{
+				return GetCurrentThreadId_Internal ();
+			}
+		}
+
+		public class LinuxThread : IThreadManager
+		{
+			[DllImport ("libc")]
+			public static extern int syscall (int number);
+
+			[DllImport ("libc")]
+			public static extern int getpid ();
+
+			[DllImport ("libc")]
+			public static extern int sysconf (int name);
+
+			const int SYSCONF_CLK_TCK = 2;
+			const int SYSCALL_GETTID = 224;
+
+			string _baseDir;
+			double _clockTick;
+
+			public LinuxThread ()
+			{
+				_baseDir = "/proc/" + getpid ().ToString () + "/task/";
+				if (!Directory.Exists (_baseDir))
+					throw new NotSupportedException ();
+				_clockTick = sysconf (SYSCONF_CLK_TCK);
+			}
+
+			public ProcessThreadInfo[] GetThreads ()
+			{
+				string[] tasks = Directory.GetDirectories (_baseDir);
+				List<ProcessThreadInfo> list = new List<ProcessThreadInfo> (tasks.Length);
+				byte[] buffer = new byte[2048];
+				StringBuilder sb = new StringBuilder ();
+				for (int i = 0; i < tasks.Length; i++) {
+					try {
+						sb.Remove (0, sb.Length);
+						using (FileStream fs = new FileStream (tasks[i] + "/stat", FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
+							while (true) {
+								int ret = fs.Read (buffer, 0, buffer.Length);
+								if (ret <= 0) break;
+								sb.Append (Encoding.ASCII.GetString (buffer, 0, ret));
+							}
+						}
+						string[] items = sb.ToString ().Split (' ');
+						int id = int.Parse (items[0]);
+						long utime = long.Parse (items[12]);
+						long stime = long.Parse (items[13]);
+						list.Add (new ProcessThreadInfo (id, TimeSpan.FromSeconds ((utime + stime) / _clockTick)));
+					} catch {}
+				}
+				return list.ToArray ();
+			}
+
+			public int GetCurrentThreadId ()
+			{
+				return syscall (SYSCALL_GETTID);
+			}
 		}
 	}
 }

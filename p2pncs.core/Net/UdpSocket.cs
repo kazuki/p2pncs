@@ -21,6 +21,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using p2pncs.Utility;
+using p2pncs.Threading;
 
 namespace p2pncs.Net
 {
@@ -54,7 +55,7 @@ namespace p2pncs.Net
 				_sockets.Add (_sock);
 				_socketMap.Add (_sock, this);
 				if (_receiveThread == null) {
-					_receiveThread = p2pncs.Threading.ThreadTracer.CreateThread (ReceiveThread, "UdpSocket.ReceiveThread");
+					_receiveThread = ThreadTracer.CreateThread (ReceiveThread, "UdpSocket.ReceiveThread");
 					_receiveThread.Start ();
 				}
 			}
@@ -119,7 +120,7 @@ namespace p2pncs.Net
 							IPAddress adrs = new IPAddress (recvBuffer.CopyRange (2, usock._header_size - 2));
 							usock._pubIpVotingBox.Vote ((IPEndPoint)remoteEP, adrs);
 							DatagramReceiveEventArgs e = new DatagramReceiveEventArgs (recvData, recvData.Length, remoteEP);
-							ThreadPool.QueueUserWorkItem (new InvokeHelper (usock, e).Invoke, null);
+							ThreadTracer.QueueToThreadPool (new InvokeHelper (usock, e).Invoke, "Handling Received UDP Datagram");
 						} catch {}
 					}
 				}

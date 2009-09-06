@@ -21,13 +21,13 @@ namespace p2pncs.Threading
 {
 	public class ThreadTraceInfo
 	{
-		uint _id;
+		int _id;
 		string _name;
 		DateTime _start;
 		float _cpuUsage;
 		TimeSpan _totalCpuUsageTime;
 
-		public ThreadTraceInfo (uint id, string name, DateTime start, float cpuUsage, TimeSpan totalCpuUsageTime)
+		public ThreadTraceInfo (int id, string name, DateTime start, float cpuUsage, TimeSpan totalCpuUsageTime)
 		{
 			_id = id;
 			_name = name;
@@ -36,7 +36,7 @@ namespace p2pncs.Threading
 			_totalCpuUsageTime = totalCpuUsageTime;
 		}
 
-		public uint ID {
+		public int ID {
 			get { return _id; }
 		}
 
