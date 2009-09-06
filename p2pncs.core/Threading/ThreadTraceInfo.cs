@@ -16,6 +16,7 @@
  */
 
 using System;
+using System.Diagnostics;
 
 namespace p2pncs.Threading
 {
@@ -26,14 +27,16 @@ namespace p2pncs.Threading
 		DateTime _start;
 		float _cpuUsage;
 		TimeSpan _totalCpuUsageTime;
+		ThreadState _state;
 
-		public ThreadTraceInfo (int id, string name, DateTime start, float cpuUsage, TimeSpan totalCpuUsageTime)
+		public ThreadTraceInfo (int id, string name, DateTime start, float cpuUsage, TimeSpan totalCpuUsageTime, ThreadState state)
 		{
 			_id = id;
 			_name = name;
 			_start = start;
 			_cpuUsage = cpuUsage;
 			_totalCpuUsageTime = totalCpuUsageTime;
+			_state = state;
 		}
 
 		public int ID {
@@ -54,6 +57,10 @@ namespace p2pncs.Threading
 
 		public TimeSpan TotalCpuUsageTime {
 			get { return _totalCpuUsageTime; }
+		}
+
+		public ThreadState State {
+			get { return _state; }
 		}
 	}
 }

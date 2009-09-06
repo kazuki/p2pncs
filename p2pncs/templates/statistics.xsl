@@ -226,6 +226,7 @@
 					<td>ID</td>
 					<td>%</td>
 					<td>Total</td>
+					<td>State</td>
 					<td>Name</td>
 				</tr>
 			</thead>
@@ -236,15 +237,22 @@
 						<td><xsl:value-of select="@id" /></td>
 						<td><xsl:value-of select="@cpu" /></td>
 						<td>
+							<xsl:variable name="padTime">
+								<xsl:value-of select="@total-cpu-time" />
+								<xsl:if test="not(contains(@total-cpu-time,'.'))">
+									<xsl:text>.00</xsl:text>
+								</xsl:if>
+							</xsl:variable>
 							<xsl:choose>
-								<xsl:when test="contains(@total-cpu-time, '.')">
-									<xsl:value-of select="substring-before(@total-cpu-time,'.')" />
+								<xsl:when test="contains($padTime,'00:')">
+									<xsl:value-of select="substring($padTime,4,8)" />
 								</xsl:when>
 								<xsl:otherwise>
-									<xsl:value-of select="@total-cpu-time" />
+									<xsl:value-of select="substring-before($padTime,'.')" />
 								</xsl:otherwise>
 							</xsl:choose>
 						</td>
+						<td><xsl:value-of select="@state" /></td>
 						<td><xsl:value-of select="@name" /></td>
 					</tr>
 				</xsl:for-each>

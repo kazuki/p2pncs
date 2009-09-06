@@ -72,6 +72,7 @@ namespace p2pncs
 						new string[] {"id", tiList[i].ID.ToString ()},
 						new string[] {"cpu", (tiList[i].CpuUsage * 100.0F).ToString ("f2")},
 						new string[] {"total-cpu-time", tiList[i].TotalCpuUsageTime.ToString ()},
+						new string[] {"state", tiList[i].State.ToString ()},
 						new string[] {"name", tiList[i].Name}
 					}, null));
 				}

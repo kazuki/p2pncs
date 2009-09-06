@@ -22,6 +22,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
+using ThreadState = System.Diagnostics.ThreadState;
 
 namespace p2pncs.Threading
 {
@@ -134,7 +135,8 @@ namespace p2pncs.Threading
 					if (deltaTime.TotalMilliseconds < 1.0)
 						deltaTime = TimeSpan.FromSeconds (1);
 					list.Add (new ThreadTraceInfo (ti.ID, ti.Name, ti.StartDateTime,
-						(float)(deltaCpuTime.TotalMilliseconds / deltaTime.TotalMilliseconds), lastCheckCpu));
+						(float)(deltaCpuTime.TotalMilliseconds / deltaTime.TotalMilliseconds),
+						lastCheckCpu, pt.State));
 					threadIds.Remove (pt.ID);
 				}
 				if (threadIds.Count > 0) {
@@ -245,11 +247,13 @@ namespace p2pncs.Threading
 		{
 			int _id;
 			TimeSpan _totalProcessorTime;
+			ThreadState _state;
 
-			public ProcessThreadInfo (int id, TimeSpan totalProcessorTime)
+			public ProcessThreadInfo (int id, TimeSpan totalProcessorTime, ThreadState state)
 			{
 				_id = id;
 				_totalProcessorTime = totalProcessorTime;
+				_state = state;
 			}
 
 			public int ID {
@@ -258,6 +262,10 @@ namespace p2pncs.Threading
 
 			public TimeSpan TotalProcessorTime {
 				get { return _totalProcessorTime; }
+			}
+
+			public ThreadState State {
+				get { return _state; }
 			}
 		}
 
@@ -277,7 +285,7 @@ namespace p2pncs.Threading
 				Process proc = Process.GetCurrentProcess ();
 				List<ProcessThreadInfo> list = new List<ProcessThreadInfo> (proc.Threads.Count);
 				foreach (ProcessThread pt in proc.Threads) {
-					list.Add (new ProcessThreadInfo (pt.Id, pt.TotalProcessorTime));
+					list.Add (new ProcessThreadInfo (pt.Id, pt.TotalProcessorTime, pt.ThreadState));
 				}
 				return list.ToArray ();
 			}
@@ -333,7 +341,17 @@ namespace p2pncs.Threading
 						int id = int.Parse (items[0]);
 						long utime = long.Parse (items[12]);
 						long stime = long.Parse (items[13]);
-						list.Add (new ProcessThreadInfo (id, TimeSpan.FromSeconds ((utime + stime) / _clockTick)));
+						ThreadState state;
+						switch (items[2][0]) {
+							case 'R': state = ThreadState.Running; break;
+							case 'S':
+							case 'D':
+							case 'T': state = ThreadState.Wait; break;
+							case 'W': state = ThreadState.Transition; break;
+							case 'Z': state = ThreadState.Terminated; break;
+							default:  state = ThreadState.Unknown; break;
+						}
+						list.Add (new ProcessThreadInfo (id, TimeSpan.FromSeconds ((utime + stime) / _clockTick), state));
 					} catch {}
 				}
 				return list.ToArray ();
