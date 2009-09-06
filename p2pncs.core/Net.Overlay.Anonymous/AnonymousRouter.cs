@@ -61,13 +61,13 @@ namespace p2pncs.Net.Overlay.Anonymous
 		static TimeSpan DHT_Lifetime = DHT_PutInterval + DHT_GetTimeout;
 
 		// Static parameters for Multiple Cipher Route (MCR)
-		static TimeSpan MCR_MaxMessageInterval = TimeSpan.FromSeconds (30);
+		static TimeSpan MCR_MaxMessageInterval = TimeSpan.FromSeconds (10);
 		static TimeSpan MCR_AliveCheckScheduleInterval = MCR_MaxMessageInterval - TimeSpan.FromSeconds (1);
 		static TimeSpan MCR_MaxMessageIntervalWithMargin = MCR_MaxMessageInterval + TimeSpan.FromSeconds (8);
 
 		// Static parameters for Anonymous Connection (AC)
 		public static int AC_DefaultUseSubscribeRoutes = DefaultSubscribeRoutes;
-		static TimeSpan AC_EstablishTimeout = TimeSpan.FromSeconds (30);
+		static TimeSpan AC_EstablishTimeout = TimeSpan.FromSeconds (10);
 		static TimeSpan AC_MaxMessageInterval = MCR_MaxMessageInterval;
 		static TimeSpan AC_AliveCheckScheduleInterval = MCR_AliveCheckScheduleInterval;
 		static TimeSpan AC_MaxMessageIntervalWithMargin = new TimeSpan (AC_MaxMessageInterval.Ticks * 3);
