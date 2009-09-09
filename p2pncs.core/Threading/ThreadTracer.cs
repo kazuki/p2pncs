@@ -111,6 +111,20 @@ namespace p2pncs.Threading
 			}
 		}
 
+		public static void AppendThreadName (string name)
+		{
+			if (_threadMgr == null)
+				return;
+
+			int tid = _threadMgr.GetCurrentThreadId ();
+			ThreadInfo ti;
+			using (_lock.EnterReadLock ()) {
+				if (!_threads.TryGetValue (tid, out ti))
+					return;
+				ti.Name += name;
+			}
+		}
+
 		public static ThreadTraceInfo[] GetThreadInfo ()
 		{
 			if (_threadMgr == null)
