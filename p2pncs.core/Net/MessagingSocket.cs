@@ -85,9 +85,11 @@ namespace p2pncs.Net
 
 			if (_nullObject.Equals (obj))
 				obj = null;
+			string strMsgType = (obj == null ? "null msg" : obj.GetType ().Name);
 
 			switch (type) {
 				case MessageType.Request:
+					ThreadTracer.AppendThreadName (" (req: " + strMsgType + ")");
 					InquiredEventArgs args = new InquiredResponseState (obj, e.RemoteEndPoint, id);
 					InvokeInquired (this, args);
 					break;
@@ -95,10 +97,13 @@ namespace p2pncs.Net
 					InquiredAsyncResultBase ar = RemoveFromRetryList (id, e.RemoteEndPoint);
 					if (ar == null)
 						return;
+					ThreadTracer.AppendThreadName (" (res: " + strMsgType + ", req: "
+						+ (ar.Request == null ? "null msg" : ar.Request.GetType ().Name) + ")");
 					ar.Complete (obj, this);
 					InvokeInquirySuccess (this, new InquiredEventArgs (ar.Request, obj, e.RemoteEndPoint, DateTime.Now - ar.TransmitTime, ar.RetryCount));
 					break;
 				case MessageType.OneWay:
+					ThreadTracer.AppendThreadName (" (ow: " + strMsgType + ")");
 					InvokeReceived (this, new ReceivedEventArgs (obj, e.RemoteEndPoint));
 					break;
 				default:
