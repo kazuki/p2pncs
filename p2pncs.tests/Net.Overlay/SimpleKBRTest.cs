@@ -82,8 +82,8 @@ namespace p2pncs.tests.Net.Overlay
 						sorted = new List<IKeyBasedRouter> (env.KeyBasedRouters);
 					}
 					sorted.Sort (delegate (IKeyBasedRouter x, IKeyBasedRouter y) {
-						Key diffX = target.Xor (x.SelftNodeId);
-						Key diffY = target.Xor (y.SelftNodeId);
+						Key diffX = target ^ x.SelftNodeId;
+						Key diffY = target ^ y.SelftNodeId;
 						return diffX.CompareTo (diffY);
 					});
 
