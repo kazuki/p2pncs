@@ -50,7 +50,7 @@ namespace p2pncs.Net.Overlay
 
 		public Key ComputeDistance (Key x, Key y)
 		{
-			return x.Xor (y);
+			return x ^ y;
 		}
 
 		public int ComputeRoutingLevel (Key x, Key y)
@@ -69,13 +69,13 @@ namespace p2pncs.Net.Overlay
 				return null;
 
 			List<NodeHandle> list = new List<NodeHandle> ();
-			Key minDist = _selfNodeId.Xor (dest);
+			Key minDist = _selfNodeId ^ dest;
 			Key selfDist = minDist;
 			lock (_routingTable[match]) {
 				for (int i = 0; i < Math.Min (maxNum, _routingTable[match].Count); i++) {
 					if (exclude != null && exclude.Equals (_routingTable[match][i].NodeID))
 						continue;
-					Key dist = dest.Xor (_routingTable[match][i].NodeID);
+					Key dist = dest ^ _routingTable[match][i].NodeID;
 					if (minDist.CompareTo (dist) > 0) {
 						minDist = dist;
 					}
@@ -129,8 +129,8 @@ namespace p2pncs.Net.Overlay
 					} else {
 						List<NodeHandle> temp = new List<NodeHandle> (_routingTable[i]);
 						temp.Sort (delegate (NodeHandle x, NodeHandle y) {
-							Key diffX = _selfNodeId.Xor (x.NodeID);
-							Key diffY = _selfNodeId.Xor (y.NodeID);
+							Key diffX = _selfNodeId ^ x.NodeID;
+							Key diffY = _selfNodeId ^ y.NodeID;
 							return diffX.CompareTo (diffY);
 						});
 						for (int k = 0; k < remain; k ++)
@@ -157,8 +157,8 @@ namespace p2pncs.Net.Overlay
 				}
 			}
 			nodes.Sort (delegate (NodeHandle x, NodeHandle y) {
-				Key diffX = target.Xor (x.NodeID);
-				Key diffY = target.Xor (y.NodeID);
+				Key diffX = target ^ x.NodeID;
+				Key diffY = target ^ y.NodeID;
 				return diffX.CompareTo (diffY);
 			});
 

@@ -488,7 +488,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					init_records[i].AuthorityIndex = byte.MaxValue;
 					init_records[i].UpdateHash ();
 					init_records[i].Authentication = ecdsa.SignHash (init_records[i].Hash.GetByteArray ());
-					header.RecordsetHash = header.RecordsetHash.Xor (init_records[i].Hash);
+					header.RecordsetHash = header.RecordsetHash ^ init_records[i].Hash;
 				}
 			}
 
@@ -573,7 +573,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 					throw new ArgumentException ();
 				try {
 					Insert (transaction, record, parser, header_id);
-					current.RecordsetHash = current.RecordsetHash.Xor (record.Hash);
+					current.RecordsetHash = current.RecordsetHash ^ record.Hash;
 					Update (transaction, current, parser, header_id, current); // Update RecordsetHash Field
 					transaction.Commit ();
 				} catch {
@@ -642,7 +642,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 				new_records[i].AuthorityIndex = byte.MaxValue;
 				new_records[i].UpdateHash ();
 				new_records[i].Authentication = ecdsa.SignHash (new_records[i].Hash.GetByteArray ());
-				hash = hash.Xor (new_records[i].Hash);
+				hash = hash ^ new_records[i].Hash;
 			}
 			new_header.RecordsetHash = hash;
 
@@ -1350,7 +1350,7 @@ namespace p2pncs.Net.Overlay.DFS.MMLC
 								continue;
 							}
 							_mmlc.Insert (transaction, records.Records[i], _parser, _header_id);
-							hash = hash.Xor (records.Records[i].Hash);
+							hash = hash ^ records.Records[i].Hash;
 						} catch {}
 					}
 					_cur_header.RecordsetHash = hash;

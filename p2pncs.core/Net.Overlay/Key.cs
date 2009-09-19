@@ -87,15 +87,91 @@ namespace p2pncs.Net.Overlay
 		#endregion
 
 		#region Bitwise Methods
-		public Key Xor (Key key)
+		public static Key operator & (Key x, Key y)
 		{
-			if (_data.Length != key._data.Length)
+			if (x._data.Length != y._data.Length)
 				throw new ArgumentException ();
 
-			byte[] data = new byte[_data.Length];
+			byte[] data = new byte[x._data.Length];
 			for (int i = 0; i < data.Length; i++)
-				data[i] = (byte)(_data[i] ^ key._data[i]);
+				data[i] = (byte)(x._data[i] & y._data[i]);
 			return new Key (data);
+		}
+
+		public static Key operator | (Key x, Key y)
+		{
+			if (x._data.Length != y._data.Length)
+				throw new ArgumentException ();
+
+			byte[] data = new byte[x._data.Length];
+			for (int i = 0; i < data.Length; i++)
+				data[i] = (byte)(x._data[i] | y._data[i]);
+			return new Key (data);
+		}
+
+		public static Key operator ^ (Key x, Key y)
+		{
+			if (x._data.Length != y._data.Length)
+				throw new ArgumentException ();
+
+			byte[] data = new byte[x._data.Length];
+			for (int i = 0; i < data.Length; i++)
+				data[i] = (byte)(x._data[i] ^ y._data[i]);
+			return new Key (data);
+		}
+
+		public static Key operator ~ (Key x)
+		{
+			byte[] data = new byte[x._data.Length];
+			for (int i = 0; i < data.Length; i ++)
+				data[i] = (byte)~x._data[i];
+			return new Key (data);
+		}
+
+		public static Key operator << (Key key, int n)
+		{
+			int w = n >> 3;
+			n &= ((1 << 3) - 1);
+			byte[] data = key._data;
+			byte[] tmp = new byte[data.Length];
+
+			int i = 0;
+			if (n != 0) {
+				int carry = 0;
+				while (i + w < data.Length) {
+					tmp[i + w] = (byte)((data[i] << n) | carry);
+					carry = data[i] >> (8 - n);
+					i++;
+				}
+			} else {
+				while (i + w < data.Length) {
+					tmp[i + w] = data[i];
+					i++;
+				}
+			}
+			return new Key (tmp);
+		}
+
+		public static Key operator >> (Key key, int n)
+		{
+			int w = n >> 3;
+			n &= ((1 << 3) - 1);
+			byte[] data = key._data;
+			byte[] tmp = new byte[data.Length];
+			int l = data.Length - w;
+
+			if (n != 0) {
+				int x, carry = 0;
+				while (l-- > 0) {
+					x = data[l + w];
+					tmp[l] = (byte)((x >> n) | carry);
+					carry = x << (8 - n);
+				}
+			} else {
+				while (l-- > 0)
+					tmp[l] = data[l + w];
+			}
+			return new Key (tmp);
 		}
 
 		public int ReadBits (int bitPos, int bits)
