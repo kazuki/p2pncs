@@ -29,6 +29,7 @@ namespace p2pncs.Net
 		State _state = null;
 		int _timerGranularity, _minRTO;
 		TimeSpan _defaultRTO;
+		static readonly TimeSpan InvalidValue = TimeSpan.MinValue;
 
 		public RFC2988BasedRTOCalculator (TimeSpan defaultRTO, TimeSpan minRTO, int timerGranularity, bool ignoreEP)
 		{
@@ -52,7 +53,7 @@ namespace p2pncs.Net
 
 		public TimeSpan GetRTO (EndPoint ep)
 		{
-			State state = GetState (ep, TimeSpan.Zero);
+			State state = GetState (ep, InvalidValue);
 			if (state == null)
 				return _defaultRTO;
 			return new TimeSpan (Math.Max (_minRTO, state.RTO) * TimeSpan.TicksPerMillisecond);
@@ -62,7 +63,7 @@ namespace p2pncs.Net
 		{
 			if (_states == null) {
 				lock (this) {
-					if (_state == null && rtt.Ticks != 0)
+					if (_state == null && !InvalidValue.Equals (rtt))
 						_state = new State ((int)rtt.TotalMilliseconds, _timerGranularity);
 					return _state;
 				}
@@ -77,7 +78,7 @@ namespace p2pncs.Net
 			using (_lock.EnterReadLock ()) {
 				success = _states.TryGetValue (ipep.Address, out state);
 			}
-			if (!success && rtt.Ticks != 0) {
+			if (!success && !InvalidValue.Equals (rtt)) {
 				using (_lock.EnterWriteLock ()) {
 					if (!_states.TryGetValue (ipep.Address, out state)) {
 						state = new State ((int)rtt.TotalMilliseconds, _timerGranularity);
