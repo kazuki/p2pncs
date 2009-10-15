@@ -512,9 +512,6 @@ namespace p2pncs.Net.Overlay
 			{
 				if (_buckets[level] != null)
 					return _buckets[level];
-
-				if (_buckets[level] != null)
-					return _buckets[level];
 				_buckets[level] = new RoutingBucket (_bucketSize);
 				return _buckets[level];
 			}
@@ -553,6 +550,8 @@ namespace p2pncs.Net.Overlay
 				if (_buckets[level] == null)
 					return;
 				_buckets[level].RemoveEntry (entry);
+				if (_buckets[level].NumberOfEntries == 0)
+					_buckets[level] = null;
 			}
 
 			public int GetNumberOfEntries ()
