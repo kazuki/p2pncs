@@ -131,10 +131,8 @@ namespace p2pncs.Net.Overlay
 					for (int i = 0; i < closeNodes.Length; i ++)
 						_candidates.Add (new CandidateEntry (_dest, closeNodes[i].NodeID, null, _router._algo, closeNodes[i].EndPoint, 1));
 				} else {
-					Key farthestKey = ~dest;
-					Key maxDistance = _router._algo.ComputeDistance (_dest, farthestKey);
 					for (int i = 0; i < firstHops.Length; i ++) {
-						_candidates.Add (new CandidateEntry (_dest, farthestKey, maxDistance, _router._algo, firstHops[i], 1));
+						_candidates.Add (new CandidateEntry (firstHops[i], 1));
 					}
 				}
 
@@ -149,10 +147,9 @@ namespace p2pncs.Net.Overlay
 						CandidateEntry entry = _candidates[idx];
 						if (entry.IsResponsed) {
 							responsedCount ++;
-							if (_maxMatchBits >= 0 && entry.MatchBits > _maxMatchBits)
-								continue;
+							continue;
 						}
-						if (!entry.IsNoCheck)
+						if (entry.IsRunning || entry.IsFailed)
 							continue;
 
 						_router._msock.BeginInquire (_findMsg, entry.EndPoint, FindQuery_Callback, entry);
@@ -194,24 +191,17 @@ namespace p2pncs.Net.Overlay
 					if (msg == null) {
 						entry.IsFailed = true;
 					} else {
+						bool entryHasDummyId = (entry.Distance == null);
 						msg.NodeHandle.EndPoint = entry.EndPoint;
 						entry.Responsed (_dest, _router._algo, msg.NodeHandle);
+						if (entryHasDummyId) {
+							_candidates.Remove (entry);
+							AddToCandidateList (entry);
+						}
 						if (msg.CloseNodes != null) {
 							foreach (NodeHandle node in msg.CloseNodes) {
-								Key distance = _router._algo.ComputeDistance (_dest, node.NodeID);
-								for (int i = 0; i < _candidates.Count; i ++) {
-									int comp = distance.CompareTo (_candidates[i].Distance);
-									if (comp == 0)
-										break;
-									if (comp < 0 || i == _candidates.Count - 1) {
-										CandidateEntry new_entry = new CandidateEntry (_dest, node.NodeID, distance, _router._algo, node.EndPoint, entry.Hops + 1);
-										if (comp < 0)
-											_candidates.Insert (i, new_entry);
-										else
-											_candidates.Add (new_entry);
-										break;
-									}
-								}
+								CandidateEntry new_entry = new CandidateEntry (_dest, node.NodeID, null, _router._algo, node.EndPoint, entry.Hops + 1);
+								AddToCandidateList (new_entry);
 							}
 						}
 					}
@@ -224,6 +214,20 @@ namespace p2pncs.Net.Overlay
 				} else {
 					_router._algo.Touch (msg.NodeHandle);
 				}
+			}
+
+			void AddToCandidateList (CandidateEntry entry)
+			{
+				for (int i = 0; i < _candidates.Count; i++) {
+					int comp = (_candidates[i].Distance == null ? -1 : entry.Distance.CompareTo (_candidates[i].Distance));
+					if (comp == 0)
+						break;
+					if (comp < 0) {
+						_candidates.Insert (i, entry);
+						break;
+					}
+				}
+				_candidates.Add (entry);
 			}
 
 			public RoutingResult Result {
@@ -278,6 +282,12 @@ namespace p2pncs.Net.Overlay
 					}
 				}
 
+				public CandidateEntry (EndPoint ep, int hop)
+				{
+					_ep = ep;
+					_hop = hop;
+				}
+
 				public void Responsed (Key target, IKeyBasedRoutingAlgorithm algo, MultiAppNodeHandle nodeHandle)
 				{
 					_nodeId = nodeHandle.NodeID;
@@ -327,10 +337,6 @@ namespace p2pncs.Net.Overlay
 				public bool IsFailed {
 					get { return _failed; }
 					set { _failed = value;}
-				}
-
-				public bool IsNoCheck {
-					get { return !(IsRunning || IsResponsed || IsFailed); }
 				}
 			}
 		}

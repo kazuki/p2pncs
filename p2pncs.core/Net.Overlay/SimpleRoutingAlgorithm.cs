@@ -290,7 +290,7 @@ namespace p2pncs.Net.Overlay
 					}
 					Key target = _self ^ (_mask >> info.CurrentLevel);
 					_router.BeginRoute (info.AppId, target, _bucketSize, new KeyBasedRoutingOptions {FirstHops = info.InitNodes, RoutingFinishedMatchBits = info.CurrentLevel},
-					Stabilize_Callback, info);
+						Stabilize_Callback, info);
 					return;
 				}
 			}
@@ -558,7 +558,7 @@ namespace p2pncs.Net.Overlay
 				return _buckets[level].NumberOfEntries;
 			}
 
-			sealed class RoutingBucket : IEnumerable<RoutingEntry>
+			sealed class RoutingBucket
 			{
 				List<RoutingEntry> _entries;
 
@@ -625,20 +625,6 @@ namespace p2pncs.Net.Overlay
 				public int NumberOfEntries {
 					get { return _entries.Count; }
 				}
-
-				#region IEnumerable<RoutingEntry> Members
-
-				public IEnumerator<RoutingEntry> GetEnumerator ()
-				{
-					return _entries.GetEnumerator ();
-				}
-
-				System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator ()
-				{
-					return GetEnumerator ();
-				}
-
-				#endregion
 			}
 		}
 
