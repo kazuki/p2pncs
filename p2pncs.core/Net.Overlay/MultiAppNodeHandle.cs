@@ -47,9 +47,13 @@ namespace p2pncs.Net.Overlay
 			_options = options;
 		}
 
+		public MultiAppNodeHandle CloneWithNewEndPoint (EndPoint newEndPoint)
+		{
+			return new MultiAppNodeHandle (_id, newEndPoint, _appIds, _appIdsChanged, _options);
+		}
+
 		public EndPoint EndPoint {
 			get { return _ep; }
-			set { _ep = value;}
 		}
 
 		public Key NodeID {

@@ -449,8 +449,7 @@ namespace p2pncs.Net.Overlay
 		{
 			_msock.StartResponse (e, new PingResponse (_selfNodeHandle));
 			MultiAppNodeHandle nodeHandle = (e.InquireMessage as IIterativeMessage).NodeHandle;
-			nodeHandle.EndPoint = e.EndPoint;
-			Touch (nodeHandle);
+			Touch (nodeHandle.CloneWithNewEndPoint (e.EndPoint));
 		}
 		#endregion
 

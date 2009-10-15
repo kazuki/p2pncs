@@ -74,9 +74,7 @@ namespace p2pncs.Net.Overlay
 			FindCloseNode req = (FindCloseNode)args.InquireMessage;
 			NodeHandle[] results = _algo.GetCloseNodes (req.AppId, req.Destination, 5);
 			_msock.StartResponse (args, new CloseNodeSet (_algo.SelfNodeHandle, results));
-
-			req.NodeHandle.EndPoint = args.EndPoint;
-			_algo.Touch (req.NodeHandle);
+			_algo.Touch (req.NodeHandle.CloneWithNewEndPoint (args.EndPoint));
 		}
 
 		#region Internal Classes
@@ -185,15 +183,16 @@ namespace p2pncs.Net.Overlay
 			{
 				CandidateEntry entry = ar.AsyncState as CandidateEntry;
 				CloseNodeSet msg = _router._msock.EndInquire (ar) as CloseNodeSet;
+				MultiAppNodeHandle nodeHandle = null;
 
 				lock (_candidates) {
 					_inquiring --;
 					if (msg == null) {
 						entry.IsFailed = true;
 					} else {
+						nodeHandle = msg.NodeHandle.CloneWithNewEndPoint (entry.EndPoint);
 						bool entryHasDummyId = (entry.Distance == null);
-						msg.NodeHandle.EndPoint = entry.EndPoint;
-						entry.Responsed (_dest, _router._algo, msg.NodeHandle);
+						entry.Responsed (_dest, _router._algo, nodeHandle);
 						if (entryHasDummyId) {
 							_candidates.Remove (entry);
 							AddToCandidateList (entry);
@@ -212,7 +211,7 @@ namespace p2pncs.Net.Overlay
 				if (entry.IsFailed) {
 					_router._algo.Fail (entry.EndPoint);
 				} else {
-					_router._algo.Touch (msg.NodeHandle);
+					_router._algo.Touch (nodeHandle);
 				}
 			}
 
