@@ -15,101 +15,93 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-// TODO: 複数のストア候補ノードからの結果をマージする機能を実装する
-// TODO: PutするオブジェクトがIPutterEndPointStoreインターフェイスを実装していた場合の動作が、IterativeなKBR専用となっているので、汎用性を持たせる
-// TODO: 複数候補へのGet/Put時、どのタイミングで停止するかを制御する機能を実装する (現状では1つでも応答があれば他の応答を無視している)
+// REM TODO: 複数のストア候補ノードからの結果をマージする機能を実装する
+// REM TODO: PutするオブジェクトがIPutterEndPointStoreインターフェイスを実装していた場合の動作が、IterativeなKBR専用となっているので、汎用性を持たせる
+// REM TODO: 複数候補へのGet/Put時、どのタイミングで停止するかを制御する機能を実装する (現状では1つでも応答があれば他の応答を無視している)
 
 using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Threading;
+using p2pncs.Threading;
+using p2pncs.Utility;
 
 namespace p2pncs.Net.Overlay.DHT
 {
 	public class SimpleDHT : IDistributedHashTable
 	{
-		IKeyBasedRouter _kbr;
 		IMessagingSocket _sock;
-		ILocalHashTable _lht;
-		int _numOfReplicas = 3, _numOfSimultaneous = 3;
+		IKeyBasedRouter _kbr;
+		ILocalHashTable _local;
 		Dictionary<Type, int> _typeMap = new Dictionary<Type, int> ();
-		Dictionary<int, ILocalHashTableValueMerger> _mergerMap = new Dictionary<int,ILocalHashTableValueMerger> ();
+		ReaderWriterLockWrapper _typeMapLock = new ReaderWriterLockWrapper ();
+		const int NumberOfReplica = 3;
+		static string ACK = "ACK";
 
-		public SimpleDHT (IKeyBasedRouter kbr, IMessagingSocket sock, ILocalHashTable lht)
+		public SimpleDHT (IMessagingSocket sock, IKeyBasedRouter kbr, ILocalHashTable localStore)
 		{
-			_kbr = kbr;
 			_sock = sock;
-			_lht = lht;
-			sock.AddInquiredHandler (typeof (GetRequest), MessagingSocket_Inquired_GetRequest);
-			sock.AddInquiredHandler (typeof (PutRequest), MessagingSocket_Inquired_PutRequest);
+			_kbr = kbr;
+			_local = localStore;
+			sock.AddInquiredHandler (typeof (GetRequest), Inquired_GetRequest);
+			sock.AddInquiredHandler (typeof (PutRequest), Inquired_PutRequest);
 		}
 
-		void MessagingSocket_Inquired_GetRequest (object sender, InquiredEventArgs e)
+		void Inquired_GetRequest (object sender, InquiredEventArgs args)
 		{
-			GetRequest getReq = (GetRequest)e.InquireMessage;
-			_sock.StartResponse (e, new GetResponse (_lht.Get (getReq.Key, getReq.TypeID, _mergerMap[getReq.TypeID])));
+			GetRequest req = (GetRequest)args.InquireMessage;
+			object[] values = _local.Get (req.Key, req.TypeId, req.NumberOfValues);
+			_sock.StartResponse (args, new GetResponse (values));
 		}
-		void MessagingSocket_Inquired_PutRequest (object sender, InquiredEventArgs e)
-		{
-			PutRequest putReq = (PutRequest)e.InquireMessage;
-			LocalPut (putReq.Key, putReq.LifeTime, putReq.Value, e.EndPoint);
-			_sock.StartResponse (e, new PutResponse ());
-		}
-		void LocalPut (Key key, TimeSpan lifeTime, object value, EndPoint remoteEP)
-		{
-			IPutterEndPointStore epStore = value as IPutterEndPointStore;
-			if (epStore != null)
-				epStore.EndPoint = remoteEP;
 
+		void Inquired_PutRequest (object sender, InquiredEventArgs args)
+		{
+			PutRequest req = (PutRequest)args.InquireMessage;
+			_sock.StartResponse (args, ACK);
 			int typeId;
-			if (_typeMap.TryGetValue (value.GetType (), out typeId)) {
-				_lht.Put (key, typeId, lifeTime, value, _mergerMap[typeId]);
+			using (_typeMapLock.EnterReadLock ()) {
+				typeId = _typeMap[req.Value.GetType ()];
 			}
+			_local.Put (req.Key, typeId, req.LifeTime, req.Value);
 		}
 
 		#region IDistributedHashTable Members
 
-		public void RegisterTypeID (Type type, int id, ILocalHashTableValueMerger merger)
+		public void RegisterType (Type type, int id)
 		{
-			_typeMap.Add (type, id);
-			_mergerMap.Add (id, merger);
+			using (_typeMapLock.EnterWriteLock ()) {
+				_typeMap.Add (type, id);
+			}
 		}
 
-		public IAsyncResult BeginGet (Key key, Type type, AsyncCallback callback, object state)
+		public IAsyncResult BeginGet (Key appId, Key key, Type type, GetOptions opts, AsyncCallback callback, object state)
 		{
 			int typeId;
-			if (!_typeMap.TryGetValue (type, out typeId))
-				throw new ArgumentException ();
-			AsyncResult ar = new AsyncResult (key, typeId, this, callback, state);
-			return ar;
+			using (_typeMapLock.EnterReadLock ()) {
+				typeId = _typeMap[type];
+			}
+			return new GetAsyncResult (this, appId, key, typeId, opts, callback, state);
 		}
 
 		public GetResult EndGet (IAsyncResult ar)
 		{
-			ar.AsyncWaitHandle.WaitOne ();
-			return ((AsyncResult)ar).Result;
+			GetAsyncResult gar = (GetAsyncResult)ar;
+			gar.AsyncWaitHandle.WaitOne ();
+			return gar.Result;
 		}
 
-		public IAsyncResult BeginPut (Key key, TimeSpan lifeTime, object value, AsyncCallback callback, object state)
+		public IAsyncResult BeginPut (Key appId, Key key, TimeSpan lifeTime, object value, AsyncCallback callback, object state)
 		{
-			return new AsyncResult (key, value, lifeTime, this, callback, state);
+			int typeId;
+			using (_typeMapLock.EnterReadLock ()) {
+				typeId = _typeMap[value.GetType ()];
+			}
+			return new PutAsyncResult (this, appId, key, typeId, lifeTime, value, callback, state);
 		}
 
 		public void EndPut (IAsyncResult ar)
 		{
 			ar.AsyncWaitHandle.WaitOne ();
-		}
-
-		public void LocalPut (Key key, TimeSpan lifeTime, object value)
-		{
-			int typeId;
-			if (!_typeMap.TryGetValue (value.GetType (), out typeId))
-				throw new ArgumentException ();
-			_lht.Put (key, typeId, lifeTime, value, _mergerMap[typeId]);
-		}
-
-		public IKeyBasedRouter KeyBasedRouter {
-			get { return _kbr; }
 		}
 
 		#endregion
@@ -118,156 +110,36 @@ namespace p2pncs.Net.Overlay.DHT
 
 		public void Dispose ()
 		{
-			_sock.RemoveInquiredHandler (typeof (GetRequest), MessagingSocket_Inquired_GetRequest);
-			_sock.RemoveInquiredHandler (typeof (PutRequest), MessagingSocket_Inquired_PutRequest);
-			_lht.Dispose ();
+			_sock.RemoveInquiredHandler (typeof (GetRequest), Inquired_GetRequest);
+			_sock.RemoveInquiredHandler (typeof (PutRequest), Inquired_PutRequest);
 		}
 
 		#endregion
 
-		#region Properties
-		public int NumberOfReplicas {
-			get { return _numOfReplicas; }
-			set { _numOfReplicas = value;}
-		}
-
-		public int NumberOfSimultaneous {
-			get { return _numOfSimultaneous; }
-			set { _numOfSimultaneous = value;}
-		}
-
-		public IMessagingSocket MessagingSocket {
-			get { return _sock; }
-		}
-
-		public ILocalHashTable LocalHashTable {
-			get { return _lht; }
-		}
-		#endregion
-
-		#region Internal Classes
-		class AsyncResult : IAsyncResult
+		#region Internal Class
+		abstract class AsyncResultBase : IAsyncResult
 		{
-			bool _getMethod;
-			SimpleDHT _dht;
-			IAsyncResult _kbrAR;
-			Key _key;
-			int _typeId;
-			AsyncCallback _callback;
-			object _state;
-			ManualResetEvent _done = new ManualResetEvent (false);
-			bool _completed = false;
-			GetResult _result = null;
-			DateTime _start;
-			PutRequest _putReq = null;
-			int _hops, _getInquires = 0;
-			object _getLock = null;
+			protected SimpleDHT _dht;
+			protected Key _appId, _key;
+			protected int _typeId;
+			protected AsyncCallback _callback;
+			protected object _state;
+			protected EventWaitHandle _done = new ManualResetEvent (false);
+			protected bool _completed = false;
+			protected DateTime _start;
 
-			public AsyncResult (Key key, int typeId, SimpleDHT dht, AsyncCallback callback, object state)
+			protected AsyncResultBase (SimpleDHT dht, Key appId, Key key, int typeId, AsyncCallback callback, object state)
 			{
-				_callback = callback;
-				_state = state;
 				_dht = dht;
+				_appId = appId;
 				_key = key;
 				_typeId = typeId;
-				_start = DateTime.Now;
-				_getMethod = true;
-				_getLock = new object ();
-				_kbrAR = dht.KeyBasedRouter.BeginRoute (key, null, dht.NumberOfReplicas, dht.NumberOfSimultaneous, KBR_Callback, null);
-			}
-
-			public AsyncResult (Key key, object value, TimeSpan lifetime, SimpleDHT dht, AsyncCallback callback, object state)
-			{
 				_callback = callback;
 				_state = state;
-				_dht = dht;
-				_key = key;
 				_start = DateTime.Now;
-				_getMethod = false;
-				_putReq = new PutRequest (key, value, lifetime);
-				_kbrAR = dht.KeyBasedRouter.BeginRoute (key, null, dht.NumberOfReplicas, dht.NumberOfSimultaneous, KBR_Callback, null);
 			}
 
-			void KBR_Callback (IAsyncResult ar)
-			{
-				RoutingResult rr = _dht.KeyBasedRouter.EndRoute (ar);
-				if (rr.RootCandidates == null || rr.RootCandidates.Length == 0) {
-					//TimeSpan time = DateTime.Now.Subtract (_start);
-					_result = new GetResult (_key, null, rr.Hops);
-					Done ();
-					return;
-				}
-				_hops = rr.Hops;
-
-				int count;
-				object msg;
-				AsyncCallback callback;
-				if (_getMethod) {
-					count = Math.Min (_dht.NumberOfReplicas, rr.RootCandidates.Length);
-					msg = new GetRequest (_key, _typeId);
-					callback = GetRequest_Callback;
-				} else {
-					count = Math.Min (_dht.NumberOfReplicas, rr.RootCandidates.Length);
-					msg = _putReq;
-					callback = PutRequest_Callback;
-				}
-
-				_getInquires = count;
-				for (int i = 0; i < count; i ++) {
-					if (rr.RootCandidates[i].EndPoint == null) {
-						if (_getMethod) {
-							lock (_getLock) {
-								_getInquires --;
-								object[] ret = _dht.LocalHashTable.Get (_key, _typeId, _dht._mergerMap[_typeId]);
-								if (ret != null || _getInquires == 0) {
-									_result = new GetResult (_key, ret, rr.Hops);
-									Done ();
-									return;
-								} else {
-								}
-							}
-						} else {
-							_dht.LocalPut (_putReq.Key, _putReq.LifeTime, _putReq.Value, null);
-							Done ();
-						}
-					} else {
-						_dht.MessagingSocket.BeginInquire (msg, rr.RootCandidates[i].EndPoint, callback, rr.RootCandidates[i].EndPoint);
-					}
-				}
-			}
-
-			void GetRequest_Callback (IAsyncResult ar)
-			{
-				EndPoint remoteEP = (EndPoint)ar.AsyncState;
-				GetResponse res = _dht.MessagingSocket.EndInquire (ar) as GetResponse;
-				lock (_getLock) {
-					if (_result != null)
-						return;
-					_getInquires --;
-					if (res == null || res.Values == null) {
-						if (_getInquires != 0)
-							return;
-						_result = new GetResult (_key, null, _hops);
-					} else {
-						for (int i = 0; i < res.Values.Length; i ++) {
-							IPutterEndPointStore epStore = res.Values[i] as IPutterEndPointStore;
-							if (epStore != null && epStore.EndPoint == null)
-								epStore.EndPoint = remoteEP;
-						}
-						_result = new GetResult (_key, res.Values, _hops);
-					}
-				}
-				Done ();
-			}
-
-			void PutRequest_Callback (IAsyncResult ar)
-			{
-				_dht.MessagingSocket.EndInquire (ar);
-				_result = null;
-				Done ();
-			}
-
-			void Done ()
+			public void Done ()
 			{
 				lock (_done) {
 					if (_completed)
@@ -281,6 +153,8 @@ namespace p2pncs.Net.Overlay.DHT
 					} catch {}
 				}
 			}
+
+			#region IAsyncResult Members
 
 			public object AsyncState {
 				get { return _state; }
@@ -298,41 +172,144 @@ namespace p2pncs.Net.Overlay.DHT
 				get { return _completed; }
 			}
 
+			#endregion
+		}
+		sealed class GetAsyncResult : AsyncResultBase
+		{
+			GetOptions _opts;
+			int _waiting = 0, _hops = -1;
+			GetResult _result = null;
+			List<object> _list = new List<object> ();
+
+			public GetAsyncResult (SimpleDHT dht, Key appId, Key key, int typeId, GetOptions opts, AsyncCallback callback, object state)
+				: base (dht, appId, key, typeId, callback, state)
+			{
+				_opts = opts;
+				_dht._kbr.BeginRoute (appId, key, NumberOfReplica, null, KBR_Callback, null);
+			}
+
+			void KBR_Callback (IAsyncResult ar)
+			{
+				RoutingResult result = _dht._kbr.EndRoute (ar);
+				GetRequest req = new GetRequest (_key, _typeId, _opts.MaxValues);
+				if (result.RootCandidates.Length == 0) {
+					_result = new GetResult (_key, new object[0], _hops);
+					Done ();
+					return;
+				}
+				_hops = result.Hops;
+				for (int i = 0; i < result.RootCandidates.Length; i ++) {
+					Interlocked.Increment (ref _waiting);
+					_dht._sock.BeginInquire (req, result.RootCandidates[i].EndPoint, GetReqCallback, result.RootCandidates[i].EndPoint);
+				}
+			}
+
+			void GetReqCallback (IAsyncResult ar)
+			{
+				EndPoint ep = (EndPoint)ar.AsyncState;
+				GetResponse res = _dht._sock.EndInquire (ar) as GetResponse;
+				try {
+					int waiting = Interlocked.Decrement (ref _waiting);
+					lock (_list) {
+						if (_result != null)
+							return;
+						foreach (object value in res.Values) {
+							if (_list.Contains (value))
+								continue;
+							_list.Add (value);
+						}
+						if (_list.Count >= _opts.MaxValues) {
+							object[] values = _list.ToArray ().CopyRange<object> (0, Math.Min (_list.Count, _opts.MaxValues));
+							_result = new GetResult (_key, values, _hops);
+							Done ();
+							return;
+						}
+					}
+					if (waiting == 0) {
+						_result = new GetResult (_key, _list.ToArray (), _hops);
+						Done ();
+						return;
+					}
+				} finally {
+					if (res == null)
+						_dht._kbr.RoutingAlgorithm.Fail (ep);
+					else
+						_dht._kbr.RoutingAlgorithm.Touch (ep);
+				}
+			}
+
 			public GetResult Result {
 				get { return _result; }
 			}
 		}
+		sealed class PutAsyncResult : AsyncResultBase
+		{
+			TimeSpan _lifeTime;
+			object _value;
+			int _waiting = 0;
 
-		[Serializable]
-		[SerializableTypeId (0x300)]
+			public PutAsyncResult (SimpleDHT dht, Key appId, Key key, int typeId, TimeSpan lifeTime, object value, AsyncCallback callback, object state)
+				: base (dht, appId, key, typeId, callback, state)
+			{
+				_lifeTime = lifeTime;
+				_value = value;
+				_dht._kbr.BeginRoute (appId, key, NumberOfReplica, null, KBR_Callback, null);
+			}
+
+			void KBR_Callback (IAsyncResult ar)
+			{
+				RoutingResult result = _dht._kbr.EndRoute (ar);
+				if (result.RootCandidates.Length == 0) {
+					Done ();
+					return;
+				}
+				PutRequest req = new PutRequest (_key, _value, _lifeTime);
+				for (int i = 0; i < result.RootCandidates.Length; i ++) {
+					Interlocked.Increment (ref _waiting);
+					_dht._sock.BeginInquire (req, result.RootCandidates[i].EndPoint, PutReqCallback, result.RootCandidates[i].EndPoint);
+				}
+			}
+
+			void PutReqCallback (IAsyncResult ar)
+			{
+				EndPoint ep = (EndPoint)ar.AsyncState;
+				object ret = _dht._sock.EndInquire (ar);
+				if (Interlocked.Decrement (ref _waiting) == 0)
+					Done ();
+				if (ret == null)
+					_dht._kbr.RoutingAlgorithm.Fail (ep);
+				else
+					_dht._kbr.RoutingAlgorithm.Touch (ep);
+			}
+		}
+
 		class GetRequest
 		{
-			[SerializableFieldId (0)]
 			Key _key;
+			int _typeId, _numOfValues;
 
-			[SerializableFieldId (1)]
-			int _typeId;
-
-			public GetRequest (Key key, int typeId)
+			public GetRequest (Key key, int typeId, int numOfValues)
 			{
 				_key = key;
 				_typeId = typeId;
+				_numOfValues = numOfValues;
 			}
 
 			public Key Key {
 				get { return _key; }
 			}
 
-			public int TypeID {
+			public int TypeId {
 				get { return _typeId; }
+			}
+
+			public int NumberOfValues {
+				get { return _numOfValues; }
 			}
 		}
 
-		[Serializable]
-		[SerializableTypeId (0x301)]
 		class GetResponse
 		{
-			[SerializableFieldId (0)]
 			object[] _values;
 
 			public GetResponse (object[] values)
@@ -345,17 +322,10 @@ namespace p2pncs.Net.Overlay.DHT
 			}
 		}
 
-		[Serializable]
-		[SerializableTypeId (0x302)]
 		class PutRequest
 		{
-			[SerializableFieldId (0)]
 			Key _key;
-
-			[SerializableFieldId (1)]
 			object _value;
-
-			[SerializableFieldId (2)]
 			TimeSpan _lifetime;
 
 			public PutRequest (Key key, object value, TimeSpan lifetime)
@@ -375,15 +345,6 @@ namespace p2pncs.Net.Overlay.DHT
 
 			public TimeSpan LifeTime {
 				get { return _lifetime; }
-			}
-		}
-
-		[Serializable]
-		[SerializableTypeId (0x303)]
-		class PutResponse
-		{
-			public PutResponse ()
-			{
 			}
 		}
 		#endregion

@@ -15,14 +15,15 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using System;
-
 namespace p2pncs.Net.Overlay.DHT
 {
-	public interface ILocalHashTable
+	public class GetOptions
 	{
-		void Put (Key key, int typeId, TimeSpan lifetime, object value);
-		object[] Get (Key key, int typeId, int maxCount);
-		void Close ();
+		public GetOptions ()
+		{
+			MaxValues = 3;
+		}
+
+		public int MaxValues { get; set; }
 	}
 }

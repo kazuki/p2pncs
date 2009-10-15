@@ -109,6 +109,14 @@ namespace p2pncs.Utility
 			return ret;
 		}
 
+		public static T[] CopyRange<T> (this T[] array, int offset, int size)
+		{
+			T[] ret = new T[size];
+			for (int i = 0; i < size; i ++)
+				ret[i] = array[offset + i];
+			return ret;
+		}
+
 		public static bool EqualsRange (this byte[] x, int x_idx, byte[] y, int y_idx, int size)
 		{
 			if (x_idx + size > x.Length || y_idx + size > y.Length)

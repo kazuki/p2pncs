@@ -23,7 +23,7 @@ namespace p2pncs.Net.Overlay.DHT
 		object[] _values;
 		int _hops;
 
-		internal GetResult (Key key, object[] values, int hops)
+		public GetResult (Key key, object[] values, int hops)
 		{
 			_key = key;
 			_values = values;

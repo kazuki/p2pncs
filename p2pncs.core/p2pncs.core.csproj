@@ -70,6 +70,12 @@
     <Compile Include="Net.Overlay.Anonymous\IAnonymousRouter.cs" />
     <Compile Include="Net.Overlay.Anonymous\IAnonymousSocket.cs" />
     <Compile Include="Net.Overlay.Anonymous\IDelegateTaskOption.cs" />
+    <Compile Include="Net.Overlay.DHT\GetOptions.cs" />
+    <Compile Include="Net.Overlay.DHT\GetResult.cs" />
+    <Compile Include="Net.Overlay.DHT\IDistributedHashTable.cs" />
+    <Compile Include="Net.Overlay.DHT\ILocalHashTable.cs" />
+    <Compile Include="Net.Overlay.DHT\OnMemoryStore.cs" />
+    <Compile Include="Net.Overlay.DHT\SimpleDHT.cs" />
     <Compile Include="Net.Overlay\KeyBasedRoutingOptions.cs" />
     <Compile Include="Net.Overlay\MultiAppNodeHandle.cs" />
     <Compile Include="Net.Overlay\SimpleIterativeRouter.cs" />
