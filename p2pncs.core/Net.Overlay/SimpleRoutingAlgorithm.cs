@@ -266,7 +266,7 @@ namespace p2pncs.Net.Overlay
 				for (int i = 0; i < initNodes.Length; i++)
 					initNodes[i] = nodeHandles[i].EndPoint;
 			}
-			_router.BeginRoute (appId, _self, 3, new KeyBasedRoutingOptions {FirstHops = initNodes}, Stabilize_Callback, info);
+			_router.BeginRoute (appId, _self, _bucketSize, new KeyBasedRoutingOptions {FirstHops = initNodes}, Stabilize_Callback, info);
 		}
 
 		void Stabilize_Callback (IAsyncResult ar)
@@ -289,7 +289,7 @@ namespace p2pncs.Net.Overlay
 						continue;
 					}
 					Key target = _self ^ (_mask >> info.CurrentLevel);
-					_router.BeginRoute (info.AppId, target, 3, new KeyBasedRoutingOptions {FirstHops = info.InitNodes, RoutingFinishedMatchBits = info.CurrentLevel},
+					_router.BeginRoute (info.AppId, target, _bucketSize, new KeyBasedRoutingOptions {FirstHops = info.InitNodes, RoutingFinishedMatchBits = info.CurrentLevel},
 					Stabilize_Callback, info);
 					return;
 				}
