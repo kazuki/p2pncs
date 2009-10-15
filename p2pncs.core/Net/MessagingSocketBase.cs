@@ -86,8 +86,10 @@ namespace p2pncs.Net
 			}
 			if (overflow != null) {
 				Logger.Log (LogLevel.Error, this, "Overflow Retry Buffer");
-				overflow.Fail ();
-				InvokeInquiryFailure (this, new InquiredEventArgs (overflow.Request, overflow.RemoteEndPoint));
+				ThreadPool.QueueUserWorkItem (delegate (object o) {
+					overflow.Fail ();
+					InvokeInquiryFailure (this, new InquiredEventArgs (overflow.Request, overflow.RemoteEndPoint));
+				});
 			}
 			return ar;
 		}
