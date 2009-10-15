@@ -153,7 +153,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 		static RouteLabel GenerateRouteLabel ()
 		{
-			return BitConverter.ToUInt32 (openCrypto.RNG.GetRNGBytes (4), 0);
+			return BitConverter.ToUInt32 (openCrypto.RNG.GetBytes (4), 0);
 		}
 
 		interface IRouteInfo

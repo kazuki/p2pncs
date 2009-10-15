@@ -150,7 +150,7 @@ namespace p2pncs.Security.Cryptography
 					outputCount += _iv.Length;
 				byte[] output = new byte[outputCount];
 				if (_ivShuffle)
-					ct.TransformBlock (RNG.GetRNGBytes (_iv.Length), 0, _iv.Length, output, 0);
+					ct.TransformBlock (RNG.GetBytes (_iv.Length), 0, _iv.Length, output, 0);
 				for (int i = 0; i <= inputCount - _iv.Length; i += _iv.Length)
 					ct.TransformBlock (input, inputOffset + i, _iv.Length, output, shuffleSize + i);
 				if (diff == 0) {

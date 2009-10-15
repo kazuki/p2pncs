@@ -229,7 +229,7 @@ namespace p2pncs.Net.Overlay
 		#region Misc
 		public static Key CreateRandom (int bytes)
 		{
-			return new Key (openCrypto.RNG.GetRNGBytes (bytes), 0, bytes);
+			return new Key (openCrypto.RNG.GetBytes (bytes), 0, bytes);
 		}
 		public void WriteTo (Stream strm)
 		{

@@ -263,9 +263,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public static byte[] CreateEstablishMessageData (NodeHandle[] relayNodes, SymmetricKey[] relayKeys, object payload, ECDomainNames ecDomain, SymmetricKeyOption opt, int fixedMsgSize)
 			{
-				byte[] msg = new byte[fixedMsgSize];
+				byte[] msg = RNG.GetBytes (fixedMsgSize);
 				int msg_size = 0;
-				RNG.Instance.GetBytes (msg);
 
 				// 終端ノードに配送するデータを設定
 				// TMP    = Payload-Size[16bit]||Payload
@@ -331,7 +330,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 						return null;
 					case 1:
 						payload = null;
-						byte[] ret = RNG.GetRNGBytes (msg.Length);
+						byte[] ret = RNG.GetBytes (msg.Length);
 						using (MemoryStream ms = new MemoryStream (decrypted, 1, decrypted.Length - 1)) {
 							nextHop = (EndPoint)Serializer.Instance.Deserialize (ms);
 							Buffer.BlockCopy (decrypted, 1 + (int)ms.Position, ret, 0, decrypted.Length - 1 - (int)ms.Position);
@@ -343,7 +342,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			static byte[] CreateRoutedPayload (uint seq, object obj, int fixedPayloadSize)
 			{
-				byte[] payload = RNG.GetRNGBytes (fixedPayloadSize);
+				byte[] payload = RNG.GetBytes (fixedPayloadSize);
 				using (MemoryStream ms = new MemoryStream ())
 				using (HashAlgorithm hashAlgo = CreateHashAlgorithm ()) {
 					ms.Write (new byte[] {(byte)(seq >> 24), (byte)(seq >> 16), (byte)(seq >> 8), (byte)seq, 0, 0}, 0, 6);

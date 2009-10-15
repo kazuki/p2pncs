@@ -41,8 +41,8 @@ namespace p2pncs.Security.Captcha
 		{
 			_ecdsa = ecdsa;
 			_len = num_of_words;
-			_hmac_key = openCrypto.RNG.GetRNGBytes (64);
-			_salt = openCrypto.RNG.GetRNGBytes (32);
+			_hmac_key = openCrypto.RNG.GetBytes (64);
+			_salt = openCrypto.RNG.GetBytes (32);
 			_pubKey = ecdsa.Parameters.ExportPublicKey (true);
 
 			_font = new Font (FontFamily.GenericMonospace, 28, FontStyle.Bold);
@@ -60,7 +60,7 @@ namespace p2pncs.Security.Captcha
 
 		public CaptchaChallengeData GetChallenge (byte[] hash)
 		{
-			byte[] rnd = openCrypto.RNG.GetRNGBytes (_len);
+			byte[] rnd = openCrypto.RNG.GetBytes (_len);
 			string txt = "";
 			for (int i = 0; i < _len; i++)
 				txt += _chars[rnd[i] % _chars.Length].ToString ();
