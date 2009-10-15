@@ -24,15 +24,13 @@ namespace p2pncs.Net.Overlay
 	{
 		event EventHandler<StatisticsNoticeEventArgs> StatisticsNotice;
 
-		void Join (EndPoint[] initialNodes);
+		void Join (Key appId, EndPoint[] initialNodes);
+		void Close (Key appId);
 		void Close ();
 
-		IAsyncResult BeginRoute (Key dest, EndPoint[] firstHops, int numOfCandidates, int numOfSimultaneous, AsyncCallback callback, object state);
+		IAsyncResult BeginRoute (Key appId, Key dest, int numOfCandidates, KeyBasedRoutingOptions opts, AsyncCallback callback, object state);
 		RoutingResult EndRoute (IAsyncResult ar);
 
 		IKeyBasedRoutingAlgorithm RoutingAlgorithm { get; }
-		IMessagingSocket MessagingSocket { get; }
-		Key SelftNodeId { get; }
-		ushort SelfTcpPort { get; }
 	}
 }

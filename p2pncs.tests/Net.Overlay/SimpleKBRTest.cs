@@ -25,6 +25,8 @@ namespace p2pncs.tests.Net.Overlay
 	[TestFixture]
 	public class SimpleKBRTest
 	{
+		Key AppId = KBREnvironment.AppId;
+
 		[Test]
 		public void Test ()
 		{
@@ -42,7 +44,7 @@ namespace p2pncs.tests.Net.Overlay
 				env.AddNodes (keys, null);
 
 				Key reqKey = new Key (new byte[] { 0x00, 0x1F });
-				IAsyncResult ar = env.KeyBasedRouters[0].BeginRoute (reqKey, null, 1, 3, null, null);
+				IAsyncResult ar = env.KeyBasedRouters[0].BeginRoute (AppId, reqKey, 1, null, null, null);
 				RoutingResult rr = env.KeyBasedRouters[0].EndRoute (ar);
 				Assert.IsNotNull (rr);
 				Assert.IsNotNull (rr.RootCandidates);
@@ -67,7 +69,7 @@ namespace p2pncs.tests.Net.Overlay
 				}
 				env.AddNodes (keys, null);
 				for (int i = 0; i < keys.Length; i ++) {
-					env.KeyBasedRouters[i].RoutingAlgorithm.Stabilize ();
+					env.KeyBasedRouters[i].RoutingAlgorithm.Stabilize (AppId);
 					System.Threading.Thread.Sleep (10);
 				}
 				System.Threading.Thread.Sleep (500);
@@ -82,18 +84,18 @@ namespace p2pncs.tests.Net.Overlay
 						sorted = new List<IKeyBasedRouter> (env.KeyBasedRouters);
 					}
 					sorted.Sort (delegate (IKeyBasedRouter x, IKeyBasedRouter y) {
-						Key diffX = target ^ x.SelftNodeId;
-						Key diffY = target ^ y.SelftNodeId;
+						Key diffX = target ^ x.RoutingAlgorithm.SelfNodeHandle.NodeID;
+						Key diffY = target ^ y.RoutingAlgorithm.SelfNodeHandle.NodeID;
 						return diffX.CompareTo (diffY);
 					});
 
 					IKeyBasedRouter kbrNode = env.KeyBasedRouters[0];
 					DateTime dt = DateTime.Now;
-					RoutingResult result = kbrNode.EndRoute (kbrNode.BeginRoute (target, null, numOfRootCandidates, 3, null, null));
+					RoutingResult result = kbrNode.EndRoute (kbrNode.BeginRoute (AppId, target, numOfRootCandidates, null, null, null));
 					Assert.IsNotNull (result);
 					Assert.IsNotNull (result.RootCandidates);
 					for (int i = 0; i < Math.Min (numOfRootCandidates, result.RootCandidates.Length); i++)
-						if (Key.Equals (sorted[i].SelftNodeId, result.RootCandidates[i].NodeID))
+						if (Key.Equals (sorted[i].RoutingAlgorithm.SelfNodeHandle.NodeID, result.RootCandidates[i].NodeID))
 							success_count ++;
 				}
 				Console.WriteLine ("{0} / {1}", success_count, (TestCount * numOfRootCandidates * 90 / 100));
@@ -118,7 +120,7 @@ namespace p2pncs.tests.Net.Overlay
 				env.AddNodes (keys, null);
 
 				Key reqKey = new Key (new byte[] {0x00, 0x81});
-				IAsyncResult ar = env.KeyBasedRouters[0].BeginRoute (reqKey, null, 1, 3, null, null);
+				IAsyncResult ar = env.KeyBasedRouters[0].BeginRoute (AppId, reqKey, 1, null, null, null);
 				RoutingResult rr = env.KeyBasedRouters[0].EndRoute (ar);
 				Assert.IsNotNull (rr, "#1");
 				Assert.IsNotNull (rr.RootCandidates, "#2");
@@ -127,7 +129,7 @@ namespace p2pncs.tests.Net.Overlay
 				Assert.IsNull (rr.RootCandidates[0].EndPoint, "#5");
 
 				reqKey = new Key (new byte[] {0x00, 0x81});
-				ar = env.KeyBasedRouters[0].BeginRoute (reqKey, null, 2, 3, null, null);
+				ar = env.KeyBasedRouters[0].BeginRoute (AppId, reqKey, 2, null, null, null);
 				rr = env.KeyBasedRouters[0].EndRoute (ar);
 				Assert.IsNotNull (rr, "#6");
 				Assert.IsNotNull (rr.RootCandidates, "#7");
@@ -138,7 +140,7 @@ namespace p2pncs.tests.Net.Overlay
 				Assert.AreEqual (env.EndPoints[7], rr.RootCandidates[1].EndPoint, "#c");
 
 				reqKey = new Key (new byte[] {0x00, 0x80});
-				ar = env.KeyBasedRouters[0].BeginRoute (reqKey, null, 2, 3, null, null);
+				ar = env.KeyBasedRouters[0].BeginRoute (AppId, reqKey, 2, null, null, null);
 				rr = env.KeyBasedRouters[0].EndRoute (ar);
 				Assert.IsNotNull (rr, "#d");
 				Assert.IsNotNull (rr.RootCandidates, "#e");

@@ -15,99 +15,36 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using System;
 using System.Collections.Generic;
-using System.Text;
-using p2pncs.Net;
-using p2pncs.Net.Overlay;
-using p2pncs.Net.Overlay.Anonymous;
-using p2pncs.Net.Overlay.DHT;
-using p2pncs.Threading;
-using NLogLogger = NLog.Logger;
 using LogEventInfo = NLog.LogEventInfo;
-using LayoutRenderer = NLog.LayoutRenderer;
-using LayoutRendererAttribute = NLog.LayoutRendererAttribute;
+using NLogLogger = NLog.Logger;
 
 namespace p2pncs
 {
 	public static class Logger
 	{
-		static Dictionary<LogLevel, NLog.LogLevel> _levelMap = new Dictionary<LogLevel, NLog.LogLevel> ();
+		static NLog.LogLevel[] _levelMap = new NLog.LogLevel[] {
+			NLog.LogLevel.Fatal,
+			NLog.LogLevel.Error,
+			NLog.LogLevel.Warn,
+			NLog.LogLevel.Info,
+			NLog.LogLevel.Debug,
+			NLog.LogLevel.Trace
+		};
 		static NLogLogger _logger = NLog.LogManager.GetLogger (string.Empty);
-		const int KeyShortLength = 6;
-
-		static Logger ()
-		{
-			_levelMap.Add (LogLevel.Fatal, NLog.LogLevel.Fatal);
-			_levelMap.Add (LogLevel.Error, NLog.LogLevel.Error);
-			_levelMap.Add (LogLevel.Warn, NLog.LogLevel.Warn);
-			_levelMap.Add (LogLevel.Info, NLog.LogLevel.Info);
-			_levelMap.Add (LogLevel.Debug, NLog.LogLevel.Debug);
-			_levelMap.Add (LogLevel.Trace, NLog.LogLevel.Trace);
-		}
 
 		public static void Log (LogLevel level, object sender, string message, params object[] args)
 		{
 			string typeName = (sender == null ? "(null)" : sender.GetType ().FullName);
-			LogEventInfo info = new LogEventInfo (_levelMap[level], typeName, string.Format (message, args));
+			LogEventInfo info = new LogEventInfo (_levelMap[(int)level], typeName, string.Format (message, args));
 			info.Context.Add ("sender", sender);
 			_logger.Log (info);
-		}
-
-		[LayoutRenderer ("kbr")]
-		public class KBRRenderer : LayoutRenderer
-		{
-			protected override void Append (StringBuilder builder, LogEventInfo logEvent)
-			{
-				IKeyBasedRouter kbr = logEvent.Context["sender"] as IKeyBasedRouter;
-				if (kbr == null) return;
-				builder.Append (kbr.SelftNodeId.ToString ().Substring (0, KeyShortLength));
-			}
-
-			protected override int GetEstimatedBufferSize (LogEventInfo logEvent)
-			{
-				return 128;
-			}
-		}
-
-		[LayoutRenderer ("ar")]
-		public class ARRenderer : LayoutRenderer
-		{
-			protected override void Append (StringBuilder builder, LogEventInfo logEvent)
-			{
-				IAnonymousRouter ar = logEvent.Context["sender"] as IAnonymousRouter;
-				if (ar == null) return;
-				builder.Append (ar.KeyBasedRouter.SelftNodeId.ToString ().Substring (0, KeyShortLength));
-			}
-
-			protected override int GetEstimatedBufferSize (LogEventInfo logEvent)
-			{
-				return 128;
-			}
-		}
-
-		[LayoutRenderer ("ar.subscribe")]
-		public class ARSRenderer : LayoutRenderer
-		{
-			protected override void Append (StringBuilder builder, LogEventInfo logEvent)
-			{
-				ISubscribeInfo subscribe = logEvent.Context["sender"] as ISubscribeInfo;
-				if (subscribe == null) return;
-				builder.Append (subscribe.AnonymousRouter.KeyBasedRouter.SelftNodeId.ToString ().Substring (0, KeyShortLength));
-				builder.Append ('+');
-				builder.Append (subscribe.Key.ToString ().Substring (0, KeyShortLength));
-			}
-
-			protected override int GetEstimatedBufferSize (LogEventInfo logEvent)
-			{
-				return 128;
-			}
 		}
 	}
 
 	public enum LogLevel
 	{
-		Fatal,
+		Fatal = 0,
 		Error,
 		Warn,
 		Info,

@@ -20,9 +20,8 @@ using System.Net;
 
 namespace p2pncs.Net.Overlay
 {
-	[Serializable]
-	[SerializableTypeId (0x101)]
-	public class NodeHandle : IEquatable<NodeHandle>
+	[SerializableTypeId (0x1f0)]
+	public class MultiAppNodeHandle
 	{
 		[SerializableFieldId (0)]
 		EndPoint _ep;
@@ -30,53 +29,58 @@ namespace p2pncs.Net.Overlay
 		[SerializableFieldId (1)]
 		Key _id;
 
-		public NodeHandle (Key id, EndPoint ep)
+		[SerializableFieldId (2)]
+		Key[] _appIds;
+
+		[SerializableFieldId (3)]
+		DateTime _appIdsChanged;
+
+		[SerializableFieldId (4)]
+		object[] _options;
+
+		public MultiAppNodeHandle (Key id, EndPoint ep, Key[] appIds, DateTime appIdsChanged, object[] options)
 		{
 			_id = id;
 			_ep = ep;
+			_appIds = appIds;
+			_appIdsChanged = appIdsChanged;
+			_options = options;
 		}
 
 		public EndPoint EndPoint {
 			get { return _ep; }
+			set { _ep = value;}
 		}
 
 		public Key NodeID {
 			get { return _id; }
 		}
 
+		public Key[] AppIDs {
+			get { return _appIds; }
+		}
+
+		public DateTime AppIDsLastModified {
+			get { return _appIdsChanged; }
+		}
+
+		public object[] Options {
+			get { return _options; }
+		}
+
+		public object GetOption (Type type)
+		{
+			if (_options == null)
+				return null;
+			for (int i = 0; i < _options.Length; i ++)
+				if (type.Equals (_options[i].GetType ()))
+					return _options[i];
+			return null;
+		}
+
 		public override string ToString ()
 		{
 			return (_id == null ? "null" : _id.ToString ()) + (_ep == null ? "@null" : "@" + _ep.ToString ());
-		}
-
-		public override int GetHashCode ()
-		{
-			return (_id == null ? 0 : _id.GetHashCode ()) ^ (_ep == null ? 0 : _ep.GetHashCode ());
-		}
-
-		public override bool Equals (object obj)
-		{
-			if (!(obj is NodeHandle))
-				return false;
-			return Equals ((NodeHandle)obj);
-		}
-
-		public bool Equals (NodeHandle other)
-		{
-			if (_ep == null) {
-				if (other._ep != null)
-					return false;
-			} else {
-				if (!_ep.Equals (other._ep))
-					return false;
-			}
-			if (_id == null) {
-				if (other._id != null)
-					return false;
-				return true;
-			} else {
-				return _id.Equals (other._id);
-			}
 		}
 	}
 }

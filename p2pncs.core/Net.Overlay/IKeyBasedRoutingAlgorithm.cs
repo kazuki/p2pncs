@@ -15,30 +15,35 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using System.Collections.Generic;
+using System;
 using System.Net;
 
 namespace p2pncs.Net.Overlay
 {
 	public interface IKeyBasedRoutingAlgorithm
 	{
-		void Join (EndPoint[] initialNodes);
+		void Setup (IKeyBasedRouter router);
+		void NewApp (Key appId);
+		void Join (Key appId, EndPoint[] initialNodes);
+		void Close (Key appId);
 		void Close ();
 
+		void SetEndPointOption (object opt);
+		void RemoveEndPointOption (Type optType);
+
 		Key ComputeDistance (Key x, Key y);
-		int ComputeRoutingLevel (Key x, Key y);
-		int MaxRoutingLevel { get; }
+		NodeHandle[] GetCloseNodes (Key appId, Key target, int maxNum);
+		NodeHandle[] GetRandomNodes (Key appId, int maxNum);
 
-		NodeHandle[] GetNextHopNodes (Key dest, int maxNum, Key exclude);
-		NodeHandle[] GetRandomNodes (int maxNum);
-		NodeHandle[] GetNeighbors (int maxNum);
-		NodeHandle[] GetCloseNodes (Key target, int maxNum, Key exclude);
-
-		void Touch (NodeHandle node);
-		void Fail (NodeHandle node);
+		void Touch (MultiAppNodeHandle node);
+		void Touch (EndPoint ep);
 		void Fail (EndPoint ep);
 
-		void Setup (Key selfNodeId, IKeyBasedRouter router);
-		void Stabilize ();
+		void Stabilize (Key appId);
+
+		int GetRoutingTableSize ();
+		int GetRoutingTableSize (Key appId);
+
+		MultiAppNodeHandle SelfNodeHandle { get; }
 	}
 }

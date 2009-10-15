@@ -21,7 +21,7 @@ namespace p2pncs.Net.Overlay
 	{
 		NodeHandle[] _candidates;
 		int _hops;
-		FailReason _reason = FailReason.None;
+		//FailReason _reason = FailReason.None;
 
 		public RoutingResult (NodeHandle[] candidates, int hops)
 		{
@@ -29,11 +29,13 @@ namespace p2pncs.Net.Overlay
 			_hops = hops;
 		}
 
+#if false
 		public RoutingResult (FailReason reason, int hops)
 		{
 			_reason = reason;
 			_hops = hops;
 		}
+#endif
 
 		/// <remarks>配列の要素のEndPointがnullだった場合は、自身のノードを意味する</remarks>
 		public NodeHandle[] RootCandidates {
@@ -44,8 +46,10 @@ namespace p2pncs.Net.Overlay
 			get { return _hops; }
 		}
 
+#if fasle
 		public FailReason FailReason {
 			get { return _reason; }
 		}
+#endif
 	}
 }

@@ -315,7 +315,7 @@ namespace p2pncs.Net.Overlay
 
 		public bool Equals (Key other)
 		{
-			if (other._data.Length != this._data.Length)
+			if (other == null || other._data.Length != this._data.Length)
 				return false;
 			for (int i = 0; i < _data.Length; i ++) {
 				if (this._data[i] != other._data[i])

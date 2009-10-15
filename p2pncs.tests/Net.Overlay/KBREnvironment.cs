@@ -22,8 +22,8 @@ using System.Threading;
 using openCrypto.EllipticCurve;
 using p2pncs.Net;
 using p2pncs.Net.Overlay;
-using p2pncs.Net.Overlay.Anonymous;
-using p2pncs.Net.Overlay.DHT;
+//using p2pncs.Net.Overlay.Anonymous;
+//using p2pncs.Net.Overlay.DHT;
 using p2pncs.Security.Cryptography;
 using p2pncs.Simulation;
 using p2pncs.Simulation.VirtualNet;
@@ -33,13 +33,14 @@ namespace p2pncs.tests.Net.Overlay
 {
 	class KBREnvironment : IDisposable
 	{
+		public static Key AppId = new Key (new byte[] {0});
 		VirtualNetwork _network;
-		IntervalInterrupter _interrupter, _dhtInt, _anonInt;
+		IntervalInterrupter _interrupter;//, _dhtInt, _anonInt;
 		List<EndPoint> _endPoints = new List<EndPoint> ();
 		List<IMessagingSocket> _sockets = new List<IMessagingSocket> ();
 		List<IKeyBasedRouter> _routers = new List<IKeyBasedRouter> ();
-		List<IDistributedHashTable> _dhts = null;
-		List<IAnonymousRouter> _anons = null;
+		//List<IDistributedHashTable> _dhts = null;
+		//List<IAnonymousRouter> _anons = null;
 		RandomIPAddressGenerator _ipGenerator = new RandomIPAddressGenerator ();
 		EndPoint[] _initEPs = null;
 		IRTOAlgorithm _rtoAlgo = new ConstantRTO (TimeSpan.FromSeconds (1));
@@ -50,6 +51,8 @@ namespace p2pncs.tests.Net.Overlay
 			_interrupter = new IntervalInterrupter (TimeSpan.FromMilliseconds (50), "MessagingSocket Interrupter");
 			_interrupter.Start ();
 			if (enableDHT || enableAnon) {
+				throw new NotImplementedException ();
+#if false
 				_dhts = new List<IDistributedHashTable> ();
 				_dhtInt = new IntervalInterrupter (TimeSpan.FromSeconds (5), "DHT Maintenance Interrupter");
 				_dhtInt.Start ();
@@ -58,6 +61,7 @@ namespace p2pncs.tests.Net.Overlay
 				_anons = new List<IAnonymousRouter> ();
 				_anonInt = new IntervalInterrupter (TimeSpan.FromMilliseconds (500), "Anonymous Interrupter");
 				_anonInt.Start ();
+#endif
 			}
 		}
 
@@ -71,8 +75,13 @@ namespace p2pncs.tests.Net.Overlay
 				//IMessagingSocket msock = new MessagingSocket (sock, true, SymmetricKey.NoneKey, Serializer.Instance, null, _interrupter, TimeSpan.FromSeconds (1), 2, 1024);
 				IMessagingSocket msock = new VirtualMessagingSocket (sock, true, _interrupter, _rtoAlgo, 2, 1024, 1024);
 				_sockets.Add (msock);
-				IKeyBasedRouter router = new SimpleIterativeRouter2 (keys[i], 0, msock, new SimpleRoutingAlgorithm (), Serializer.Instance, true);
+				//IKeyBasedRouter router = new SimpleIterativeRouter (keys[i], 0, msock, new SimpleRoutingAlgorithm (), Serializer.Instance, true);
+
+				IKeyBasedRoutingAlgorithm routingAlgo = new SimpleRoutingAlgorithm (keys[i], msock, 4, TimeSpan.FromMinutes (5));
+				routingAlgo.NewApp (AppId);
+				IKeyBasedRouter router = new SimpleIterativeRouter (routingAlgo, msock);
 				_routers.Add (router);
+#if false
 				if (_dhts != null) {
 					IDistributedHashTable dht = new SimpleDHT (router, msock, new OnMemoryLocalHashTable (router, _dhtInt));
 					_dhts.Add (dht);
@@ -81,10 +90,11 @@ namespace p2pncs.tests.Net.Overlay
 						_anons.Add (anonRouter);
 					}
 				}
+#endif
 				if (_endPoints.Count != 0) {
 					if (_initEPs == null || _endPoints.Count < 3)
 						_initEPs = _endPoints.ToArray ();
-					router.Join (_initEPs);
+					router.Join (AppId, _initEPs);
 				}
 				_endPoints.Add (ep);
 				Thread.Sleep (5);
@@ -95,6 +105,7 @@ namespace p2pncs.tests.Net.Overlay
 		public void RemoveNode (int index)
 		{
 			_endPoints.RemoveAt (index);
+#if false
 			if (_dhts != null) {
 				if (_anons != null) {
 					_anons[index].Close ();
@@ -103,6 +114,7 @@ namespace p2pncs.tests.Net.Overlay
 				_dhts[index].Dispose ();
 				_dhts.RemoveAt (index);
 			}
+#endif
 			_routers[index].Close ();
 			_routers.RemoveAt (index);
 			_sockets[index].Close ();
@@ -125,6 +137,7 @@ namespace p2pncs.tests.Net.Overlay
 			get { return _routers; }
 		}
 
+#if false
 		public IList<IDistributedHashTable> DistributedHashTables {
 			get { return _dhts; }
 		}
@@ -132,9 +145,11 @@ namespace p2pncs.tests.Net.Overlay
 		public IList<IAnonymousRouter> AnonymousRouters {
 			get { return _anons; }
 		}
+#endif
 
 		public void Dispose ()
 		{
+#if false
 			if (_dhts != null) {
 				if (_anonInt != null) {
 					_anonInt.Dispose ();
@@ -145,6 +160,7 @@ namespace p2pncs.tests.Net.Overlay
 				for (int i = 0; i < _dhts.Count; i++)
 					_dhts[i].Dispose ();
 			}
+#endif
 			for (int i = 0; i < _routers.Count; i++)
 				_routers[i].Close ();
 			for (int i = 0; i < _sockets.Count; i++)

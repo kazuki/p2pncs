@@ -15,6 +15,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+/// TODO:
+#if false
 namespace p2pncs.Net.Overlay
 {
 	public enum FailReason
@@ -24,3 +26,4 @@ namespace p2pncs.Net.Overlay
 		NoRoot
 	}
 }
+#endif
