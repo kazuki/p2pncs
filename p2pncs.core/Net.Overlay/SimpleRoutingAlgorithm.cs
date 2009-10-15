@@ -45,7 +45,7 @@ namespace p2pncs.Net.Overlay
 			_self = self;
 			_msock = msock;
 			_selfMinNodeHandle = new NodeHandle (self, null);
-			_selfNodeHandle = new MultiAppNodeHandle (self, null, null, DateTime.MinValue, null);
+			_selfNodeHandle = new MultiAppNodeHandle (self, null, null, null);
 			_mask = ~new Key (new byte[self.KeyBytes]);
 			_bucketSize = bucketSize;
 			_minimumPingInterval = minPingInterval;
@@ -68,7 +68,7 @@ namespace p2pncs.Net.Overlay
 				_multiAppRoutingTable.Add (appId, new RoutingTable (_selfMinNodeHandle, _bucketSize));
 
 				Key[] apps = new List<Key> (_multiAppRoutingTable.Keys).ToArray ();
-				_selfNodeHandle = new MultiAppNodeHandle (_self, null, apps, DateTime.Now, _selfNodeHandle.Options);
+				_selfNodeHandle = new MultiAppNodeHandle (_self, null, apps, _selfNodeHandle.Options);
 			}
 		}
 
@@ -111,8 +111,7 @@ namespace p2pncs.Net.Overlay
 				options[options.Length - 1] = opt;
 			}
 
-			_selfNodeHandle = new MultiAppNodeHandle (_self, null, _selfNodeHandle.AppIDs,
-				_selfNodeHandle.AppIDsLastModified, options);
+			_selfNodeHandle = new MultiAppNodeHandle (_self, null, _selfNodeHandle.AppIDs, options);
 		}
 
 		public void RemoveEndPointOption (Type optType)
@@ -121,8 +120,7 @@ namespace p2pncs.Net.Overlay
 			for (int i = 0; i < list.Count; i++) {
 				if (optType.Equals (list[i].GetType ())) {
 					list.RemoveAt (i);
-					_selfNodeHandle = new MultiAppNodeHandle (_self, null, _selfNodeHandle.AppIDs,
-						_selfNodeHandle.AppIDsLastModified, list.ToArray ());
+					_selfNodeHandle = new MultiAppNodeHandle (_self, null, _selfNodeHandle.AppIDs, list.ToArray ());
 					return;
 				}
 			}
@@ -165,7 +163,7 @@ namespace p2pncs.Net.Overlay
 
 					bool epChanged = entry != null && !node.EndPoint.Equals (entry.NodeHandle.EndPoint);
 					bool idChanged = !epChanged && entry2 != null && !node.NodeID.Equals (entry2.NodeHandle.NodeID);
-					bool appChanged = !epChanged && !idChanged && entry != null && !node.AppIDsLastModified.Equals (entry.NodeHandle.AppIDsLastModified);
+					bool appChanged = !epChanged && !idChanged && entry != null && MultiAppNodeHandle.IsAppIdChanged (node, entry.NodeHandle);
 					if (epChanged || idChanged || appChanged || entry != entry2) {
 						if (entry != null) RemoveEntry (entry);
 						if (entry2 != null && entry != entry2) RemoveEntry (entry2);

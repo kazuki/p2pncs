@@ -33,23 +33,31 @@ namespace p2pncs.Net.Overlay
 		Key[] _appIds;
 
 		[SerializableFieldId (3)]
-		DateTime _appIdsChanged;
-
-		[SerializableFieldId (4)]
 		object[] _options;
 
-		public MultiAppNodeHandle (Key id, EndPoint ep, Key[] appIds, DateTime appIdsChanged, object[] options)
+		public MultiAppNodeHandle (Key id, EndPoint ep, Key[] appIds, object[] options)
 		{
 			_id = id;
 			_ep = ep;
 			_appIds = appIds;
-			_appIdsChanged = appIdsChanged;
 			_options = options;
 		}
 
 		public MultiAppNodeHandle CloneWithNewEndPoint (EndPoint newEndPoint)
 		{
-			return new MultiAppNodeHandle (_id, newEndPoint, _appIds, _appIdsChanged, _options);
+			return new MultiAppNodeHandle (_id, newEndPoint, _appIds, _options);
+		}
+
+		public static bool IsAppIdChanged (MultiAppNodeHandle x, MultiAppNodeHandle y)
+		{
+			if (x.AppIDs == y.AppIDs)
+				return false; // for simulator
+			if (x.AppIDs.Length != y.AppIDs.Length)
+				return true;
+			for (int i = 0; i < x.AppIDs.Length; i ++)
+				if (!x.AppIDs[i].Equals (y.AppIDs[i]))
+					return true;
+			return false;
 		}
 
 		public EndPoint EndPoint {
@@ -62,10 +70,6 @@ namespace p2pncs.Net.Overlay
 
 		public Key[] AppIDs {
 			get { return _appIds; }
-		}
-
-		public DateTime AppIDsLastModified {
-			get { return _appIdsChanged; }
 		}
 
 		public object[] Options {
