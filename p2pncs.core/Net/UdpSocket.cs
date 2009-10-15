@@ -205,7 +205,7 @@ namespace p2pncs.Net
 			Interlocked.Increment (ref _sentDgrams);
 		}
 
-		public event DatagramReceiveEventHandler Received;
+		public event EventHandler<DatagramReceiveEventArgs> Received;
 
 		public int MaxDatagramSize {
 			get { return _max_datagram_size; }

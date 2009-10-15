@@ -59,7 +59,7 @@ namespace p2pncs.Net
 		/// <summary>
 		/// データグラムの受信時に発生するイベント
 		/// </summary>
-		event DatagramReceiveEventHandler Received;
+		event EventHandler<DatagramReceiveEventArgs> Received;
 
 		int MaxDatagramSize { get; }
 

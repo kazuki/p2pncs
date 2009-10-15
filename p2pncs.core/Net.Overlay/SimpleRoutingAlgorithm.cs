@@ -52,7 +52,7 @@ namespace p2pncs.Net.Overlay
 			_bucketSize = bucketSize;
 			_minimumPingInterval = minPingInterval;
 
-			_msock.AddInquiredHandler (typeof (PingRequest), ReceivedPingRequest);
+			_msock.InquiredHandlers.Add (typeof (PingRequest), ReceivedPingRequest);
 		}
 
 		#region IKeyBasedRoutingAlgorithm Members
@@ -93,7 +93,7 @@ namespace p2pncs.Net.Overlay
 				_allEntries.Clear ();
 				_reverseMap.Clear ();
 			}
-			_msock.RemoveInquiredHandler (typeof (PingRequest), ReceivedPingRequest);
+			_msock.InquiredHandlers.Remove (typeof (PingRequest), ReceivedPingRequest);
 			_multiAppTableLock.Dispose ();
 		}
 

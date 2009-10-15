@@ -61,12 +61,12 @@ namespace p2pncs.tests.Simulation.VirtualNet
 				using (VirtualDatagramEventSocket sock2 = new VirtualDatagramEventSocket (network, ep2.Address)) {
 					sock1.Bind (new IPEndPoint (IPAddress.Any, ep1.Port));
 					sock2.Bind (new IPEndPoint (IPAddress.Any, ep2.Port));
-					sock1.Received += new DatagramReceiveEventHandler (delegate (object sender, DatagramReceiveEventArgs e) {
+					sock1.Received += delegate (object sender, DatagramReceiveEventArgs e) {
 						done.Set ();
-					});
-					sock2.Received += new DatagramReceiveEventHandler (delegate (object sender, DatagramReceiveEventArgs e) {
+					};
+					sock2.Received += delegate (object sender, DatagramReceiveEventArgs e) {
 						done.Set ();
-					});
+					};
 					sock1.SendTo (msg, new IPEndPoint (ep2.Address, ep2.Port + 1));
 					Assert.IsFalse (done.WaitOne (500));
 					sock2.SendTo (msg, ep1);

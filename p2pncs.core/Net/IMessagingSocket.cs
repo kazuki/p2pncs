@@ -33,10 +33,6 @@ namespace p2pncs.Net
 		/// <param name="remoteEP">送信先のエンドポイント</param>
 		void Send (object obj, EndPoint remoteEP);
 
-		void AddReceivedHandler (Type msgType, ReceivedEventHandler handler);
-		void RemoveReceivedHandler (Type msgType, ReceivedEventHandler handler);
-		event ReceivedEventHandler ReceivedUnknownMessage;
-
 		/// <summary>
 		/// 非同期問い合わせを開始します
 		/// </summary>
@@ -55,29 +51,14 @@ namespace p2pncs.Net
 		object EndInquire (IAsyncResult ar);
 
 		/// <summary>
-		/// 引数にて指定する型の問い合わせに対して処理を行うハンドラを登録します
-		/// </summary>
-		/// <param name="inquiredMessageType">ハンドラに結びつける問い合わせメッセージの型</param>
-		/// <param name="handler">処理を行うハンドラ</param>
-		void AddInquiredHandler (Type inquiredMessageType, InquiredEventHandler handler);
-
-		/// <summary>
-		/// AddInquiredHandlerメソッドで登録した型とハンドラの組を削除します
-		/// </summary>
-		void RemoveInquiredHandler (Type inquiredMessageType, InquiredEventHandler handler);
-
-		/// <summary>
-		/// AddInquiredHandlerメソッドを利用して登録していない問い合わせがあったときに発生するイベント
-		/// </summary>
-		event InquiredEventHandler InquiredUnknownMessage;
-
-		/// <summary>
 		/// 問い合わせに対して応答を返します
 		/// </summary>
 		void StartResponse (InquiredEventArgs args, object response);
 
-		event InquiredEventHandler InquiryFailure;
-		event InquiredEventHandler InquirySuccess;
+		EventHandlers<Type, ReceivedEventArgs> ReceivedHandlers { get; }
+		EventHandlers<Type, InquiredEventArgs> InquiredHandlers { get; }
+		event EventHandler<InquiredEventArgs> InquiryFailure;
+		event EventHandler<InquiredEventArgs> InquirySuccess;
 
 		/// <summary>
 		/// 問い合わせの重複をチェックする型を追加します

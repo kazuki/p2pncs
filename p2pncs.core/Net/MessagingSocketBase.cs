@@ -37,16 +37,14 @@ namespace p2pncs.Net
 		IntervalInterrupter _interrupter;
 		KeyValueCache<MessageIdentity, object> _inquiryDupCheckCache;
 		HashSet<Type> _inquiryDupCheckTypeSet = new HashSet<Type> ();
-		Dictionary<Type, InquiredEventHandler> _inquiredHandlers = new Dictionary<Type, InquiredEventHandler> ();
-		Dictionary<Type, ReceivedEventHandler> _receivedHandlers = new Dictionary<Type, ReceivedEventHandler> ();
+		EventHandlers<Type, InquiredEventArgs> _inquiredHandlers = new EventHandlers<Type, InquiredEventArgs> ();
+		EventHandlers<Type, ReceivedEventArgs> _receivedHandlers = new EventHandlers<Type, ReceivedEventArgs> ();
 		long _numInq = 0, _numReinq = 0;
 
 		protected IRTOAlgorithm _rtoAlgo;
 
-		public event ReceivedEventHandler ReceivedUnknownMessage;
-		public event InquiredEventHandler InquiredUnknownMessage;
-		public event InquiredEventHandler InquirySuccess;
-		public event InquiredEventHandler InquiryFailure;
+		public event EventHandler<InquiredEventArgs> InquirySuccess;
+		public event EventHandler<InquiredEventArgs> InquiryFailure;
 
 		protected MessagingSocketBase (IDatagramEventSocket sock, bool ownSocket, IntervalInterrupter interrupter,
 			IRTOAlgorithm rtoAlgo, int defaultMaxRetries, int retryListSize, int inquiryDupCheckSize)
@@ -118,54 +116,6 @@ namespace p2pncs.Net
 		}
 		protected abstract void StartResponse_Internal (InquiredResponseState state, object response);
 
-		public void AddReceivedHandler (Type msgType, ReceivedEventHandler handler)
-		{
-			lock (_receivedHandlers) {
-				ReceivedEventHandler value;
-				if (_receivedHandlers.TryGetValue (msgType, out value)) {
-					value += handler;
-				} else {
-					_receivedHandlers.Add (msgType, handler);
-				}
-			}
-		}
-
-		public void RemoveReceivedHandler (Type msgType, ReceivedEventHandler handler)
-		{
-			lock (_receivedHandlers) {
-				ReceivedEventHandler value;
-				if (_receivedHandlers.TryGetValue (msgType, out value)) {
-					value -= handler;
-					if (value == null)
-						_receivedHandlers.Remove (msgType);
-				}
-			}
-		}
-
-		public void AddInquiredHandler (Type inquiryMessageType, InquiredEventHandler handler)
-		{
-			lock (_inquiredHandlers) {
-				InquiredEventHandler value;
-				if (_inquiredHandlers.TryGetValue (inquiryMessageType, out value)) {
-					value += handler;
-				} else {
-					_inquiredHandlers.Add (inquiryMessageType, handler);
-				}
-			}
-		}
-
-		public void RemoveInquiredHandler (Type inquiryMessageType, InquiredEventHandler handler)
-		{
-			lock (_inquiredHandlers) {
-				InquiredEventHandler value;
-				if (_inquiredHandlers.TryGetValue (inquiryMessageType, out value)) {
-					value -= handler;
-					if (value == null)
-						_inquiredHandlers.Remove (inquiryMessageType);
-				}
-			}
-		}
-
 		public void AddInquiryDuplicationCheckType (Type type)
 		{
 			lock (_inquiryDupCheckTypeSet) {
@@ -178,6 +128,14 @@ namespace p2pncs.Net
 			lock (_inquiryDupCheckTypeSet) {
 				_inquiryDupCheckTypeSet.Remove (type);
 			}
+		}
+
+		public EventHandlers<Type, ReceivedEventArgs> ReceivedHandlers {
+			get { return _receivedHandlers; }
+		}
+
+		public EventHandlers<Type, InquiredEventArgs> InquiredHandlers {
+			get { return _inquiredHandlers; }
 		}
 
 		public IDatagramEventSocket BaseSocket {
@@ -200,12 +158,8 @@ namespace p2pncs.Net
 					_retryList[i].Fail ();
 				_retryList.Clear ();
 			}
-			lock (_inquiredHandlers) {
-				_inquiredHandlers.Clear ();
-			}
-			lock (_receivedHandlers) {
-				_receivedHandlers.Clear ();
-			}
+			_inquiredHandlers.Clear ();
+			_receivedHandlers.Clear ();
 		}
 
 		public long NumberOfInquiries {
@@ -292,16 +246,12 @@ namespace p2pncs.Net
 				return;
 			}
 
-			InquiredEventHandler handler;
-			lock (_inquiredHandlers) {
-				if (e.InquireMessage == null || !_inquiredHandlers.TryGetValue (e.InquireMessage.GetType (), out handler))
-					handler = InquiredUnknownMessage;
-			}
-			if (handler != null) {
-				try {
-					handler (sender, e);
-				} catch {}
-			}
+			try {
+				if (e.InquireMessage == null)
+					_inquiredHandlers.UnknownKeyHandler (sender, e);
+				else
+					_inquiredHandlers.Invoke (e.InquireMessage.GetType (), sender, e);
+			} catch {}
 		}
 
 		protected void InvokeInquirySuccess (object sender, InquiredEventArgs e)
@@ -326,16 +276,12 @@ namespace p2pncs.Net
 
 		protected void InvokeReceived (object sender, ReceivedEventArgs e)
 		{
-			ReceivedEventHandler handler;
-			lock (_receivedHandlers) {
-				if (e.Message == null || !_receivedHandlers.TryGetValue (e.Message.GetType (), out handler))
-					handler = ReceivedUnknownMessage;
-			}
-			if (handler != null) {
-				try {
-					handler (this, e);
-				} catch {}
-			}
+			try {
+				if (e.Message == null)
+					_receivedHandlers.UnknownKeyHandler (sender, e);
+				else
+					_receivedHandlers.Invoke (e.Message.GetType (), sender, e);
+			} catch {}
 		}
 		#endregion
 

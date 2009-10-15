@@ -93,7 +93,7 @@ namespace p2pncs.Simulation.VirtualNet
 			Interlocked.Increment (ref _sentDgrams);
 		}
 
-		public event DatagramReceiveEventHandler Received;
+		public event EventHandler<DatagramReceiveEventArgs> Received;
 
 		internal void InvokeReceivedEvent (object sender, DatagramReceiveEventArgs e)
 		{

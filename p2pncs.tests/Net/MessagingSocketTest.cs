@@ -85,7 +85,7 @@ namespace p2pncs.tests.Net
 			EndPoint[] endPoints;
 			EndPoint noRouteEP;
 			CreateMessagingSockets (2, key, out msockets, out endPoints, out noRouteEP);
-			msockets[1].AddInquiredHandler (typeof (byte[]), delegate (object sender, InquiredEventArgs e) {
+			msockets[1].InquiredHandlers.Add (typeof (byte[]), delegate (object sender, InquiredEventArgs e) {
 				msockets[1].StartResponse (e, e.InquireMessage);
 			});
 

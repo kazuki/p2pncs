@@ -70,7 +70,7 @@ namespace p2pncs.tests.Net
 				CreateMessagingSocket (i, key, out sock, out ep);
 				sockets[i] = sock;
 				endPoints[i] = ep;
-				sockets[i].InquiredUnknownMessage += DefaultInquiredEventHandler;
+				sockets[i].InquiredHandlers.AddUnknownKeyHandler (DefaultInquiredEventHandler);
 			}
 		}
 		static void DefaultInquiredEventHandler (object sender, InquiredEventArgs e)
@@ -89,19 +89,19 @@ namespace p2pncs.tests.Net
 
 				try {
 					int count = 0;
-					msockets[0].InquirySuccess += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+					msockets[0].InquirySuccess += delegate (object sender, InquiredEventArgs e) {
 						Interlocked.Increment (ref count);
 						done2.Set ();
-					});
-					msockets[0].InquiryFailure += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+					};
+					msockets[0].InquiryFailure += delegate (object sender, InquiredEventArgs e) {
 						Assert.Fail ();
-					});
-					msockets[1].InquirySuccess += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+					};
+					msockets[1].InquirySuccess += delegate (object sender, InquiredEventArgs e) {
 						Assert.Fail ();
-					});
-					msockets[1].InquiryFailure += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+					};
+					msockets[1].InquiryFailure += delegate (object sender, InquiredEventArgs e) {
 						Assert.Fail ();
-					});
+					};
 
 					{
 						IAsyncResult ar = msockets[0].BeginInquire ("HELLO", endPoints[1], null, null);
@@ -141,19 +141,19 @@ namespace p2pncs.tests.Net
 
 				try {
 					int count = 0;
-					msockets[0].InquirySuccess += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+					msockets[0].InquirySuccess += delegate (object sender, InquiredEventArgs e) {
 						Assert.Fail ();
-					});
-					msockets[0].InquiryFailure += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+					};
+					msockets[0].InquiryFailure += delegate (object sender, InquiredEventArgs e) {
 						Interlocked.Increment (ref count);
 						done2.Set ();
-					});
-					msockets[1].InquirySuccess += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+					};
+					msockets[1].InquirySuccess += delegate (object sender, InquiredEventArgs e) {
 						Assert.Fail ();
-					});
-					msockets[1].InquiryFailure += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+					};
+					msockets[1].InquiryFailure += delegate (object sender, InquiredEventArgs e) {
 						Assert.Fail ();
-					});
+					};
 
 					{
 						IAsyncResult ar = msockets[0].BeginInquire ("HELLO", noRouteEP, null, null);
@@ -189,31 +189,31 @@ namespace p2pncs.tests.Net
 				CreateMessagingSockets (2, null, out msockets, out endPoints, out noRouteEP);
 
 				try {
-					msockets[0].ReceivedUnknownMessage += new ReceivedEventHandler(delegate (object sender, ReceivedEventArgs e) {
+					msockets[0].ReceivedHandlers.AddUnknownKeyHandler (delegate (object sender, ReceivedEventArgs e) {
 						Assert.Fail ();
 					});
-					msockets[0].InquiredUnknownMessage += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+					msockets[0].InquiredHandlers.AddUnknownKeyHandler (delegate (object sender, InquiredEventArgs e) {
 						Assert.Fail ();
 					});
-					msockets[0].InquirySuccess += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+					msockets[0].InquirySuccess += delegate (object sender, InquiredEventArgs e) {
 						Assert.Fail ();
-					});
-					msockets[0].InquiryFailure += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+					};
+					msockets[0].InquiryFailure += delegate (object sender, InquiredEventArgs e) {
 						Assert.Fail ();
-					});
-					msockets[1].ReceivedUnknownMessage += new ReceivedEventHandler (delegate (object sender, ReceivedEventArgs e) {
+					};
+					msockets[1].ReceivedHandlers.AddUnknownKeyHandler (delegate (object sender, ReceivedEventArgs e) {
 						Assert.AreEqual ("HELLO", e.Message as string);
 						done.Set ();
 					});
-					msockets[1].InquiredUnknownMessage += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+					msockets[1].InquiredHandlers.AddUnknownKeyHandler (delegate (object sender, InquiredEventArgs e) {
 						Assert.Fail ();
 					});
-					msockets[1].InquirySuccess += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+					msockets[1].InquirySuccess += delegate (object sender, InquiredEventArgs e) {
 						Assert.Fail ();
-					});
-					msockets[1].InquiryFailure += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+					};
+					msockets[1].InquiryFailure += delegate (object sender, InquiredEventArgs e) {
 						Assert.Fail ();
-					});
+					};
 
 					msockets[0].Send ("HELLO", endPoints[1]);
 					Assert.IsTrue (done.WaitOne (2000));
@@ -232,31 +232,31 @@ namespace p2pncs.tests.Net
 				CreateMessagingSockets (2, null, out msockets, out endPoints, out noRouteEP);
 
 				try {
-					msockets[0].ReceivedUnknownMessage += new ReceivedEventHandler (delegate (object sender, ReceivedEventArgs e) {
+					msockets[0].ReceivedHandlers.AddUnknownKeyHandler (delegate (object sender, ReceivedEventArgs e) {
 						Assert.Fail ();
 					});
-					msockets[0].InquiredUnknownMessage += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+					msockets[0].InquiredHandlers.AddUnknownKeyHandler (delegate (object sender, InquiredEventArgs e) {
 						Assert.Fail ();
 					});
-					msockets[0].InquiryFailure += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+					msockets[0].InquiryFailure += delegate (object sender, InquiredEventArgs e) {
 						Assert.Fail ();
-					});
-					msockets[1].ReceivedUnknownMessage += new ReceivedEventHandler (delegate (object sender, ReceivedEventArgs e) {
+					};
+					msockets[1].ReceivedHandlers.AddUnknownKeyHandler (delegate (object sender, ReceivedEventArgs e) {
 						Assert.IsNull (e.Message);
 						done.Set ();
 					});
-					msockets[1].InquiredUnknownMessage -= DefaultInquiredEventHandler;
-					msockets[1].InquiredUnknownMessage += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+					msockets[1].InquiredHandlers.RemoveUnknownKeyHandler (DefaultInquiredEventHandler);
+					msockets[1].InquiredHandlers.AddUnknownKeyHandler (delegate (object sender, InquiredEventArgs e) {
 						Assert.IsNull (e.InquireMessage);
 						(sender as IMessagingSocket).StartResponse (e, null);
 						done.Set ();
 					});
-					msockets[1].InquirySuccess += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+					msockets[1].InquirySuccess += delegate (object sender, InquiredEventArgs e) {
 						Assert.Fail ();
-					});
-					msockets[1].InquiryFailure += new InquiredEventHandler (delegate (object sender, InquiredEventArgs e) {
+					};
+					msockets[1].InquiryFailure += delegate (object sender, InquiredEventArgs e) {
 						Assert.Fail ();
-					});
+					};
 
 					msockets[0].Send (null, endPoints[1]);
 					Assert.IsTrue (done.WaitOne (2000));

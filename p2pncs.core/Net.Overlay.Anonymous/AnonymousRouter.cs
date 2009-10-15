@@ -61,8 +61,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 			_checkInt = timeoutCheckInt;
 			_checkInt.AddInterruption (TimeoutCheck);
 
-			_sock.AddInquiredHandler (typeof (EstablishRouteMessage), InquiredHandler_EstablishRouteMessage);
-			_sock.AddInquiredHandler (typeof (RoutedMessage), InquiredHandler_RoutedMessage);
+			_sock.InquiredHandlers.Add (typeof (EstablishRouteMessage), InquiredHandler_EstablishRouteMessage);
+			_sock.InquiredHandlers.Add (typeof (RoutedMessage), InquiredHandler_RoutedMessage);
 		}
 
 		#region IAnonymousRouter Members
@@ -107,8 +107,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 		public void Close ()
 		{
 			_checkInt.RemoveInterruption (TimeoutCheck);
-			_sock.RemoveInquiredHandler (typeof (EstablishRouteMessage), InquiredHandler_EstablishRouteMessage);
-			_sock.RemoveInquiredHandler (typeof (RoutedMessage), InquiredHandler_RoutedMessage);
+			_sock.InquiredHandlers.Remove (typeof (EstablishRouteMessage), InquiredHandler_EstablishRouteMessage);
+			_sock.InquiredHandlers.Remove (typeof (RoutedMessage), InquiredHandler_RoutedMessage);
 		}
 
 		#endregion

@@ -34,12 +34,12 @@ namespace p2pncs.tests.Net
 
 			for (int i = 0; i < sockets.Length; i++) {
 				sockets[i].Bind (endPoints[i]);
-				sockets[i].Received += new DatagramReceiveEventHandler (delegate (object sender, DatagramReceiveEventArgs e) {
+				sockets[i].Received += delegate (object sender, DatagramReceiveEventArgs e) {
 					recvIdx = Array.IndexOf<IDatagramEventSocket> (sockets, sender as IDatagramEventSocket);
 					recvSize = e.Size;
 					recvData = (byte[])e.Buffer.Clone ();
 					done.Set ();
-				});
+				};
 			}
 
 			for (int i = 0; i < sockets.Length; i++) {

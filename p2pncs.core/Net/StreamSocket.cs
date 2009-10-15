@@ -60,7 +60,7 @@ namespace p2pncs.Net
 			_remoteEP = remoteEP;
 			for (int i = 0; i < _sendBuffer.Length; i ++)
 				_sendBuffer[i] = new Packet (max_datagram_size);
-			_sock.Received += new DatagramReceiveEventHandler (Socket_Received);
+			_sock.Received += Socket_Received;
 			_timeoutCheckInt = timeoutCheckInt;
 			_timeoutCheckInt.AddInterruption (CheckTimeout);
 

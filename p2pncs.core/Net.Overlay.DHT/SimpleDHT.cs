@@ -42,8 +42,8 @@ namespace p2pncs.Net.Overlay.DHT
 			_sock = sock;
 			_kbr = kbr;
 			_local = localStore;
-			sock.AddInquiredHandler (typeof (GetRequest), Inquired_GetRequest);
-			sock.AddInquiredHandler (typeof (PutRequest), Inquired_PutRequest);
+			sock.InquiredHandlers.Add (typeof (GetRequest), Inquired_GetRequest);
+			sock.InquiredHandlers.Add (typeof (PutRequest), Inquired_PutRequest);
 		}
 
 		void Inquired_GetRequest (object sender, InquiredEventArgs args)
@@ -109,8 +109,8 @@ namespace p2pncs.Net.Overlay.DHT
 
 		public void Dispose ()
 		{
-			_sock.RemoveInquiredHandler (typeof (GetRequest), Inquired_GetRequest);
-			_sock.RemoveInquiredHandler (typeof (PutRequest), Inquired_PutRequest);
+			_sock.InquiredHandlers.Remove (typeof (GetRequest), Inquired_GetRequest);
+			_sock.InquiredHandlers.Remove (typeof (PutRequest), Inquired_PutRequest);
 		}
 
 		#endregion

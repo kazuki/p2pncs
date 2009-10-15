@@ -96,18 +96,15 @@
     <Compile Include="Net.Overlay\RoutingResult.cs" />
     <Compile Include="Net.Overlay\SimpleRoutingAlgorithm.cs" />
     <Compile Include="Net\DatagramReceiveEventArgs.cs" />
-    <Compile Include="Net\DatagramReceiveEventHandler.cs" />
     <Compile Include="Net\IDatagramEventSocket.cs" />
     <Compile Include="Net\IMessagingSocket.cs" />
     <Compile Include="Net\InquiredEventArgs.cs" />
-    <Compile Include="Net\InquiredEventHandler.cs" />
     <Compile Include="Net\IPAddressUtility.cs" />
     <Compile Include="Net\IPublicIPAddressVotingBox.cs" />
     <Compile Include="Net\IStreamSocket.cs" />
     <Compile Include="Net\MessagingSocket.cs" />
     <Compile Include="Net\MessagingSocketBase.cs" />
     <Compile Include="Net\ReceivedEventArgs.cs" />
-    <Compile Include="Net\ReceivedEventHandler.cs" />
     <Compile Include="Net\SimplePublicIPAddressVotingBox.cs" />
     <Compile Include="Net\StreamSocket.cs" />
     <Compile Include="Net\UdpSocket.cs" />
@@ -131,6 +128,7 @@
     <Compile Include="SerializableFieldIndexAttribute.cs" />
     <Compile Include="SerializableTypeIdAttribute.cs" />
     <Compile Include="Serializer.cs" />
+    <Compile Include="EventHandlers.cs" />
     <Compile Include="Utility\KeyValueCache.cs" />
     <Compile Include="Utility\LzmaUtility.cs" />
     <Compile Include="Utility\SerializeHelper.cs" />

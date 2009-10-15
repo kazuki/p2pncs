@@ -34,7 +34,7 @@ namespace p2pncs.Net.Overlay
 			_algo = algo;
 			_msock = msock;
 			_algo.Setup (this);
-			_msock.AddInquiredHandler (typeof (FindCloseNode), Received_FindCloseNode);
+			_msock.InquiredHandlers.Add (typeof (FindCloseNode), Received_FindCloseNode);
 		}
 
 		public void Join (Key appId, EndPoint[] initialNodes)
@@ -51,7 +51,7 @@ namespace p2pncs.Net.Overlay
 		public void Close ()
 		{
 			_algo.Close ();
-			_msock.RemoveInquiredHandler (typeof (FindCloseNode), Received_FindCloseNode);
+			_msock.InquiredHandlers.Remove (typeof (FindCloseNode), Received_FindCloseNode);
 		}
 
 		public IAsyncResult BeginRoute (Key appId, Key dest, int numOfCandidates, KeyBasedRoutingOptions opts, AsyncCallback callback, object state)
