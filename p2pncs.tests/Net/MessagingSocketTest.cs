@@ -80,7 +80,7 @@ namespace p2pncs.tests.Net
 		[Test]
 		public void EncryptionTest ()
 		{
-			SymmetricKey key = new SymmetricKey (SymmetricAlgorithmType.Camellia, RNG.GetRNGBytes (16), RNG.GetRNGBytes (16));
+			SymmetricKey key = new SymmetricKey (SymmetricAlgorithmType.Camellia, RNG.GetBytes (16), RNG.GetBytes (16));
 			IMessagingSocket[] msockets;
 			EndPoint[] endPoints;
 			EndPoint noRouteEP;

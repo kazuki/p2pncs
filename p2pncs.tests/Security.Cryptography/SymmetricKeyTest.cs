@@ -38,14 +38,14 @@ namespace p2pncs.tests.Security.Cryptography
 					null, null
 				},
 				new byte[][] {
-					RNG.GetRNGBytes (16), RNG.GetRNGBytes (16),
-					RNG.GetRNGBytes (24), RNG.GetRNGBytes (16),
-					RNG.GetRNGBytes (32), RNG.GetRNGBytes (16)
+					RNG.GetBytes (16), RNG.GetBytes (16),
+					RNG.GetBytes (24), RNG.GetBytes (16),
+					RNG.GetBytes (32), RNG.GetBytes (16)
 				},
 				new byte[][] {
-					RNG.GetRNGBytes (16), RNG.GetRNGBytes (16),
-					RNG.GetRNGBytes (24), RNG.GetRNGBytes (16),
-					RNG.GetRNGBytes (32), RNG.GetRNGBytes (16)
+					RNG.GetBytes (16), RNG.GetBytes (16),
+					RNG.GetBytes (24), RNG.GetBytes (16),
+					RNG.GetBytes (32), RNG.GetBytes (16)
 				},
 			};
 			int[] data_length_list = new int[] {
@@ -59,7 +59,7 @@ namespace p2pncs.tests.Security.Cryptography
 					foreach (bool enableShuffle in shuffle_list) {
 						SymmetricKey key = new SymmetricKey (types[i], key_ivs[k + 1], key_ivs[k], CipherModePlus.CBC, System.Security.Cryptography.PaddingMode.ISO10126, enableShuffle);
 						for (int idx = 0; idx < data_length_list.Length; idx ++) {
-							byte[] data = RNG.GetRNGBytes (data_length_list[idx]);
+							byte[] data = RNG.GetBytes (data_length_list[idx]);
 							byte[] e1 = key.Encrypt (data, 0, data.Length);
 							byte[] p1 = key.Decrypt (e1, 0, e1.Length);
 							Assert.AreEqual (data, p1);
@@ -78,8 +78,8 @@ namespace p2pncs.tests.Security.Cryptography
 		[Test]
 		public void Test2 ()
 		{
-			SymmetricKey key = new SymmetricKey (SymmetricAlgorithmType.Camellia, RNG.GetRNGBytes (16), RNG.GetRNGBytes (16), CipherModePlus.CBC, System.Security.Cryptography.PaddingMode.None, true);
-			byte[] plain = RNG.GetRNGBytes (16);
+			SymmetricKey key = new SymmetricKey (SymmetricAlgorithmType.Camellia, RNG.GetBytes (16), RNG.GetBytes (16), CipherModePlus.CBC, System.Security.Cryptography.PaddingMode.None, true);
+			byte[] plain = RNG.GetBytes (16);
 			byte[] ciper = key.Encrypt (plain, 0, plain.Length);
 			byte[] plain2 = key.Decrypt (ciper, 0, ciper.Length);
 			Assert.AreEqual (plain, plain2);
