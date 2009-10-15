@@ -26,8 +26,6 @@ namespace p2pncs.Net.Overlay
 	public class SimpleRoutingAlgorithm : IKeyBasedRoutingAlgorithm
 	{
 		Dictionary<Key, RoutingTable> _multiAppRoutingTable = new Dictionary<Key, RoutingTable> ();
-		ReaderWriterLockWrapper _multiAppTableLock = new ReaderWriterLockWrapper ();
-
 		Dictionary<Key, RoutingEntry> _allEntries = new Dictionary<Key,RoutingEntry> ();
 		Dictionary<EndPoint, RoutingEntry> _reverseMap = new Dictionary<EndPoint,RoutingEntry> ();
 		object _routingTableLock = new object ();
@@ -64,7 +62,7 @@ namespace p2pncs.Net.Overlay
 
 		public void NewApp (Key appId)
 		{
-			using (_multiAppTableLock.EnterWriteLock ()) {
+			lock (_routingTableLock) {
 				if (_multiAppRoutingTable.ContainsKey (appId))
 					return;
 				_multiAppRoutingTable.Add (appId, new RoutingTable (_selfMinNodeHandle, _bucketSize));
@@ -88,13 +86,12 @@ namespace p2pncs.Net.Overlay
 		{
 			if (_multiAppRoutingTable.Count == 0)
 				return;
-			using (_multiAppTableLock.EnterWriteLock ()) {
+			lock (_routingTableLock) {
 				_multiAppRoutingTable.Clear ();
 				_allEntries.Clear ();
 				_reverseMap.Clear ();
 			}
 			_msock.InquiredHandlers.Remove (typeof (PingRequest), ReceivedPingRequest);
-			_multiAppTableLock.Dispose ();
 		}
 
 		public void SetEndPointOption (object opt)
@@ -138,13 +135,11 @@ namespace p2pncs.Net.Overlay
 
 		public NodeHandle[] GetCloseNodes (Key appId, Key target, int maxNum)
 		{
-			RoutingTable table;
-			using (_multiAppTableLock.EnterReadLock ()) {
+			lock (_routingTableLock) {
+				RoutingTable table;
 				if (!_multiAppRoutingTable.TryGetValue (appId, out table))
 					throw new UnknownApplicationIdException ();
-				lock (_routingTableLock) {
-					return table.GetCloseNodes (target, maxNum);
-				}
+				return table.GetCloseNodes (target, maxNum);
 			}
 		}
 
@@ -159,57 +154,55 @@ namespace p2pncs.Net.Overlay
 
 			RoutingEntry entry;
 			//List<object[]> pingRequests = new List<object[]> ();
-			using (_multiAppTableLock.EnterReadLock ()) {
-				lock (_routingTableLock) {
-					// 既にルーティングテーブルに存在するノードの
-					// NodeID, EndPoint, AppIDsが変更されたかチェックし、
-					// 変更されている場合は、既存のエントリを削除する
-					{
-						RoutingEntry entry2;
-						_allEntries.TryGetValue (node.NodeID, out entry);
-						_reverseMap.TryGetValue (node.EndPoint, out entry2);
+			lock (_routingTableLock) {
+				// 既にルーティングテーブルに存在するノードの
+				// NodeID, EndPoint, AppIDsが変更されたかチェックし、
+				// 変更されている場合は、既存のエントリを削除する
+				{
+					RoutingEntry entry2;
+					_allEntries.TryGetValue (node.NodeID, out entry);
+					_reverseMap.TryGetValue (node.EndPoint, out entry2);
 
-						bool epChanged = entry != null && !node.EndPoint.Equals (entry.NodeHandle.EndPoint);
-						bool idChanged = !epChanged && entry2 != null && !node.NodeID.Equals (entry2.NodeHandle.NodeID);
-						bool appChanged = !epChanged && !idChanged && entry != null && !node.AppIDsLastModified.Equals (entry.NodeHandle.AppIDsLastModified);
-						if (epChanged || idChanged || appChanged || entry != entry2) {
-							if (entry != null) RemoveEntry (entry);
-							if (entry2 != null && entry != entry2) RemoveEntry (entry2);
-							entry = entry2 = null;
-						}
-					}
-
-					// ルーティングテーブルにエントリが存在しない場合は新規作成
-					bool newEntry = false;
-					if (entry == null) {
-						entry = new RoutingEntry (node, _multiAppRoutingTable);
-						newEntry = true;
-					} else {
-						entry.Touch ();
-					}
-
-					// 各アプリケーションに対応するルーティングテーブルに対して追加要請
-					bool addedFlag = false;
-					for (int i = 0; i < entry.NodeHandle.AppIDs.Length; i ++) {
-						RoutingTable table;
-						if (!_multiAppRoutingTable.TryGetValue (entry.NodeHandle.AppIDs[i], out table))
-							continue;
-
-						RoutingEntry firstEntry;
-						if (table.TryAddToBucket (level, entry, out firstEntry)) {
-							addedFlag = true;
-						} else if (firstEntry.NeedPingCheck (_minimumPingInterval)) {
-							addedFlag = true;
-							//pingRequests.Add (new object[] {bucket, firstEntry});
-						}
-					}
-					if (newEntry && addedFlag) {
-						_allEntries.Add (node.NodeID, entry);
-						_reverseMap.Add (node.EndPoint, entry);
+					bool epChanged = entry != null && !node.EndPoint.Equals (entry.NodeHandle.EndPoint);
+					bool idChanged = !epChanged && entry2 != null && !node.NodeID.Equals (entry2.NodeHandle.NodeID);
+					bool appChanged = !epChanged && !idChanged && entry != null && !node.AppIDsLastModified.Equals (entry.NodeHandle.AppIDsLastModified);
+					if (epChanged || idChanged || appChanged || entry != entry2) {
+						if (entry != null) RemoveEntry (entry);
+						if (entry2 != null && entry != entry2) RemoveEntry (entry2);
+						entry = entry2 = null;
 					}
 				}
-			}
 
+				// ルーティングテーブルにエントリが存在しない場合は新規作成
+				bool newEntry = false;
+				if (entry == null) {
+					entry = new RoutingEntry (node, _multiAppRoutingTable);
+					newEntry = true;
+				} else {
+					entry.Touch ();
+				}
+
+				// 各アプリケーションに対応するルーティングテーブルに対して追加要請
+				bool addedFlag = false;
+				for (int i = 0; i < entry.NodeHandle.AppIDs.Length; i++) {
+					RoutingTable table;
+					if (!_multiAppRoutingTable.TryGetValue (entry.NodeHandle.AppIDs[i], out table))
+						continue;
+
+					RoutingEntry firstEntry;
+					if (table.TryAddToBucket (level, entry, out firstEntry)) {
+						addedFlag = true;
+					} else if (firstEntry.NeedPingCheck (_minimumPingInterval)) {
+						addedFlag = true;
+						//pingRequests.Add (new object[] {bucket, firstEntry});
+					}
+				}
+				if (newEntry && addedFlag) {
+					_allEntries.Add (node.NodeID, entry);
+					_reverseMap.Add (node.EndPoint, entry);
+				}
+			}
+			
 			// ノードが生きているかチェック。死んでいたら置き換える
 			/*foreach (object[] pingReq in pingRequests) {
 				_msock.BeginInquire (new PingRequest (_selfNodeHandle), (pingReq[1] as RoutingEntry).NodeHandle.EndPoint, delegate (IAsyncResult ar) {
@@ -286,13 +279,10 @@ namespace p2pncs.Net.Overlay
 					info.CurrentLevel = matchBits;
 			}
 
-			RoutingTable table;
-			using (_multiAppTableLock.EnterReadLock ()) {
+			lock (_routingTableLock) {
+				RoutingTable table;
 				if (!_multiAppRoutingTable.TryGetValue (info.AppId, out table))
 					return;
-			}
-
-			lock (_routingTableLock) {
 				int filledMaxLevel = table.GetFilledBucketMaxLevel ();
 				while (++info.CurrentLevel < filledMaxLevel) {
 					if (table.GetNumberOfEntries (info.CurrentLevel) > 0) {
@@ -341,7 +331,7 @@ namespace p2pncs.Net.Overlay
 
 		public int GetRoutingTableSize (Key appId)
 		{
-			using (_multiAppTableLock.EnterReadLock ()) {
+			lock (_routingTableLock) {
 				return _multiAppRoutingTable[appId].GetNumberOfEntries ();
 			}
 		}
@@ -355,10 +345,8 @@ namespace p2pncs.Net.Overlay
 		public void ReduceRoutingTableSize ()
 		{
 #if ENABLE_REDUCTION
-			using (_multiAppTableLock.EnterReadLock ()) {
-				lock (_routingTableLock) {
-					ReduceRoutingTableSizeWithoutLock ();
-				}
+			lock (_routingTableLock) {
+				ReduceRoutingTableSizeWithoutLock ();
 			}
 #endif
 		}
@@ -435,13 +423,11 @@ namespace p2pncs.Net.Overlay
 		public NodeHandle[] GetRandomNodes (Key appId, int maxNum)
 		{
 			List<NodeHandle> list = new List<NodeHandle> ();
-			using (_multiAppTableLock.EnterReadLock ()) {
+			lock (_routingTableLock) {
 				RoutingTable table;
 				if (!_multiAppRoutingTable.TryGetValue (appId, out table))
 					throw new UnknownApplicationIdException ();
-				lock (_routingTableLock) {
-					table.CopyTo (list);
-				}
+				table.CopyTo (list);
 			}
 
 			if (list.Count <= maxNum)
