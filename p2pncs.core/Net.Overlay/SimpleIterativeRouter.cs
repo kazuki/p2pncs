@@ -129,13 +129,12 @@ namespace p2pncs.Net.Overlay
 				if (firstHops == null) {
 					NodeHandle[] closeNodes = _router._algo.GetCloseNodes (appId, dest, numOfCandidates);
 					for (int i = 0; i < closeNodes.Length; i ++)
-						_candidates.Add (new CandidateEntry (_dest, closeNodes[i].NodeID,
-							_router._algo.ComputeDistance (_dest, closeNodes[i].NodeID), closeNodes[i].EndPoint, 1));
+						_candidates.Add (new CandidateEntry (_dest, closeNodes[i].NodeID, null, _router._algo, closeNodes[i].EndPoint, 1));
 				} else {
-					Key tmpKey = ~dest;
-					Key tmpDistance = _router._algo.ComputeDistance (_dest, tmpKey);
+					Key farthestKey = ~dest;
+					Key maxDistance = _router._algo.ComputeDistance (_dest, farthestKey);
 					for (int i = 0; i < firstHops.Length; i ++) {
-						_candidates.Add (new CandidateEntry (_dest, tmpKey, tmpDistance, firstHops[i], 1));
+						_candidates.Add (new CandidateEntry (_dest, farthestKey, maxDistance, _router._algo, firstHops[i], 1));
 					}
 				}
 
@@ -205,7 +204,7 @@ namespace p2pncs.Net.Overlay
 									if (comp == 0)
 										break;
 									if (comp < 0 || i == _candidates.Count - 1) {
-										CandidateEntry new_entry = new CandidateEntry (_dest, node.NodeID, distance, node.EndPoint, entry.Hops + 1);
+										CandidateEntry new_entry = new CandidateEntry (_dest, node.NodeID, distance, _router._algo, node.EndPoint, entry.Hops + 1);
 										if (comp < 0)
 											_candidates.Insert (i, new_entry);
 										else
@@ -259,13 +258,24 @@ namespace p2pncs.Net.Overlay
 				bool _failed = false, _running = false;
 				int _hop, _matchBits;
 
-				public CandidateEntry (Key target, Key nodeId, Key distance, EndPoint ep, int hop)
+				public CandidateEntry (Key target, Key nodeId, Key distance, IKeyBasedRoutingAlgorithm algo, EndPoint ep, int hop)
 				{
 					_nodeId = nodeId;
-					_distance = distance;
+					if (distance != null) {
+						_distance = distance;
+					} else {
+						_distance = algo.ComputeDistance (target, nodeId);
+					}
 					_matchBits = Key.MatchBitsFromMSB (target, nodeId);
 					_ep = ep;
 					_hop = hop;
+
+					// Check selft node
+					if (_nodeId.Equals (algo.SelfNodeHandle.NodeID)) {
+						_running = true;
+						_ep = null;
+						_nodeHandle = algo.SelfNodeHandle;
+					}
 				}
 
 				public void Responsed (Key target, IKeyBasedRoutingAlgorithm algo, MultiAppNodeHandle nodeHandle)

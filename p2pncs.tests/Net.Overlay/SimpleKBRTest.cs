@@ -46,11 +46,11 @@ namespace p2pncs.tests.Net.Overlay
 				Key reqKey = new Key (new byte[] { 0x00, 0x1F });
 				IAsyncResult ar = env.KeyBasedRouters[0].BeginRoute (AppId, reqKey, 1, null, null, null);
 				RoutingResult rr = env.KeyBasedRouters[0].EndRoute (ar);
-				Assert.IsNotNull (rr);
-				Assert.IsNotNull (rr.RootCandidates);
-				Assert.AreEqual (1, rr.RootCandidates.Length);
-				Assert.AreEqual (keys[3], rr.RootCandidates[0].NodeID);
-				Assert.AreEqual (env.EndPoints[3], rr.RootCandidates[0].EndPoint);
+				Assert.IsNotNull (rr, "#1");
+				Assert.IsNotNull (rr.RootCandidates, "#2");
+				Assert.AreEqual (1, rr.RootCandidates.Length, "#3");
+				Assert.AreEqual (keys[3], rr.RootCandidates[0].NodeID, "#4");
+				Assert.AreEqual (env.EndPoints[3], rr.RootCandidates[0].EndPoint, "#5");
 			}
 		}
 
