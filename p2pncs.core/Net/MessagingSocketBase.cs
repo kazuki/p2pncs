@@ -37,9 +37,6 @@ namespace p2pncs.Net
 		IntervalInterrupter _interrupter;
 		KeyValueCache<MessageIdentity, object> _inquiryDupCheckCache;
 		HashSet<Type> _inquiryDupCheckTypeSet = new HashSet<Type> ();
-		ReaderWriterLockWrapper _inquiryDupCheckTypeSetLock = new ReaderWriterLockWrapper ();
-
-		ReaderWriterLockWrapper _eventHandlersLock = new ReaderWriterLockWrapper ();
 		Dictionary<Type, InquiredEventHandler> _inquiredHandlers = new Dictionary<Type, InquiredEventHandler> ();
 		Dictionary<Type, ReceivedEventHandler> _receivedHandlers = new Dictionary<Type, ReceivedEventHandler> ();
 		long _numInq = 0, _numReinq = 0;
@@ -123,7 +120,7 @@ namespace p2pncs.Net
 
 		public void AddReceivedHandler (Type msgType, ReceivedEventHandler handler)
 		{
-			using (_eventHandlersLock.EnterWriteLock ()) {
+			lock (_receivedHandlers) {
 				ReceivedEventHandler value;
 				if (_receivedHandlers.TryGetValue (msgType, out value)) {
 					value += handler;
@@ -135,7 +132,7 @@ namespace p2pncs.Net
 
 		public void RemoveReceivedHandler (Type msgType, ReceivedEventHandler handler)
 		{
-			using (_eventHandlersLock.EnterWriteLock ()) {
+			lock (_receivedHandlers) {
 				ReceivedEventHandler value;
 				if (_receivedHandlers.TryGetValue (msgType, out value)) {
 					value -= handler;
@@ -147,7 +144,7 @@ namespace p2pncs.Net
 
 		public void AddInquiredHandler (Type inquiryMessageType, InquiredEventHandler handler)
 		{
-			using (_eventHandlersLock.EnterWriteLock ()) {
+			lock (_inquiredHandlers) {
 				InquiredEventHandler value;
 				if (_inquiredHandlers.TryGetValue (inquiryMessageType, out value)) {
 					value += handler;
@@ -159,7 +156,7 @@ namespace p2pncs.Net
 
 		public void RemoveInquiredHandler (Type inquiryMessageType, InquiredEventHandler handler)
 		{
-			using (_eventHandlersLock.EnterWriteLock ()) {
+			lock (_inquiredHandlers) {
 				InquiredEventHandler value;
 				if (_inquiredHandlers.TryGetValue (inquiryMessageType, out value)) {
 					value -= handler;
@@ -171,14 +168,14 @@ namespace p2pncs.Net
 
 		public void AddInquiryDuplicationCheckType (Type type)
 		{
-			using (_inquiryDupCheckTypeSetLock.EnterWriteLock ()) {
+			lock (_inquiryDupCheckTypeSet) {
 				_inquiryDupCheckTypeSet.Add (type);
 			}
 		}
 
 		public void RemoveInquiryDuplicationCheckType (Type type)
 		{
-			using (_inquiryDupCheckTypeSetLock.EnterWriteLock ()) {
+			lock (_inquiryDupCheckTypeSet) {
 				_inquiryDupCheckTypeSet.Remove (type);
 			}
 		}
@@ -203,12 +200,12 @@ namespace p2pncs.Net
 					_retryList[i].Fail ();
 				_retryList.Clear ();
 			}
-			using (_eventHandlersLock.EnterWriteLock ()) {
+			lock (_inquiredHandlers) {
 				_inquiredHandlers.Clear ();
+			}
+			lock (_receivedHandlers) {
 				_receivedHandlers.Clear ();
 			}
-			_eventHandlersLock.Dispose ();
-			_inquiryDupCheckTypeSetLock.Dispose ();
 		}
 
 		public long NumberOfInquiries {
@@ -281,7 +278,7 @@ namespace p2pncs.Net
 		{
 			if (msg == null)
 				return false;
-			using (_inquiryDupCheckTypeSetLock.EnterReadLock ()) {
+			lock (_inquiryDupCheckTypeSet) {
 				return _inquiryDupCheckTypeSet.Contains (msg.GetType ());
 			}
 		}
@@ -296,7 +293,7 @@ namespace p2pncs.Net
 			}
 
 			InquiredEventHandler handler;
-			using (_eventHandlersLock.EnterReadLock ()) {
+			lock (_inquiredHandlers) {
 				if (e.InquireMessage == null || !_inquiredHandlers.TryGetValue (e.InquireMessage.GetType (), out handler))
 					handler = InquiredUnknownMessage;
 			}
@@ -330,7 +327,7 @@ namespace p2pncs.Net
 		protected void InvokeReceived (object sender, ReceivedEventArgs e)
 		{
 			ReceivedEventHandler handler;
-			using (_eventHandlersLock.EnterReadLock ()) {
+			lock (_receivedHandlers) {
 				if (e.Message == null || !_receivedHandlers.TryGetValue (e.Message.GetType (), out handler))
 					handler = ReceivedUnknownMessage;
 			}

@@ -24,7 +24,6 @@ namespace p2pncs.Net
 {
 	public class RFC2988BasedRTOCalculator : IRTOAlgorithm
 	{
-		ReaderWriterLockWrapper _lock = null;
 		Dictionary<IPAddress, State> _states = null;
 		State _state = null;
 		int _timerGranularity, _minRTO;
@@ -34,10 +33,8 @@ namespace p2pncs.Net
 		public RFC2988BasedRTOCalculator (TimeSpan defaultRTO, TimeSpan minRTO, int timerGranularity, bool ignoreEP)
 		{
 			if (ignoreEP) {
-				_lock = null;
 				_states = null;
 			} else {
-				_lock = new ReaderWriterLockWrapper ();
 				_states = new Dictionary<IPAddress,State> ();
 			}
 			_timerGranularity = timerGranularity;
@@ -74,16 +71,11 @@ namespace p2pncs.Net
 				throw new ArgumentException ();
 
 			State state;
-			bool success;
-			using (_lock.EnterReadLock ()) {
-				success = _states.TryGetValue (ipep.Address, out state);
-			}
-			if (!success && !InvalidValue.Equals (rtt)) {
-				using (_lock.EnterWriteLock ()) {
-					if (!_states.TryGetValue (ipep.Address, out state)) {
-						state = new State ((int)rtt.TotalMilliseconds, _timerGranularity);
-						_states.Add (ipep.Address, state);
-					}
+			lock (_states) {
+				bool success = _states.TryGetValue (ipep.Address, out state);
+				if (!success && !InvalidValue.Equals (rtt)) {
+					state = new State ((int)rtt.TotalMilliseconds, _timerGranularity);
+					_states.Add (ipep.Address, state);
 				}
 			}
 			return state;

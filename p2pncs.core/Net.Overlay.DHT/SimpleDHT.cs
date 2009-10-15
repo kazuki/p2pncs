@@ -34,7 +34,6 @@ namespace p2pncs.Net.Overlay.DHT
 		IKeyBasedRouter _kbr;
 		ILocalHashTable _local;
 		Dictionary<Type, int> _typeMap = new Dictionary<Type, int> ();
-		ReaderWriterLockWrapper _typeMapLock = new ReaderWriterLockWrapper ();
 		const int NumberOfReplica = 3;
 		static string ACK = "ACK";
 
@@ -59,7 +58,7 @@ namespace p2pncs.Net.Overlay.DHT
 			PutRequest req = (PutRequest)args.InquireMessage;
 			_sock.StartResponse (args, ACK);
 			int typeId;
-			using (_typeMapLock.EnterReadLock ()) {
+			lock (_typeMap) {
 				typeId = _typeMap[req.Value.GetType ()];
 			}
 			_local.Put (req.Key, typeId, req.LifeTime, req.Value);
@@ -69,7 +68,7 @@ namespace p2pncs.Net.Overlay.DHT
 
 		public void RegisterType (Type type, int id)
 		{
-			using (_typeMapLock.EnterWriteLock ()) {
+			lock (_typeMap) {
 				_typeMap.Add (type, id);
 			}
 		}
@@ -77,7 +76,7 @@ namespace p2pncs.Net.Overlay.DHT
 		public IAsyncResult BeginGet (Key appId, Key key, Type type, GetOptions opts, AsyncCallback callback, object state)
 		{
 			int typeId;
-			using (_typeMapLock.EnterReadLock ()) {
+			lock (_typeMap) {
 				typeId = _typeMap[type];
 			}
 			return new GetAsyncResult (this, appId, key, typeId, opts, callback, state);
@@ -93,7 +92,7 @@ namespace p2pncs.Net.Overlay.DHT
 		public IAsyncResult BeginPut (Key appId, Key key, TimeSpan lifeTime, object value, AsyncCallback callback, object state)
 		{
 			int typeId;
-			using (_typeMapLock.EnterReadLock ()) {
+			lock (_typeMap) {
 				typeId = _typeMap[value.GetType ()];
 			}
 			return new PutAsyncResult (this, appId, key, typeId, lifeTime, value, callback, state);

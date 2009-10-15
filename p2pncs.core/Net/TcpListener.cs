@@ -28,7 +28,6 @@ namespace p2pncs.Net
 	public class TcpListener : ITcpListener
 	{
 		Dictionary<Type, EventHandler<TcpListenerAcceptedEventArgs>> _handlers = new Dictionary<Type,EventHandler<TcpListenerAcceptedEventArgs>> ();
-		ReaderWriterLockWrapper _lock = new ReaderWriterLockWrapper ();
 		bool _active = false;
 		Socket _listener;
 		Thread _recvThread;
@@ -141,9 +140,11 @@ namespace p2pncs.Net
 										info.Received = 0;
 									} else {
 										object firstMsg = Serializer.Instance.Deserialize (info.Buffer);
-										using (_lock.EnterReadLock ()) {
-											_handlers[firstMsg.GetType ()].BeginInvoke (this, new TcpListenerAcceptedEventArgs (list[i], firstMsg), null, null);
+										EventHandler<TcpListenerAcceptedEventArgs> handler;
+										lock (_handlers) {
+											handler = _handlers[firstMsg.GetType ()];
 										}
+										handler.BeginInvoke (this, new TcpListenerAcceptedEventArgs (list[i], firstMsg), null, null);
 										_sockMap.Remove (list[i]);
 										_recvWaits.Remove (list[i]);
 									}
@@ -165,14 +166,14 @@ namespace p2pncs.Net
 
 		public void RegisterAcceptHandler (Type firstMessageType, EventHandler<TcpListenerAcceptedEventArgs> handler)
 		{
-			using (_lock.EnterWriteLock ()) {
+			lock (_handlers) {
 				_handlers.Add (firstMessageType, handler);
 			}
 		}
 
 		public void UnregisterAcceptHandler (Type firstMessageType)
 		{
-			using (_lock.EnterWriteLock ()) {
+			lock (_handlers) {
 				_handlers.Remove (firstMessageType);
 			}
 		}
@@ -189,10 +190,9 @@ namespace p2pncs.Net
 		{
 			if (_active) {
 				_active = false;
-				using (_lock.EnterWriteLock ()) {
+				lock (_handlers) {
 					_handlers.Clear ();
 				}
-				_lock.Dispose ();
 				try {
 					_listener.Close ();
 				} catch { }
