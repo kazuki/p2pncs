@@ -108,5 +108,15 @@ namespace p2pncs.Utility
 			Buffer.BlockCopy (array, offset, ret, 0, size);
 			return ret;
 		}
+
+		public static bool EqualsRange (this byte[] x, int x_idx, byte[] y, int y_idx, int size)
+		{
+			if (x_idx + size > x.Length || y_idx + size > y.Length)
+				throw new ArgumentOutOfRangeException ();
+			for (int i = 0; i < size; i++)
+				if (x[x_idx + i] != y[y_idx + i])
+					return false;
+			return true;
+		}
 	}
 }

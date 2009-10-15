@@ -15,9 +15,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+using System;
+
 namespace p2pncs.Net.Overlay.Anonymous
 {
-	public interface IAnonymousSocket
+	public interface IDelegateTaskOption
 	{
+		TimeSpan TaskTimeout { get; }
 	}
 }

@@ -15,9 +15,23 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+using System;
+using openCrypto.EllipticCurve;
+
 namespace p2pncs.Net.Overlay.Anonymous
 {
-	public interface IAnonymousSocket
+	public interface IAnonymousEndPoint
 	{
+		IAsyncResult BeginConnect (Key dest, object payload, object opts, AsyncCallback callback, object state);
+		IAnonymousSocket EndConnect (IAsyncResult ar);
+
+		IAsyncResult BeginDelegateTask (object msg, IDelegateTaskOption opts, AsyncCallback callback, object state);
+		object EndDelegateTask (IAsyncResult ar);
+
+		void Close ();
+
+		Key Address { get; }
+		ECKeyPair PrivateKey { get; }
+		object Options { get; }
 	}
 }

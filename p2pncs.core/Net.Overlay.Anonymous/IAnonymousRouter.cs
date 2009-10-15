@@ -15,31 +15,15 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using System;
-using System.Collections.Generic;
 using openCrypto.EllipticCurve;
-using p2pncs.Net.Overlay.DHT;
 
 namespace p2pncs.Net.Overlay.Anonymous
 {
 	public interface IAnonymousRouter
 	{
-		ISubscribeInfo SubscribeRecipient (Key recipientId, ECKeyPair privateKey);
-		void UnsubscribeRecipient (Key recipientId);
-
-		void AddBoundaryNodeReceivedEventHandler (Type type, EventHandler<BoundaryNodeReceivedEventArgs> handler);
-		void RemoveBoundaryNodeReceivedEventHandler (Type type);
-
-		IAsyncResult BeginConnect (Key recipientId, Key destinationId, AnonymousConnectionType type, object payload, AsyncCallback callback, object state);
-		IAnonymousSocket EndConnect (IAsyncResult ar);
-
-		ISubscribeInfo GetSubscribeInfo (Key recipientId);
-		IList<ISubscribeInfo> GetAllSubscribes ();
-		IList<IAnonymousSocket> GetAllConnections ();
-
-		IKeyBasedRouter KeyBasedRouter { get; }
-		IDistributedHashTable DistributedHashTable { get; }
-
+		IAnonymousEndPoint CreateEndPoint (ECKeyPair privateKey, object opts);
+		IAnonymousEndPoint GetEndPoint (Key address);
+		IAnonymousEndPoint[] GetEndPoints ();
 		void Close ();
 	}
 }

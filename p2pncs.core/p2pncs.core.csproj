@@ -61,6 +61,15 @@
     <Compile Include="LZMA\Compress\RangeCoder\RangeCoderBit.cs" />
     <Compile Include="LZMA\Compress\RangeCoder\RangeCoderBitTree.cs" />
     <Compile Include="LZMA\ICoder.cs" />
+    <Compile Include="Net.Overlay.Anonymous\AnonymousRouter.cs" />
+    <Compile Include="Net.Overlay.Anonymous\AnonymousRouter.EndPoint.cs" />
+    <Compile Include="Net.Overlay.Anonymous\AnonymousRouter.MCR.cs" />
+    <Compile Include="Net.Overlay.Anonymous\AnonymousRouter.MessageHandlers.cs" />
+    <Compile Include="Net.Overlay.Anonymous\AnonymousRouter.Messages.cs" />
+    <Compile Include="Net.Overlay.Anonymous\IAnonymousEndPoint.cs" />
+    <Compile Include="Net.Overlay.Anonymous\IAnonymousRouter.cs" />
+    <Compile Include="Net.Overlay.Anonymous\IAnonymousSocket.cs" />
+    <Compile Include="Net.Overlay.Anonymous\IDelegateTaskOption.cs" />
     <Compile Include="Net.Overlay\KeyBasedRoutingOptions.cs" />
     <Compile Include="Net.Overlay\MultiAppNodeHandle.cs" />
     <Compile Include="Net.Overlay\SimpleIterativeRouter.cs" />
@@ -109,6 +118,7 @@
     <Compile Include="Threading\ReaderWriterLockWrapper.cs" />
     <Compile Include="Threading\ThreadTraceInfo.cs" />
     <Compile Include="Threading\ThreadTracer.cs" />
+    <Compile Include="Utility\AntiReplayWindow.cs" />
     <Compile Include="Utility\ArrayExtensions.cs" />
     <Compile Include="Utility\DatabaseUtility.cs" />
     <Compile Include="Utility\DuplicationChecker.cs" />
