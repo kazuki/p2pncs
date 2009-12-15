@@ -19,7 +19,6 @@ using System;
 using System.IO;
 using System.Text;
 using openCrypto.EllipticCurve;
-using p2pncs.Security.Cryptography;
 
 namespace p2pncs.Net.Overlay
 {
@@ -287,7 +286,7 @@ namespace p2pncs.Net.Overlay
 		}
 		public ECKeyPair ToECPublicKey ()
 		{
-			return ECKeyPair.CreatePublic (DefaultAlgorithm.GetDefaultDomainName (KeyBytes), _data);
+			return ECKeyPair.CreatePublic (ConstantParameters.GetDefaultDomainName (KeyBytes), _data);
 		}
 		#endregion
 

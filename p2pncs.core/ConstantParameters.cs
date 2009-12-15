@@ -19,10 +19,12 @@ using System;
 using System.Security.Cryptography;
 using openCrypto.EllipticCurve;
 
-namespace p2pncs.Security.Cryptography
+namespace p2pncs
 {
-	public static class DefaultAlgorithm
+	public static class ConstantParameters
 	{
+		public const ushort ProtocolVersion = 0;
+
 		public static ECDomainNames ECDomainName {
 			get { return ECDomainNames.secp256r1; }
 		}
