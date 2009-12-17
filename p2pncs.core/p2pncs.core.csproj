@@ -63,7 +63,15 @@
     <Compile Include="LZMA\Compress\RangeCoder\RangeCoderBit.cs" />
     <Compile Include="LZMA\Compress\RangeCoder\RangeCoderBitTree.cs" />
     <Compile Include="LZMA\ICoder.cs" />
+    <Compile Include="Net.Overlay\IKeyBasedRouter.cs" />
+    <Compile Include="Net.Overlay\IKeyBasedRoutingAlgorithm.cs" />
     <Compile Include="Net.Overlay\Key.cs" />
+    <Compile Include="Net.Overlay\KeyBasedRoutingOptions.cs" />
+    <Compile Include="Net.Overlay\MultiAppNodeHandle.cs" />
+    <Compile Include="Net.Overlay\NodeHandle.cs" />
+    <Compile Include="Net.Overlay\RoutingResult.cs" />
+    <Compile Include="Net.Overlay\SimpleIterativeRouter.cs" />
+    <Compile Include="Net.Overlay\SimpleRoutingAlgorithm.cs" />
     <Compile Include="Net\IInquirySocket.cs" />
     <Compile Include="Net\InquiredEventArgs.cs" />
     <Compile Include="Net\InquirySocket.cs" />

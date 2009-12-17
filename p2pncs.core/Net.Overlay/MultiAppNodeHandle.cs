@@ -20,7 +20,7 @@ using System.Net;
 
 namespace p2pncs.Net.Overlay
 {
-	[SerializableTypeId (0x1f0)]
+	[SerializableTypeId (0x202)]
 	public class MultiAppNodeHandle
 	{
 		[SerializableFieldId (0)]

@@ -32,7 +32,6 @@ namespace p2pncs
 		{
 			IntervalInterrupter interrupter = new IntervalInterrupter (TimeSpan.FromSeconds (1), "InquirySocket TimeoutCheck");
 			IRTOAlgorithm rto = new RFC2988BasedRTOCalculator (TimeSpan.FromSeconds (1), TimeSpan.FromMilliseconds (200), 50);
-			RandomIPAddressGenerator rndIpGen = new RandomIPAddressGenerator ();
 			interrupter.Start ();
 
 			IPEndPoint ep1, ep2;
@@ -40,16 +39,17 @@ namespace p2pncs
 			ep1 = new IPEndPoint (IPAddress.Loopback, 8080);
 			ep2 = new IPEndPoint (IPAddress.Loopback, 8081);
 #else
+			RandomIPAddressGenerator rndIpGen = new RandomIPAddressGenerator ();
 			bool bypassSerialize = false;
 			ep1 = new IPEndPoint (rndIpGen.Next (), 8080);
 			ep2 = new IPEndPoint (rndIpGen.Next (), 8081);
 #endif
 
-			using (VirtualNetwork vnet = new VirtualNetwork (LatencyTypes.Constant (100), 5, PacketLossType.Lossless (), 1))
 #if LOOPBACK
 			using (UdpSocket sock1 = UdpSocket.CreateIPv4 ())
 			using (UdpSocket sock2 = UdpSocket.CreateIPv4 ())
 #else
+			using (VirtualNetwork vnet = new VirtualNetwork (LatencyTypes.Constant (100), 5, PacketLossType.Lossless (), 1))
 			using (VirtualUdpSocket sock1 = new VirtualUdpSocket (vnet, ep1.Address, bypassSerialize))
 			using (VirtualUdpSocket sock2 = new VirtualUdpSocket (vnet, ep2.Address, bypassSerialize))
 #endif

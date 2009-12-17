@@ -21,7 +21,7 @@ using System.Net;
 namespace p2pncs.Net.Overlay
 {
 	[Serializable]
-	[SerializableTypeId (0x101)]
+	[SerializableTypeId (0x201)]
 	public class NodeHandle : IEquatable<NodeHandle>
 	{
 		[SerializableFieldId (0)]

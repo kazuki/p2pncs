@@ -34,23 +34,23 @@ namespace p2pncs.Net.Overlay
 		NodeHandle _selfMinNodeHandle;
 		MultiAppNodeHandle _selfNodeHandle;
 
-		IMessagingSocket _msock;
+		IInquirySocket _sock;
 		IKeyBasedRouter _router;
 
 		int _bucketSize;
 		TimeSpan _minimumPingInterval;
 
-		public SimpleRoutingAlgorithm (Key self, IMessagingSocket msock, int bucketSize, TimeSpan minPingInterval)
+		public SimpleRoutingAlgorithm (Key self, IInquirySocket sock, int bucketSize, TimeSpan minPingInterval)
 		{
 			_self = self;
-			_msock = msock;
+			_sock = sock;
 			_selfMinNodeHandle = new NodeHandle (self, null);
 			_selfNodeHandle = new MultiAppNodeHandle (self, null, null, null);
 			_mask = ~new Key (new byte[self.KeyBytes]);
 			_bucketSize = bucketSize;
 			_minimumPingInterval = minPingInterval;
 
-			_msock.InquiredHandlers.Add (typeof (PingRequest), ReceivedPingRequest);
+			_sock.Inquired.Add (typeof (PingRequest), ReceivedPingRequest);
 		}
 
 		#region IKeyBasedRoutingAlgorithm Members
@@ -91,7 +91,7 @@ namespace p2pncs.Net.Overlay
 				_allEntries.Clear ();
 				_reverseMap.Clear ();
 			}
-			_msock.InquiredHandlers.Remove (typeof (PingRequest), ReceivedPingRequest);
+			_sock.Inquired.Remove (typeof (PingRequest), ReceivedPingRequest);
 		}
 
 		public void SetEndPointOption (object opt)
@@ -445,7 +445,7 @@ namespace p2pncs.Net.Overlay
 		#region Message Handler
 		void ReceivedPingRequest (object sender, InquiredEventArgs e)
 		{
-			_msock.StartResponse (e, new PingResponse (_selfNodeHandle));
+			_sock.RespondToInquiry (e, new PingResponse (_selfNodeHandle));
 			MultiAppNodeHandle nodeHandle = (e.InquireMessage as IIterativeMessage).NodeHandle;
 			Touch (nodeHandle.CloneWithNewEndPoint (e.EndPoint));
 		}
@@ -677,7 +677,7 @@ namespace p2pncs.Net.Overlay
 		#endregion
 
 		#region Messages
-		[SerializableTypeId (0x1f1)]
+		[SerializableTypeId (0x212)]
 		sealed class PingRequest : IIterativeMessage
 		{
 			[SerializableFieldId (0)]
@@ -693,7 +693,7 @@ namespace p2pncs.Net.Overlay
 			}
 		}
 
-		[SerializableTypeId (0x1f2)]
+		[SerializableTypeId (0x213)]
 		sealed class PingResponse : IIterativeMessage
 		{
 			[SerializableFieldId (0)]

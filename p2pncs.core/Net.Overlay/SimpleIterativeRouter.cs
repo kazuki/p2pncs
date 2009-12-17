@@ -25,16 +25,16 @@ namespace p2pncs.Net.Overlay
 	public class SimpleIterativeRouter : IKeyBasedRouter
 	{
 		IKeyBasedRoutingAlgorithm _algo;
-		IMessagingSocket _msock;
+		IInquirySocket _sock;
 
-		public event EventHandler<StatisticsNoticeEventArgs> StatisticsNotice;
+		//public event EventHandler<StatisticsNoticeEventArgs> StatisticsNotice;
 
-		public SimpleIterativeRouter (IKeyBasedRoutingAlgorithm algo, IMessagingSocket msock)
+		public SimpleIterativeRouter (IKeyBasedRoutingAlgorithm algo, IInquirySocket sock)
 		{
 			_algo = algo;
-			_msock = msock;
+			_sock = sock;
 			_algo.Setup (this);
-			_msock.InquiredHandlers.Add (typeof (FindCloseNode), Received_FindCloseNode);
+			_sock.Inquired.Add (typeof (FindCloseNode), Received_FindCloseNode);
 		}
 
 		public void Join (Key appId, EndPoint[] initialNodes)
@@ -51,7 +51,7 @@ namespace p2pncs.Net.Overlay
 		public void Close ()
 		{
 			_algo.Close ();
-			_msock.InquiredHandlers.Remove (typeof (FindCloseNode), Received_FindCloseNode);
+			_sock.Inquired.Remove (typeof (FindCloseNode), Received_FindCloseNode);
 		}
 
 		public IAsyncResult BeginRoute (Key appId, Key dest, int numOfCandidates, KeyBasedRoutingOptions opts, AsyncCallback callback, object state)
@@ -73,7 +73,7 @@ namespace p2pncs.Net.Overlay
 		{
 			FindCloseNode req = (FindCloseNode)args.InquireMessage;
 			NodeHandle[] results = _algo.GetCloseNodes (req.AppId, req.Destination, 5);
-			_msock.StartResponse (args, new CloseNodeSet (_algo.SelfNodeHandle, results));
+			_sock.RespondToInquiry (args, new CloseNodeSet (_algo.SelfNodeHandle, results));
 			_algo.Touch (req.NodeHandle.CloneWithNewEndPoint (args.EndPoint));
 		}
 
@@ -150,7 +150,7 @@ namespace p2pncs.Net.Overlay
 						if (entry.IsRunning || entry.IsFailed)
 							continue;
 
-						_router._msock.BeginInquire (_findMsg, entry.EndPoint, FindQuery_Callback, entry);
+						_router._sock.BeginInquire (_findMsg, entry.EndPoint, FindQuery_Callback, entry);
 						entry.IsRunning = true;
 						_inquiring ++;
 					}
@@ -182,7 +182,7 @@ namespace p2pncs.Net.Overlay
 			void FindQuery_Callback (IAsyncResult ar)
 			{
 				CandidateEntry entry = ar.AsyncState as CandidateEntry;
-				CloseNodeSet msg = _router._msock.EndInquire (ar) as CloseNodeSet;
+				CloseNodeSet msg = _router._sock.EndInquire (ar) as CloseNodeSet;
 				MultiAppNodeHandle nodeHandle = null;
 
 				lock (_candidates) {
@@ -340,7 +340,7 @@ namespace p2pncs.Net.Overlay
 			}
 		}
 
-		[SerializableTypeId (0x1f3)]
+		[SerializableTypeId (0x210)]
 		sealed class FindCloseNode : IIterativeMessage
 		{
 			[SerializableFieldId (0)]
@@ -372,7 +372,7 @@ namespace p2pncs.Net.Overlay
 			}
 		}
 
-		[SerializableTypeId (0x1f4)]
+		[SerializableTypeId (0x211)]
 		sealed class CloseNodeSet : IIterativeMessage
 		{
 			[SerializableFieldId (0)]

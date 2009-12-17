@@ -22,7 +22,7 @@ namespace p2pncs.Net.Overlay
 {
 	public interface IKeyBasedRouter
 	{
-		event EventHandler<StatisticsNoticeEventArgs> StatisticsNotice;
+		//event EventHandler<StatisticsNoticeEventArgs> StatisticsNotice;
 
 		void Join (Key appId, EndPoint[] initialNodes);
 		void Close (Key appId);
