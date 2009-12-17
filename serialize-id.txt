@@ -1,0 +1,6 @@
+p2pncs.Net (0x100-0x1ff):
+  0x100: InquirySocket.InquiryRequest
+  0x101: InquirySocket.InquiryResponse
+
+p2pncs.Net.Overlay (0x200-0x2ff):
+  0x200: Key

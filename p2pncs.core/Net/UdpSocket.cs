@@ -16,49 +16,37 @@
  */
 
 using System;
-using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
-using p2pncs.Utility;
-using p2pncs.Threading;
 
 namespace p2pncs.Net
 {
-	public class UdpSocket : IDatagramEventSocket
+	public class UdpSocket : ISocket
 	{
-		const int MAX_DATAGRAM_SIZE = 1000;
 		int _max_datagram_size, _header_size;
 		Socket _sock;
-		IPAddress _receiveAdrs, _loopbackAdrs, _noneAdrs;
+		IPAddress _loopbackAdrs, _noneAdrs;
 		ushort _bindPort;
 		long _recvBytes = 0, _sentBytes = 0, _recvDgrams = 0, _sentDgrams = 0;
 		IPublicIPAddressVotingBox _pubIpVotingBox;
-		byte[] _sendBuffer = new byte[MAX_DATAGRAM_SIZE];
-
-		static Thread _receiveThread = null;
-		static Dictionary<Socket, UdpSocket> _socketMap = new Dictionary<Socket, UdpSocket> ();
-		static List<Socket> _sockets = new List<Socket> ();
+		byte[] _sendBuffer = new byte[ConstantParameters.MaxUdpDatagramSize];
+		Thread _recvThread;
+		bool _active = true;
+		EventHandlers<Type, ReceivedEventArgs> _received = new EventHandlers<Type,ReceivedEventArgs> ();
 
 		#region Constructor
 		UdpSocket (AddressFamily addressFamily)
 		{
-			_receiveAdrs = IPAddressUtility.GetAnyAddress (addressFamily);
 			_pubIpVotingBox = new SimplePublicIPAddressVotingBox (addressFamily);
 			_loopbackAdrs = IPAddressUtility.GetLoopbackAddress (addressFamily);
 			_noneAdrs = IPAddressUtility.GetNoneAddress (addressFamily);
 			_sock = new Socket (addressFamily, SocketType.Dgram, ProtocolType.Udp);
 			_header_size = (addressFamily == AddressFamily.InterNetwork ? 4 : 16) + 2;
-			_max_datagram_size = MAX_DATAGRAM_SIZE - _header_size;
-
-			lock (_sockets) {
-				_sockets.Add (_sock);
-				_socketMap.Add (_sock, this);
-				if (_receiveThread == null) {
-					_receiveThread = ThreadTracer.CreateThread (ReceiveThread, "UdpSocket.ReceiveThread");
-					_receiveThread.Start ();
-				}
-			}
+			_max_datagram_size = ConstantParameters.MaxUdpDatagramSize - _header_size;
+			_recvThread = new Thread (ReceiveThread);
+			_recvThread.Start ();
 		}
 		public static UdpSocket CreateIPv4 ()
 		{
@@ -70,142 +58,139 @@ namespace p2pncs.Net
 		}
 		#endregion
 
-		#region Receive Process
-		static void ReceiveThread ()
+		#region ISocket Members
+
+		public ISocket Accept ()
 		{
-			List<Socket> list = new List<Socket> ();
-			byte[] recvBuffer = new byte[MAX_DATAGRAM_SIZE];
-			while (true) {
-				list.Clear ();
-				lock (_sockets) {
-					if (_sockets.Count == 0) {
-						_receiveThread = null;
-						return;
-					}
-					list.AddRange (_sockets);
+			throw new NotSupportedException ();
+		}
+
+		public void Bind (EndPoint localEP)
+		{
+			_sock.Bind (localEP);
+			_bindPort = (ushort)((IPEndPoint)localEP).Port;
+		}
+
+		public void Connect (EndPoint remoteEP)
+		{
+			throw new NotSupportedException ();
+		}
+
+		public void Send (object message)
+		{
+			throw new NotSupportedException ();
+		}
+
+		public void SendTo (object message, EndPoint remoteEP)
+		{
+			int bytes;
+			byte[] sendBuffer = _sendBuffer;
+			lock (_sendBuffer) {
+				using (MemoryStream ms = new MemoryStream (sendBuffer, _header_size, _sendBuffer.Length - _header_size, true)) {
+					Serializer.Instance.Serialize (ms, message);
+					bytes = (int)ms.Position;
 				}
-				Socket.Select (list, null, null, 1 * 1000000);
-				lock (_sockets) {
-					for (int i = 0; i < list.Count; i ++) {
-						UdpSocket usock;
-						if (!_socketMap.TryGetValue (list[i], out usock)) {
-							continue;
-						}
-						if (usock.Received == null) {
-							continue;
-						}
-						try {
-							EndPoint remoteEP = new IPEndPoint (usock._receiveAdrs, 0);
-							int receiveSize = usock._sock.ReceiveFrom (recvBuffer, 0, recvBuffer.Length, SocketFlags.None, ref remoteEP);
-							IPEndPoint remoteIPEP = (IPEndPoint)remoteEP;
+
+				IPEndPoint remoteIPEP = (IPEndPoint)remoteEP;
+				if (remoteIPEP.Port == _bindPort && remoteIPEP.Address.Equals (_pubIpVotingBox.CurrentPublicIPAddress)) {
+					// 自分自身が宛先の場合はループバックアドレスに書き換える
+					remoteEP = new IPEndPoint (_loopbackAdrs, _bindPort);
+				}
 #if !DEBUG
-							if (remoteIPEP.Port == usock._bindPort && usock._loopbackAdrs.Equals (remoteIPEP.Address)) {
-								IPAddress new_adrs = usock._pubIpVotingBox.CurrentPublicIPAddress;
-								if (usock._noneAdrs.Equals (new_adrs))
-									continue; // パブリックIPが決定していないときはそのパケットを破棄
-								remoteEP = new IPEndPoint (new_adrs, remoteIPEP.Port);
-							}
-							else if (IPAddressUtility.IsPrivate (remoteIPEP.Address)) {
-								// リリースビルド時はプライベートアドレスからのパケットを破棄
-								continue;
-							}
-#endif
-							usock._recvBytes += receiveSize;
-							usock._recvDgrams ++;
-							ushort ver = (ushort)((recvBuffer[0] << 8) | recvBuffer[1]);
-							if (ver != ProtocolVersion.Version)
-								continue; // drop
-							byte[] recvData = new byte[receiveSize - usock._header_size];
-							Buffer.BlockCopy (recvBuffer, usock._header_size, recvData, 0, recvData.Length);
-							IPAddress adrs = new IPAddress (recvBuffer.CopyRange (2, usock._header_size - 2));
-							usock._pubIpVotingBox.Vote ((IPEndPoint)remoteEP, adrs);
-							DatagramReceiveEventArgs e = new DatagramReceiveEventArgs (recvData, recvData.Length, remoteEP);
-							ThreadTracer.QueueToThreadPool (new InvokeHelper (usock, e).Invoke, "Handling Received UDP Datagram");
-						} catch {}
-					}
+				else if (IPAddressUtility.IsPrivate (remoteIPEP.Address)) {
+					// リリースビルド時には、プライベートアドレス宛のパケットを破棄する
+					throw new Exception ("Destination address is private");
 				}
+#endif
+
+				sendBuffer[0] = (byte)(ConstantParameters.ProtocolVersion >> 8);
+				sendBuffer[1] = (byte)(ConstantParameters.ProtocolVersion & 0xFF);
+				byte[] adrs_bytes = ((IPEndPoint)remoteEP).Address.GetAddressBytes ();
+				Buffer.BlockCopy (adrs_bytes, 0, sendBuffer, 2, adrs_bytes.Length);
+
+				if (!_sock.Poll (-1, SelectMode.SelectWrite))
+					throw new Exception ("Polling failed");
+				int ret = _sock.SendTo (_sendBuffer, 0, _header_size + bytes, SocketFlags.None, remoteEP) - _header_size;
+				if (ret != bytes) {
+					Logger.Log (LogLevel.Fatal, this, "Sent size is unexpected. except={0}, actual={1}", bytes, ret);
+					throw new Exception ("Sent size is unexpected");
+				}
+
+				_sentBytes += bytes;
+				_sentDgrams ++;
 			}
 		}
-		class InvokeHelper
+
+		public EventHandlers<Type, ReceivedEventArgs> Received {
+			get { return _received; }
+		}
+
+		public void Close ()
 		{
-			UdpSocket _sock;
-			DatagramReceiveEventArgs _e;
-
-			public InvokeHelper (UdpSocket sock, DatagramReceiveEventArgs e)
-			{
-				_sock = sock;
-				_e = e;
+			lock (this) {
+				if (!_active)
+					return;
+				_active = false;
 			}
+			_sock.Close ();
 
-			public void Invoke (object o)
-			{
+			_sock = null;
+			_pubIpVotingBox = null;
+			_sendBuffer = null;
+			_noneAdrs = _loopbackAdrs = null;
+		}
+
+		#endregion
+
+		#region Receive Thread
+		void ReceiveThread ()
+		{
+			byte[] recvIpBuf = new byte[_loopbackAdrs.AddressFamily == AddressFamily.InterNetwork ? 4 : 16];
+			byte[] recvBuffer = new byte[ConstantParameters.MaxUdpDatagramSize];
+
+			EndPoint remoteEP = new IPEndPoint (_loopbackAdrs, 0);
+			while (_active) {
 				try {
-					_sock.Received (_sock, _e);
+					if (!_sock.Poll (-1, SelectMode.SelectRead)) {
+						if (_active)
+							Logger.Log (LogLevel.Fatal, this, "SelectRead Polling Failed");
+						return;
+					}
+					if (!_active)
+						return;
+					int receiveSize = _sock.ReceiveFrom (recvBuffer, 0, recvBuffer.Length, SocketFlags.None, ref remoteEP);
+					IPEndPoint remoteIPEP = (IPEndPoint)remoteEP;
+#if !DEBUG
+					if (remoteIPEP.Port == _bindPort && _loopbackAdrs.Equals (remoteIPEP.Address)) {
+						IPAddress new_adrs = _pubIpVotingBox.CurrentPublicIPAddress;
+						if (_noneAdrs.Equals (new_adrs))
+							continue; // パブリックIPが決定していないときはそのパケットを破棄
+						// ループバックからのメッセージを受信したらパブリックIPに書き換える
+						remoteEP = new IPEndPoint (new_adrs, remoteIPEP.Port);
+					} else if (IPAddressUtility.IsPrivate (remoteIPEP.Address)) {
+						// プライベートアドレスからのパケットを破棄
+						continue;
+					}
+#endif
+					_recvBytes += receiveSize;
+					_recvDgrams++;
+					ushort ver = (ushort)((recvBuffer[0] << 8) | recvBuffer[1]);
+					if (ver != ConstantParameters.ProtocolVersion)
+						continue; // drop
+					Buffer.BlockCopy (recvBuffer, 2, recvIpBuf, 0, recvIpBuf.Length);
+					IPAddress adrs = new IPAddress (recvIpBuf);
+					_pubIpVotingBox.Vote ((IPEndPoint)remoteEP, adrs);
+					object obj = Serializer.Instance.Deserialize (recvBuffer, _header_size, receiveSize - _header_size);
+					Received.Invoke (obj.GetType (), this, new ReceivedEventArgs (obj, remoteEP));
 				} catch {}
 			}
 		}
 		#endregion
 
-		#region IDatagramEventSocket Members
-
-		public void Bind (EndPoint bindEP)
-		{
-			_sock.Bind (bindEP);
-			_bindPort = (ushort)((IPEndPoint)bindEP).Port;
+		#region Properties
+		public IPAddress CurrentPublicIPAddress {
+			get { return _pubIpVotingBox.CurrentPublicIPAddress; }
 		}
-
-		public void Close ()
-		{
-			lock (_sockets) {
-				_sockets.Remove (_sock);
-				_socketMap.Remove (_sock);
-			}
-			try {
-				_sock.Close ();
-			} catch {}
-		}
-
-		public void SendTo (byte[] buffer, EndPoint remoteEP)
-		{
-			SendTo (buffer, 0, buffer.Length, remoteEP);
-		}
-
-		public void SendTo (byte[] buffer, int offset, int size, EndPoint remoteEP)
-		{
-			if (size > _max_datagram_size) {
-				Logger.Log (LogLevel.Fatal, this, "Send data-size is too big. ({0} bytes)", size);
-				throw new SocketException ();
-			}
-			IPEndPoint remoteIPEP = (IPEndPoint)remoteEP;
-			if (remoteIPEP.Port == _bindPort && remoteIPEP.Address.Equals (_pubIpVotingBox.CurrentPublicIPAddress)) {
-				remoteEP = new IPEndPoint (_loopbackAdrs, _bindPort);
-			}
-#if !DEBUG
-			else if (IPAddressUtility.IsPrivate (remoteIPEP.Address)) {
-				// リリースビルド時には、プライベートアドレス宛のパケットを破棄する
-				throw new Exception ("Destination address is private");
-			}
-#endif
-			if (!_sock.Poll (-1, SelectMode.SelectWrite))
-				throw new Exception ("Polling failed");
-			int ret;
-			byte[] adrs_bytes = ((IPEndPoint)remoteEP).Address.GetAddressBytes ();
-			lock (_sendBuffer) {
-				_sendBuffer[0] = (byte)(ProtocolVersion.Version >> 8);
-				_sendBuffer[1] = (byte)(ProtocolVersion.Version & 0xFF);
-				Buffer.BlockCopy (adrs_bytes, 0, _sendBuffer, 2, adrs_bytes.Length);
-				Buffer.BlockCopy (buffer, offset, _sendBuffer, _header_size, size);
-				ret = _sock.SendTo (_sendBuffer, 0, _header_size + size, SocketFlags.None, remoteEP) - _header_size;
-			}
-			if (ret != size) {
-				Logger.Log (LogLevel.Fatal, this, "Sent size is unexpected. except={0}, actual={1}", size, ret);
-				throw new Exception ("Sent size is unexpected");
-			}
-			Interlocked.Add (ref _sentBytes, size);
-			Interlocked.Increment (ref _sentDgrams);
-		}
-
-		public event EventHandler<DatagramReceiveEventArgs> Received;
 
 		public int MaxDatagramSize {
 			get { return _max_datagram_size; }
@@ -225,13 +210,6 @@ namespace p2pncs.Net
 
 		public long SentDatagrams {
 			get { return _sentDgrams; }
-		}
-
-		#endregion
-
-		#region Properties
-		public IPAddress CurrentPublicIPAddress {
-			get { return _pubIpVotingBox.CurrentPublicIPAddress; }
 		}
 		#endregion
 

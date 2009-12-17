@@ -18,34 +18,42 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
-using p2pncs.Threading;
 
 namespace p2pncs.Net
 {
 	public class RFC2988BasedRTOCalculator : IRTOAlgorithm
 	{
-		Dictionary<IPAddress, State> _states = null;
+		Dictionary<IPAddress, State> _states = new Dictionary<IPAddress,State> ();
 		State _state = null;
 		int _timerGranularity, _minRTO;
 		TimeSpan _defaultRTO;
 		static readonly TimeSpan InvalidValue = TimeSpan.MinValue;
 
-		public RFC2988BasedRTOCalculator (TimeSpan defaultRTO, TimeSpan minRTO, int timerGranularity, bool ignoreEP)
+		public RFC2988BasedRTOCalculator (TimeSpan defaultRTO, TimeSpan minRTO, int timerGranularity)
 		{
-			if (ignoreEP) {
-				_states = null;
-			} else {
-				_states = new Dictionary<IPAddress,State> ();
-			}
 			_timerGranularity = timerGranularity;
 			_minRTO = (int)minRTO.TotalMilliseconds;
 			_defaultRTO = defaultRTO;
+		}
+
+		public void AddSample (TimeSpan rtt)
+		{
+			State state = GetState (rtt);
+			state.Update ((int)rtt.TotalMilliseconds, _timerGranularity);
 		}
 
 		public void AddSample (EndPoint ep, TimeSpan rtt)
 		{
 			State state = GetState (ep, rtt);
 			state.Update ((int)rtt.TotalMilliseconds, _timerGranularity);
+		}
+
+		public TimeSpan GetRTO ()
+		{
+			State state = GetState (InvalidValue);
+			if (state == null)
+				return _defaultRTO;
+			return new TimeSpan (Math.Max (_minRTO, state.RTO) * TimeSpan.TicksPerMillisecond);
 		}
 
 		public TimeSpan GetRTO (EndPoint ep)
@@ -56,16 +64,17 @@ namespace p2pncs.Net
 			return new TimeSpan (Math.Max (_minRTO, state.RTO) * TimeSpan.TicksPerMillisecond);
 		}
 
+		State GetState (TimeSpan rtt)
+		{
+			lock (this) {
+				if (_state == null && !InvalidValue.Equals (rtt))
+					_state = new State ((int)rtt.TotalMilliseconds, _timerGranularity);
+				return _state;
+			}
+		}
+
 		State GetState (EndPoint ep, TimeSpan rtt)
 		{
-			if (_states == null) {
-				lock (this) {
-					if (_state == null && !InvalidValue.Equals (rtt))
-						_state = new State ((int)rtt.TotalMilliseconds, _timerGranularity);
-					return _state;
-				}
-			}
-
 			IPEndPoint ipep = ep as IPEndPoint;
 			if (ipep == null)
 				throw new ArgumentException ();

@@ -26,7 +26,7 @@ using p2pncs.Utility;
 
 namespace p2pncs.Simulation.VirtualNet
 {
-	public class VirtualNetwork
+	public class VirtualNetwork : IDisposable
 	{
 		bool _active = true;
 		Thread _managementThread;
@@ -81,6 +81,7 @@ namespace p2pncs.Simulation.VirtualNet
 		{
 			Stopwatch timer = new Stopwatch ();
 			List<DatagramInfo> list;
+			OSTimerPrecision.SetCurrentThreadToHighPrecision ();
 
 			while (_active) {
 				timer.Reset ();
@@ -134,19 +135,17 @@ namespace p2pncs.Simulation.VirtualNet
 						Interlocked.Increment (ref _packets);
 					}
 
-					if (dgram.Datagram != null) {
-						DatagramReceiveEventArgs eventArgs = new DatagramReceiveEventArgs (dgram.Datagram, dgram.Datagram.Length, dgram.SourceEndPoint);
-						node.DatagramSocket.InvokeReceivedEvent (node.DatagramSocket, eventArgs);
-						Interlocked.Add (ref _totalTraffic, dgram.Datagram.Length);
+					if (dgram.Message == null) {
+						node.Socket.Deliver (dgram.SourceEndPoint, dgram.Datagram, 0, dgram.Datagram.Length);
 					} else {
-						node.MessagingSocket.Deliver (dgram.SourceEndPoint, dgram.Message);
+						node.Socket.Deliver (dgram.SourceEndPoint, dgram.Message);
 					}
 				}
 				_invokeEndHandles[idx].Set ();
 			}
 		}
 
-		internal VirtualNetworkNode AddVirtualNode (VirtualDatagramEventSocket sock, EndPoint bindEP)
+		internal VirtualNetworkNode AddVirtualNode (VirtualUdpSocket sock, EndPoint bindEP)
 		{
 			VirtualNetworkNode node = new VirtualNetworkNode (sock, bindEP);
 			using (_nodeLock.EnterWriteLock ()) {
@@ -154,16 +153,6 @@ namespace p2pncs.Simulation.VirtualNet
 				_nodes.Add (node);
 			}
 			return node;
-		}
-
-		internal void AddVirtualMessagingSocketToVirtualNode (VirtualDatagramEventSocket sock, VirtualMessagingSocket msock)
-		{
-			using (_nodeLock.EnterReadLock ()) {
-				VirtualNetworkNode node;
-				if (_mapping.TryGetValue (sock.BindedPublicEndPoint, out node)) {
-					node.MessagingSocket = msock;
-				}
-			}
 		}
 
 		internal void RemoveVirtualNode (VirtualNetworkNode node)
@@ -233,11 +222,11 @@ namespace p2pncs.Simulation.VirtualNet
 			}
 		}
 
-		public void CloseSockets (IList<VirtualDatagramEventSocket> list)
+		public void CloseSockets (IList<VirtualUdpSocket> list)
 		{
 			using (_nodeLock.EnterWriteLock ()) {
 				for (int i = 0; i < list.Count; i ++) {
-					VirtualNetworkNode vnode = list[i].VirtualNetworkNodeInfo;
+					VirtualNetworkNode vnode = list[i].VirtualNodeInfo;
 					_mapping.Remove (vnode.BindedPublicEndPoint);
 					_nodes.Remove (vnode);
 				}
@@ -247,6 +236,7 @@ namespace p2pncs.Simulation.VirtualNet
 		public void Close ()
 		{
 			_active = false;
+			CloseAllSockets ();
 			for (int i = 0; i < _invokeStartHandles.Length; i ++) {
 				_invokeStartHandles[i].Set ();
 				_invokeEndHandles[i].Set ();
@@ -256,14 +246,18 @@ namespace p2pncs.Simulation.VirtualNet
 				_invokeThreads[i].Join ();
 		}
 
+		public void Dispose ()
+		{
+			Close ();
+		}
+
 		#region Internal Classes
 		internal class VirtualNetworkNode
 		{
-			VirtualDatagramEventSocket _sock;
-			VirtualMessagingSocket _msock;
+			VirtualUdpSocket _sock;
 			EndPoint _bindEP;
 
-			public VirtualNetworkNode (VirtualDatagramEventSocket sock, EndPoint bindEP)
+			public VirtualNetworkNode (VirtualUdpSocket sock, EndPoint bindEP)
 			{
 				_sock = sock;
 				_bindEP = bindEP;
@@ -273,13 +267,8 @@ namespace p2pncs.Simulation.VirtualNet
 				get { return _bindEP; }
 			}
 
-			public VirtualDatagramEventSocket DatagramSocket {
+			public VirtualUdpSocket Socket {
 				get { return _sock; }
-			}
-
-			public VirtualMessagingSocket MessagingSocket {
-				get { return _msock; }
-				set { _msock = value;}
 			}
 		}
 

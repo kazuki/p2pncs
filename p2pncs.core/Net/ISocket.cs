@@ -20,12 +20,20 @@ using System.Net;
 
 namespace p2pncs.Net
 {
-	public interface IRTOAlgorithm
+	public interface ISocket : IDisposable
 	{
-		void AddSample (TimeSpan rtt);
-		TimeSpan GetRTO ();
+		ISocket Accept ();
 
-		void AddSample (EndPoint ep, TimeSpan rtt);
-		TimeSpan GetRTO (EndPoint ep);
+		void Bind (EndPoint localEP);
+
+		void Connect (EndPoint remoteEP);
+
+		void Send (object message);
+
+		void SendTo (object message, EndPoint remoteEP);
+
+		EventHandlers<Type, ReceivedEventArgs> Received { get; }
+
+		void Close ();
 	}
 }

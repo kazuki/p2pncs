@@ -23,7 +23,7 @@ namespace p2pncs.Simulation
 {
 	public static class OSTimerPrecision
 	{
-		/*[DllImport ("Avrt.dll"), SuppressUnmanagedCodeSecurity]
+		[DllImport ("Avrt.dll"), SuppressUnmanagedCodeSecurity]
 		extern static IntPtr AvSetMmThreadCharacteristics (string task, ref int index);
 
 		[DllImport ("Avrt.dll"), SuppressUnmanagedCodeSecurity]
@@ -31,36 +31,24 @@ namespace p2pncs.Simulation
 		extern static bool AvRevertMmThreadCharacteristics (IntPtr handle);
 
 		[ThreadStatic]
-		static IntPtr ThreadState;*/
-
-		[DllImport ("winmm.dll")]
-		public static extern uint timeBeginPeriod (uint uMilliseconds);
-
-		[DllImport ("winmm.dll")]
-		public static extern uint timeEndPeriod (uint uMilliseconds);
+		static IntPtr ThreadState;
 
 		public static void SetCurrentThreadToHighPrecision ()
 		{
-			try {
-				timeBeginPeriod (1);
-			} catch {}
-			/*int index = 0;
+			int index = 0;
 			try {
 				ThreadState = AvSetMmThreadCharacteristics ("Simulation", ref index);
-			} catch {}*/
+			} catch {}
 		}
 
 		public static void RevertCurrentThreadPrecision ()
 		{
-			try {
-				timeEndPeriod (1);
-			} catch {}
-			/*if (ThreadState != IntPtr.Zero) {
+			if (ThreadState != IntPtr.Zero) {
 				try {
 					AvRevertMmThreadCharacteristics (ThreadState);
 					ThreadState = IntPtr.Zero;
 				} catch {}
-			}*/
+			}
 		}
 	}
 }

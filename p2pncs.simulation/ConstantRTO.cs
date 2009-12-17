@@ -29,8 +29,17 @@ namespace p2pncs.Simulation
 			_rto = rto;
 		}
 
+		public void AddSample (TimeSpan rtt)
+		{
+		}
+
 		public void AddSample (System.Net.EndPoint ep, TimeSpan rtt)
 		{
+		}
+
+		public TimeSpan GetRTO ()
+		{
+			return _rto;
 		}
 
 		public TimeSpan GetRTO (System.Net.EndPoint ep)

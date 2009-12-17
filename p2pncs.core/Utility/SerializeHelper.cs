@@ -24,7 +24,7 @@ namespace p2pncs.Utility
 	{
 		public static void RegisterCustomHandler (Serializer serializer)
 		{
-			serializer.AddCustomHandler (typeof (Key), 0x100, delegate (Stream strm, object obj, byte[] buffer) {
+			serializer.AddCustomHandler (typeof (Key), 0x200, delegate (Stream strm, object obj, byte[] buffer) {
 				Key k = (Key)obj;
 				strm.WriteByte ((byte)k.KeyBytes);
 				k.WriteTo (strm);

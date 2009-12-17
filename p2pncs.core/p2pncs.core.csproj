@@ -49,6 +49,8 @@
     <Compile Include="..\AssemblyVersionInfo.cs" />
     <Compile Include="AssemblyInfo.cs" />
     <Compile Include="ConstantParameters.cs" />
+    <Compile Include="EventHandlers.cs" />
+    <Compile Include="Logger.cs" />
     <Compile Include="LZMA\Common\CRC.cs" />
     <Compile Include="LZMA\Compress\LZMA\LzmaBase.cs" />
     <Compile Include="LZMA\Compress\LZMA\LzmaDecoder.cs" />
@@ -62,13 +64,31 @@
     <Compile Include="LZMA\Compress\RangeCoder\RangeCoderBitTree.cs" />
     <Compile Include="LZMA\ICoder.cs" />
     <Compile Include="Net.Overlay\Key.cs" />
+    <Compile Include="Net\IInquirySocket.cs" />
+    <Compile Include="Net\InquiredEventArgs.cs" />
+    <Compile Include="Net\InquirySocket.cs" />
+    <Compile Include="Net\IPAddressUtility.cs" />
+    <Compile Include="Net\IPublicIPAddressVotingBox.cs" />
+    <Compile Include="Net\IRTOAlgorithm.cs" />
+    <Compile Include="Net\ISocket.cs" />
+    <Compile Include="Net\ReceivedEventArgs.cs" />
+    <Compile Include="Net\RFC2988BasedRTOCalculator.cs" />
+    <Compile Include="Net\SimplePublicIPAddressVotingBox.cs" />
+    <Compile Include="Net\UdpSocket.cs" />
     <Compile Include="StatisticsNoticeEventArgs.cs" />
     <Compile Include="StatisticsNoticeType.cs" />
     <Compile Include="SerializableFieldIndexAttribute.cs" />
     <Compile Include="SerializableTypeIdAttribute.cs" />
     <Compile Include="Serializer.cs" />
+    <Compile Include="Threading\InterruptHandler.cs" />
+    <Compile Include="Threading\IntervalInterrupter.cs" />
+    <Compile Include="Threading\ReaderWriterLockWrapper.cs" />
+    <Compile Include="Threading\ThreadTraceInfo.cs" />
+    <Compile Include="Threading\ThreadTracer.cs" />
+    <Compile Include="Utility\ArrayExtensions.cs" />
     <Compile Include="Utility\LzmaUtility.cs" />
     <Compile Include="Utility\SerializeHelper.cs" />
+    <Compile Include="Utility\StandardDeviation.cs" />
     <Compile Include="Utility\UriSafeBase64.cs" />
   </ItemGroup>
   <ItemGroup>

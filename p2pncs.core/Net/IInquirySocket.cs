@@ -20,12 +20,16 @@ using System.Net;
 
 namespace p2pncs.Net
 {
-	public interface IRTOAlgorithm
+	public interface IInquirySocket : ISocket
 	{
-		void AddSample (TimeSpan rtt);
-		TimeSpan GetRTO ();
+		IAsyncResult BeginInquire (object obj, EndPoint remoteEP, AsyncCallback callback, object state);
+		IAsyncResult BeginInquire (object obj, EndPoint remoteEP, IRTOAlgorithm rto, int retries, AsyncCallback callback, object state);
+		object EndInquire (IAsyncResult ar);
 
-		void AddSample (EndPoint ep, TimeSpan rtt);
-		TimeSpan GetRTO (EndPoint ep);
+		void RespondToInquiry (InquiredEventArgs e, object response);
+
+		EventHandlers<Type, InquiredEventArgs> Inquired { get; }
+		event EventHandler<InquiredEventArgs> InquiryFailure;
+		event EventHandler<InquiredEventArgs> InquirySuccess;
 	}
 }

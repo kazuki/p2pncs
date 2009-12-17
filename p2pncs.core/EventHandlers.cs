@@ -103,6 +103,7 @@ namespace p2pncs
 			handler (sender, e);
 		}
 
+#if false
 		public IAsyncResult BeginInvoke (TKey key, object sender, TEventArgs e, AsyncCallback callback, object @object)
 		{
 			EventHandler<TEventArgs> handler = Get (key);
@@ -155,5 +156,6 @@ namespace p2pncs
 
 			#endregion
 		}
+#endif
 	}
 }

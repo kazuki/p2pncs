@@ -39,6 +39,15 @@
   <ItemGroup>
     <Compile Include="..\AssemblyVersionInfo.cs" />
     <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="ConstantRTO.cs" />
+    <Compile Include="OSTimerPrecision.cs" />
+    <Compile Include="RandomIPAddressGenerator.cs" />
+    <Compile Include="VirtualNet\ILatency.cs" />
+    <Compile Include="VirtualNet\IPacketLossRate.cs" />
+    <Compile Include="VirtualNet\LatencyTypes.cs" />
+    <Compile Include="VirtualNet\PacketLossType.cs" />
+    <Compile Include="VirtualNet\VirtualNetwork.cs" />
+    <Compile Include="VirtualNet\VirtualUdpSocket.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\openCrypto.NET\openCrypto.NET.csproj">

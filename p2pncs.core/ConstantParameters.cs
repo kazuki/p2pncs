@@ -25,6 +25,8 @@ namespace p2pncs
 	{
 		public const ushort ProtocolVersion = 0;
 
+		public const int MaxUdpDatagramSize = 1000;
+
 		public static ECDomainNames ECDomainName {
 			get { return ECDomainNames.secp256r1; }
 		}
