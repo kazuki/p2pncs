@@ -141,18 +141,37 @@ namespace p2pncs.Net.Overlay
 			{
 				bool completed = false;
 				lock (_candidates) {
-					for (int idx = 0, responsedCount = 0; responsedCount < _numOfCandidates && idx < _candidates.Count && _inquiring < _numOfSimultaneous; idx ++) {
-						CandidateEntry entry = _candidates[idx];
-						if (entry.IsResponsed) {
-							responsedCount ++;
-							continue;
+					bool continueInquiry = true;
+					if (_maxMatchBits > 0) {
+						for (int idx = 0, matchedCount = 0; matchedCount < _numOfCandidates && idx < _candidates.Count; idx++) {
+							CandidateEntry entry = _candidates[idx];
+							if (!entry.IsResponsed)
+								continue;
+							if (entry.MatchBits < _maxMatchBits)
+								break;
+							
+							matchedCount ++;
+							if (matchedCount == _numOfCandidates) {
+								continueInquiry = false;
+								break;
+							}
 						}
-						if (entry.IsRunning || entry.IsFailed)
-							continue;
+					}
 
-						_router._sock.BeginInquire (_findMsg, entry.EndPoint, FindQuery_Callback, entry);
-						entry.IsRunning = true;
-						_inquiring ++;
+					if (continueInquiry) {
+						for (int idx = 0, responsedCount = 0; responsedCount < _numOfCandidates && idx < _candidates.Count && _inquiring < _numOfSimultaneous; idx ++) {
+							CandidateEntry entry = _candidates[idx];
+							if (entry.IsResponsed) {
+								responsedCount ++;
+								continue;
+							}
+							if (entry.IsRunning || entry.IsFailed)
+								continue;
+
+							_router._sock.BeginInquire (_findMsg, entry.EndPoint, FindQuery_Callback, entry);
+							entry.IsRunning = true;
+							_inquiring ++;
+						}
 					}
 
 					if (_inquiring == 0)
