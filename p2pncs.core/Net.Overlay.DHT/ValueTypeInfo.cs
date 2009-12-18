@@ -19,14 +19,29 @@ using System;
 
 namespace p2pncs.Net.Overlay.DHT
 {
-	public interface ILocalHashTableValueMerger
+	public sealed class ValueTypeInfo
 	{
-		object Merge (object value, object new_value, TimeSpan lifetime);
+		Type _type;
+		int _id;
+		IValueMerger _merger;
 
-		object[] GetEntries (object value, int max_num);
+		public ValueTypeInfo (Type type, int id, IValueMerger merger)
+		{
+			_type = type;
+			_id = id;
+			_merger = merger;
+		}
 
-		void ExpirationCheck (object value);
+		public Type Type {
+			get { return _type; }
+		}
 
-		int GetCount (object value);
+		public int ID {
+			get { return _id; }
+		}
+
+		public IValueMerger Merger {
+			get { return _merger; }
+		}
 	}
 }

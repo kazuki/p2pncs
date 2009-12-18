@@ -18,214 +18,91 @@
 using System;
 using System.Collections.Generic;
 using p2pncs.Threading;
+using TypedKey = p2pncs.Net.Overlay.DHT.ValueTypeRegister.TypedKey;
 
 namespace p2pncs.Net.Overlay.DHT
 {
 	public class OnMemoryStore : ILocalHashTable
 	{
+		ValueTypeRegister _typeRegister;
 		IntervalInterrupter _int;
-		ReaderWriterLockWrapper _lock = new ReaderWriterLockWrapper ();
-		Dictionary<Key2, ValueList> _dic = new Dictionary<Key2, ValueList> ();
-		const int MaxValueListSize = 32;
-		static readonly object[] EmptyResult = new object[0];
+		Dictionary<TypedKey, object> _dic = new Dictionary<TypedKey, object> ();
 
-		public OnMemoryStore (IntervalInterrupter expiryCheckInt)
+		public OnMemoryStore (ValueTypeRegister typeRegister, IntervalInterrupter expiryCheckInt)
 		{
+			_typeRegister = typeRegister;
 			_int = expiryCheckInt;
 			_int.AddInterruption (CheckExpiry);
 		}
 
 		void CheckExpiry ()
 		{
-			List<Key2> removeKeys = new List<Key2> ();
-			using (_lock.EnterReadLock ()) {
-				foreach (KeyValuePair<Key2, ValueList> pair in _dic) {
-					pair.Value.CheckExpiration ();
-					if (pair.Value.Count == 0)
-						removeKeys.Add (pair.Key);
+			List<KeyValuePair<TypedKey, object>> list;
+			List<TypedKey> removeList = new List<TypedKey> ();
+			lock (_dic) {
+				list = new List<KeyValuePair<TypedKey, object>> (_dic);
+			}
+			for (int i = 0; i < list.Count; i ++) {
+				ValueTypeInfo vi = _typeRegister[list[i].Key.TypeID];
+				lock (list[i].Value) {
+					vi.Merger.CheckExpiration (list[i].Value);
+					if (vi.Merger.GetCount (list[i].Value) == 0)
+						removeList.Add (list[i].Key);
 				}
 			}
-			if (removeKeys.Count > 0) {
-				using (_lock.EnterWriteLock ()) {
-					foreach (Key2 key in removeKeys) {
-						ValueList value;
-						if (!_dic.TryGetValue (key, out value))
-							continue;
-						if (value.Count == 0)
-							_dic.Remove (key);
-					}
-				}
+			lock (_dic) {
+				for (int i = 0; i < removeList.Count; i ++)
+					_dic.Remove (removeList[i]);
 			}
 		}
 
 		#region ILocalHashTable Members
 
-		public void Put (Key key, int typeId, TimeSpan lifetime, object value)
+		public void Put<T> (Key key, TimeSpan lifetime, T value) where T : class
 		{
-			Key2 key2 = new Key2 (key, typeId);
-			ValueList list;
-			using (_lock.EnterReadLock ()) {
-				_dic.TryGetValue (key2, out list);
-			}
-			if (list == null) {
-				using (_lock.EnterWriteLock ()) {
-					if (!_dic.TryGetValue (key2, out list)) {
-						list = new ValueList (MaxValueListSize);
-						_dic.Add (key2, list);
-					}
+			if (value == null || key == null)
+				throw new ArgumentNullException ();
+			ValueTypeInfo vi = _typeRegister[value.GetType ()];
+			TypedKey typedKey = new TypedKey (key, vi.ID);
+			object obj;
+			lock (_dic) {
+				if (!_dic.TryGetValue (typedKey, out obj)) {
+					_dic.Add (typedKey, vi.Merger.Merge (null, value, lifetime));
+					return;
 				}
 			}
-			list.Add (lifetime, value);
+			lock (obj) {
+				vi.Merger.Merge (obj, value, lifetime);
+			}
 		}
 
-		public object[] Get (Key key, int typeId, int maxCount)
+		public T[] Get<T> (Key key, int maxCount) where T : class
 		{
-			Key2 key2 = new Key2 (key, typeId);
-			ValueList list;
-			using (_lock.EnterReadLock ()) {
-				_dic.TryGetValue (key2, out list);
+			if (key == null)
+				throw new ArgumentNullException ();
+			ValueTypeInfo vi = _typeRegister[typeof (T)];
+			TypedKey typedKey = new TypedKey (key, vi.ID);
+			object obj;
+			lock (_dic) {
+				if (!_dic.TryGetValue (typedKey, out obj))
+					return null;
 			}
-			if (list == null)
-				return EmptyResult;
-			return list.GetValues (maxCount);
+			lock (obj) {
+				return (T[])vi.Merger.GetEntries (obj, maxCount);
+			}
 		}
 
 		public void Close ()
 		{
-			lock (_lock) {
+			lock (this) {
 				if (_dic == null)
 					return;
-				_int.RemoveInterruption (CheckExpiry);
 				_dic.Clear ();
 				_dic = null;
-				_lock.Dispose ();
 			}
+			_int.RemoveInterruption (CheckExpiry);
 		}
 
-		#endregion
-
-		#region Internal Class
-		class Key2 : IEquatable<Key2>
-		{
-			Key _key;
-			int _typeId;
-
-			public Key2 (Key key, int typeId)
-			{
-				_key = key;
-				_typeId = typeId;
-			}
-
-			public Key Key {
-				get { return _key; }
-			}
-
-			public int TypeID {
-				get { return _typeId; }
-			}
-
-			#region IEquatable<Key2> Members
-
-			public bool Equals (Key2 other)
-			{
-				return _key.Equals (other._key) && _typeId == other._typeId;
-			}
-
-			#endregion
-
-			#region Overrides
-			public override bool Equals (object obj)
-			{
-				Key2 pkey = obj as Key2;
-				if (pkey == null)
-					return false;
-				return Equals (pkey);
-			}
-
-			public override int GetHashCode ()
-			{
-				return _key.GetHashCode () ^ _typeId.GetHashCode ();
-			}
-
-			public override string ToString ()
-			{
-				return _key.ToString () + ":" + _typeId.ToString ();
-			}
-			#endregion
-		}
-		class ValueList
-		{
-			List<ValueEntry> _list;
-			int _maxListSize;
-
-			public ValueList (int maxListSize)
-			{
-				_list = new List<ValueEntry> ();
-				_maxListSize = maxListSize;
-			}
-
-			public void Add (TimeSpan lifeTime, object value)
-			{
-				lock (_list) {
-					for (int i = 0; i < _list.Count; i ++) {
-						if (value.Equals (_list[i].Value)) {
-							_list[i].LifeTime = lifeTime;
-							_list[i].Expiration = DateTime.Now + lifeTime;
-							return;
-						}
-					}
-					if (_list.Count >= _maxListSize) {
-						CheckExpiration ();
-						if (_list.Count >= _maxListSize)
-							return;
-					}
-					_list.Add (new ValueEntry (value, lifeTime, DateTime.Now + lifeTime));
-				}
-			}
-
-			public void CheckExpiration ()
-			{
-				lock (_list) {
-					for (int i = 0; i < _list.Count; i ++) {
-						if (_list[i].Expiration <= DateTime.Now) {
-							_list.RemoveAt (i);
-							i --;
-						}
-					}
-				}
-			}
-
-			public object[] GetValues (int maxSize)
-			{
-				lock (_list) {
-					object[] result = new object[Math.Min (_list.Count, maxSize)];
-					for (int i = 0; i < result.Length; i ++)
-						result[i] = _list[i].Value;
-					return result;
-				}
-			}
-
-			public int Count {
-				get {
-					lock (_list) {
-						return _list.Count;
-					}
-				}
-			}
-		}
-		class ValueEntry
-		{
-			public ValueEntry (object value, TimeSpan lifeTime, DateTime expiration)
-			{
-				Value = value;
-				LifeTime = lifeTime;
-				Expiration = expiration;
-			}
-
-			public object Value { get; set; }
-			public TimeSpan LifeTime { get; set; }
-			public DateTime Expiration { get; set; }
-		}
 		#endregion
 	}
 }

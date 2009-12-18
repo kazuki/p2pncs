@@ -20,14 +20,18 @@ using System.Collections.Generic;
 
 namespace p2pncs.Net.Overlay.DHT
 {
-	public class LocalHashTableValueMerger<T> : ILocalHashTableValueMerger, IMassKeyDelivererValueGetter where T : IEquatable<T>
+	/// <summary>IEquatableインターフェイスを利用して複数の値のマージを行うクラス</summary>
+	/// <remarks>既に値を保持している場合は，有効期限を延ばす</remarks>
+	/// <typeparam name="T"></typeparam>
+	public class EqualityValueMerger<T> : IValueMerger where T : class, IEquatable<T>
 	{
 		public TimeSpan MinRePutInterval = TimeSpan.FromSeconds (30);
 
+		#region IValueMerger Members
 		public object Merge (object value, object new_value, TimeSpan lifeTime)
 		{
 			List<HolderInfo> list = value as List<HolderInfo>;
-			IEquatable<T> entry = new_value as IEquatable<T>;
+			T entry = (T)new_value;
 			if (list == null)
 				list = new List<HolderInfo> ();
 			bool found = false;
@@ -56,13 +60,13 @@ namespace p2pncs.Net.Overlay.DHT
 			List<HolderInfo> list = value as List<HolderInfo>;
 			if (list == null || list.Count == 0)
 				return new object[0];
-			object[] result = new object[Math.Min (list.Count, max_num)];
+			T[] result = new T[Math.Min (list.Count, max_num)];
 			for (int i = 0; i < result.Length; i++)
 				result[i] = list[i].Entry;
-			return result;
+			return (object[])result;
 		}
 
-		public void ExpirationCheck (object value)
+		public void CheckExpiration (object value)
 		{
 			List<HolderInfo> list = value as List<HolderInfo>;
 			for (int i = 0; i < list.Count; i++) {
@@ -71,6 +75,13 @@ namespace p2pncs.Net.Overlay.DHT
 			}
 		}
 
+		public int GetCount (object value)
+		{
+			return (value as List<HolderInfo>).Count;
+		}
+#endregion
+
+#if false
 		public DHTEntry[] GetSendEntries (Key key, int typeId, object value, int max_num)
 		{
 			List<HolderInfo> list = value as List<HolderInfo>;
@@ -98,20 +109,16 @@ namespace p2pncs.Net.Overlay.DHT
 					return;
 				}
 		}
-
-		public int GetCount (object value)
-		{
-			return (value as List<HolderInfo>).Count;
-		}
+#endif
 
 		public class HolderInfo : IEquatable<HolderInfo>
 		{
-			protected IEquatable<T> _entry;
+			protected T _entry;
 			protected TimeSpan _lifeTime;
 			protected DateTime _expiration;
 			protected bool _sendFlag;
 
-			public HolderInfo (IEquatable<T> entry, TimeSpan lifetime)
+			public HolderInfo (T entry, TimeSpan lifetime)
 			{
 				_entry = entry;
 				_lifeTime = lifetime;
@@ -134,7 +141,7 @@ namespace p2pncs.Net.Overlay.DHT
 				return false;
 			}
 
-			public IEquatable<T> GetValueToSend ()
+			public T GetValueToSend ()
 			{
 				_sendFlag = true;
 				return _entry;
@@ -145,7 +152,7 @@ namespace p2pncs.Net.Overlay.DHT
 				_sendFlag = false;
 			}
 
-			public IEquatable<T> Entry {
+			public T Entry {
 				get { return _entry; }
 			}
 

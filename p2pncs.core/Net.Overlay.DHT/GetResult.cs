@@ -17,13 +17,13 @@
 
 namespace p2pncs.Net.Overlay.DHT
 {
-	public class GetResult
+	public class GetResult<T>
 	{
 		Key _key;
-		object[] _values;
+		T[] _values;
 		int _hops;
 
-		public GetResult (Key key, object[] values, int hops)
+		public GetResult (Key key, T[] values, int hops)
 		{
 			_key = key;
 			_values = values;
@@ -34,8 +34,7 @@ namespace p2pncs.Net.Overlay.DHT
 			get { return _key; }
 		}
 
-		/// <remarks>要素がIPutterEndPointStoreを実装していて、かつEndPointがnullだった場合はその要素のEndPointは自ノードを指している</remarks>
-		public object[] Values {
+		public T[] Values {
 			get { return _values; }
 		}
 

@@ -63,6 +63,15 @@
     <Compile Include="LZMA\Compress\RangeCoder\RangeCoderBit.cs" />
     <Compile Include="LZMA\Compress\RangeCoder\RangeCoderBitTree.cs" />
     <Compile Include="LZMA\ICoder.cs" />
+    <Compile Include="Net.Overlay.DHT\EqualityValueMerger.cs" />
+    <Compile Include="Net.Overlay.DHT\GetOptions.cs" />
+    <Compile Include="Net.Overlay.DHT\GetResult.cs" />
+    <Compile Include="Net.Overlay.DHT\IDistributedHashTable.cs" />
+    <Compile Include="Net.Overlay.DHT\ILocalHashTable.cs" />
+    <Compile Include="Net.Overlay.DHT\IValueMerger.cs" />
+    <Compile Include="Net.Overlay.DHT\OnMemoryStore.cs" />
+    <Compile Include="Net.Overlay.DHT\ValueTypeInfo.cs" />
+    <Compile Include="Net.Overlay.DHT\ValueTypeRegister.cs" />
     <Compile Include="Net.Overlay\IKeyBasedRouter.cs" />
     <Compile Include="Net.Overlay\IKeyBasedRoutingAlgorithm.cs" />
     <Compile Include="Net.Overlay\Key.cs" />
@@ -108,6 +117,9 @@
       <Project>{59AD989B-7DD7-400B-B2D5-EFBD0004A749}</Project>
       <Name>openCrypto.NET</Name>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Net.Overlay.Anonymous\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

@@ -9,4 +9,4 @@ p2pncs.Net.Overlay (0x200-0x2ff):
   0x210: SimpleIterativeRouter.FindCloseNode
   0x211: SimpleIterativeRouter.CloseNodeSet
   0x212: SimpleRoutingAlgorithm.PingRequest
-  0x213: SimpleRoutingAlgorithm.PingRequest
+  0x213: SimpleRoutingAlgorithm.PingResponse

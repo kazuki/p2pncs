@@ -19,12 +19,14 @@ using System;
 
 namespace p2pncs.Net.Overlay.DHT
 {
-	public interface ILocalHashTable
+	public interface IValueMerger
 	{
-		void Put<T> (Key key, TimeSpan lifetime, T value) where T : class;
+		object Merge (object value, object new_value, TimeSpan lifetime);
 
-		T[] Get<T> (Key key, int maxCount) where T : class;
+		object[] GetEntries (object value, int max_num);
 
-		void Close ();
+		void CheckExpiration (object value);
+
+		int GetCount (object value);
 	}
 }
