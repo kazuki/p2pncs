@@ -10,3 +10,9 @@ p2pncs.Net.Overlay (0x200-0x2ff):
   0x211: SimpleIterativeRouter.CloseNodeSet
   0x212: SimpleRoutingAlgorithm.PingRequest
   0x213: SimpleRoutingAlgorithm.PingResponse
+
+p2pncs.Net.Overlay.DHT (0x300-0x3ff):
+  0x300: SimpleDHT.GetRequest
+  0x301: SimpleDHT.GetResponse
+  0x302: SimpleDHT.PutRequest
+  0x303: SimpleDHT.PutResponse

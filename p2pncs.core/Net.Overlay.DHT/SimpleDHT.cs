@@ -15,10 +15,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-// REM TODO: 複数のストア候補ノードからの結果をマージする機能を実装する
-// REM TODO: PutするオブジェクトがIPutterEndPointStoreインターフェイスを実装していた場合の動作が、IterativeなKBR専用となっているので、汎用性を持たせる
-// REM TODO: 複数候補へのGet/Put時、どのタイミングで停止するかを制御する機能を実装する (現状では1つでも応答があれば他の応答を無視している)
-
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -30,72 +26,39 @@ namespace p2pncs.Net.Overlay.DHT
 {
 	public class SimpleDHT : IDistributedHashTable
 	{
-		IMessagingSocket _sock;
+		IInquirySocket _sock;
 		IKeyBasedRouter _kbr;
 		ILocalHashTable _local;
-		Dictionary<Type, int> _typeMap = new Dictionary<Type, int> ();
-		const int NumberOfReplica = 3;
-		static string ACK = "ACK";
+		ValueTypeRegister _typeReg;
+		int _numOfReplicas = 3, _numOfSimultaneous = 3;
 
-		public SimpleDHT (IMessagingSocket sock, IKeyBasedRouter kbr, ILocalHashTable localStore)
+		public SimpleDHT (IInquirySocket sock, IKeyBasedRouter kbr, ILocalHashTable localStore, ValueTypeRegister typeReg)
 		{
 			_sock = sock;
 			_kbr = kbr;
 			_local = localStore;
-			sock.InquiredHandlers.Add (typeof (GetRequest), Inquired_GetRequest);
-			sock.InquiredHandlers.Add (typeof (PutRequest), Inquired_PutRequest);
-		}
-
-		void Inquired_GetRequest (object sender, InquiredEventArgs args)
-		{
-			GetRequest req = (GetRequest)args.InquireMessage;
-			object[] values = _local.Get (req.Key, req.TypeId, req.NumberOfValues);
-			_sock.StartResponse (args, new GetResponse (values));
-		}
-
-		void Inquired_PutRequest (object sender, InquiredEventArgs args)
-		{
-			PutRequest req = (PutRequest)args.InquireMessage;
-			_sock.StartResponse (args, ACK);
-			int typeId;
-			lock (_typeMap) {
-				typeId = _typeMap[req.Value.GetType ()];
-			}
-			_local.Put (req.Key, typeId, req.LifeTime, req.Value);
+			_typeReg = typeReg;
+			sock.Inquired.Add (typeof (GetRequest), Inquired_GetRequest);
+			sock.Inquired.Add (typeof (PutRequest), Inquired_PutRequest);
 		}
 
 		#region IDistributedHashTable Members
 
-		public void RegisterType (Type type, int id)
+		public IAsyncResult BeginGet<T> (Key appId, Key key, GetOptions opts, AsyncCallback callback, object state)
 		{
-			lock (_typeMap) {
-				_typeMap.Add (type, id);
-			}
+			return new GetAsyncResult<T> (this, appId, key, _typeReg[typeof (T)].ID, opts, callback, state);
 		}
 
-		public IAsyncResult BeginGet (Key appId, Key key, Type type, GetOptions opts, AsyncCallback callback, object state)
+		public GetResult<T> EndGet<T> (IAsyncResult ar)
 		{
-			int typeId;
-			lock (_typeMap) {
-				typeId = _typeMap[type];
-			}
-			return new GetAsyncResult (this, appId, key, typeId, opts, callback, state);
-		}
-
-		public GetResult EndGet (IAsyncResult ar)
-		{
-			GetAsyncResult gar = (GetAsyncResult)ar;
+			GetAsyncResult<T> gar = (GetAsyncResult<T>)ar;
 			gar.AsyncWaitHandle.WaitOne ();
 			return gar.Result;
 		}
 
 		public IAsyncResult BeginPut (Key appId, Key key, TimeSpan lifeTime, object value, AsyncCallback callback, object state)
 		{
-			int typeId;
-			lock (_typeMap) {
-				typeId = _typeMap[value.GetType ()];
-			}
-			return new PutAsyncResult (this, appId, key, typeId, lifeTime, value, callback, state);
+			return new PutAsyncResult (this, appId, key, _typeReg[value.GetType()].ID, lifeTime, value, callback, state);
 		}
 
 		public void EndPut (IAsyncResult ar)
@@ -109,13 +72,25 @@ namespace p2pncs.Net.Overlay.DHT
 
 		public void Dispose ()
 		{
-			_sock.InquiredHandlers.Remove (typeof (GetRequest), Inquired_GetRequest);
-			_sock.InquiredHandlers.Remove (typeof (PutRequest), Inquired_PutRequest);
+			_sock.Inquired.Remove (typeof (GetRequest), Inquired_GetRequest);
+			_sock.Inquired.Remove (typeof (PutRequest), Inquired_PutRequest);
 		}
 
 		#endregion
 
-		#region Internal Class
+		#region Properties
+		public int NumberOfReplica {
+			get { return _numOfReplicas; }
+			set { _numOfReplicas = value;}
+		}
+
+		public int NumberOfSimultaneous {
+			get { return _numOfSimultaneous; }
+			set { _numOfSimultaneous = value;}
+		}
+		#endregion
+
+		#region AsyncResult
 		abstract class AsyncResultBase : IAsyncResult
 		{
 			protected SimpleDHT _dht;
@@ -149,7 +124,7 @@ namespace p2pncs.Net.Overlay.DHT
 				if (_callback != null) {
 					try {
 						_callback (this);
-					} catch {}
+					} catch { }
 				}
 			}
 
@@ -173,18 +148,18 @@ namespace p2pncs.Net.Overlay.DHT
 
 			#endregion
 		}
-		sealed class GetAsyncResult : AsyncResultBase
+		sealed class GetAsyncResult<T> : AsyncResultBase
 		{
 			GetOptions _opts;
 			int _waiting = 0, _hops = -1;
-			GetResult _result = null;
-			List<object> _list = new List<object> ();
+			GetResult<T> _result = null;
+			List<T> _list = new List<T> ();
 
 			public GetAsyncResult (SimpleDHT dht, Key appId, Key key, int typeId, GetOptions opts, AsyncCallback callback, object state)
 				: base (dht, appId, key, typeId, callback, state)
 			{
-				_opts = opts;
-				_dht._kbr.BeginRoute (appId, key, NumberOfReplica, null, KBR_Callback, null);
+				_opts = (opts == null ? new GetOptions () : opts);
+				_dht._kbr.BeginRoute (appId, key, _dht.NumberOfReplica, new KeyBasedRoutingOptions {NumberOfSimultaneous = dht.NumberOfSimultaneous}, KBR_Callback, null);
 			}
 
 			void KBR_Callback (IAsyncResult ar)
@@ -192,12 +167,12 @@ namespace p2pncs.Net.Overlay.DHT
 				RoutingResult result = _dht._kbr.EndRoute (ar);
 				GetRequest req = new GetRequest (_key, _typeId, _opts.MaxValues);
 				if (result.RootCandidates.Length == 0) {
-					_result = new GetResult (_key, new object[0], _hops);
+					_result = new GetResult<T> (_key, new T[0], _hops);
 					Done ();
 					return;
 				}
 				_hops = result.Hops;
-				for (int i = 0; i < result.RootCandidates.Length; i ++) {
+				for (int i = 0; i < result.RootCandidates.Length; i++) {
 					Interlocked.Increment (ref _waiting);
 					_dht._sock.BeginInquire (req, result.RootCandidates[i].EndPoint, GetReqCallback, result.RootCandidates[i].EndPoint);
 				}
@@ -213,19 +188,22 @@ namespace p2pncs.Net.Overlay.DHT
 						if (_result != null)
 							return;
 						foreach (object value in res.Values) {
-							if (_list.Contains (value))
-								continue;
-							_list.Add (value);
+							try {
+								T casted_value = (T)value;
+								if (_list.Contains (casted_value))
+									continue;
+								_list.Add (casted_value);
+							} catch {}
 						}
 						if (_list.Count >= _opts.MaxValues) {
-							object[] values = _list.ToArray ().CopyRange<object> (0, Math.Min (_list.Count, _opts.MaxValues));
-							_result = new GetResult (_key, values, _hops);
+							T[] values = _list.ToArray ().CopyRange<T> (0, Math.Min (_list.Count, _opts.MaxValues));
+							_result = new GetResult<T> (_key, values, _hops);
 							Done ();
 							return;
 						}
 					}
 					if (waiting == 0) {
-						_result = new GetResult (_key, _list.ToArray (), _hops);
+						_result = new GetResult<T> (_key, _list.ToArray (), _hops);
 						Done ();
 						return;
 					}
@@ -237,7 +215,8 @@ namespace p2pncs.Net.Overlay.DHT
 				}
 			}
 
-			public GetResult Result {
+			public GetResult<T> Result
+			{
 				get { return _result; }
 			}
 		}
@@ -252,7 +231,7 @@ namespace p2pncs.Net.Overlay.DHT
 			{
 				_lifeTime = lifeTime;
 				_value = value;
-				_dht._kbr.BeginRoute (appId, key, NumberOfReplica, null, KBR_Callback, null);
+				_dht._kbr.BeginRoute (appId, key, _dht.NumberOfReplica, new KeyBasedRoutingOptions {NumberOfSimultaneous = dht.NumberOfSimultaneous}, KBR_Callback, null);
 			}
 
 			void KBR_Callback (IAsyncResult ar)
@@ -263,7 +242,7 @@ namespace p2pncs.Net.Overlay.DHT
 					return;
 				}
 				PutRequest req = new PutRequest (_key, _value, _lifeTime);
-				for (int i = 0; i < result.RootCandidates.Length; i ++) {
+				for (int i = 0; i < result.RootCandidates.Length; i++) {
 					Interlocked.Increment (ref _waiting);
 					_dht._sock.BeginInquire (req, result.RootCandidates[i].EndPoint, PutReqCallback, result.RootCandidates[i].EndPoint);
 				}
@@ -281,11 +260,37 @@ namespace p2pncs.Net.Overlay.DHT
 					_dht._kbr.RoutingAlgorithm.Touch (ep);
 			}
 		}
+		#endregion
 
-		class GetRequest
+		#region Message Handlers
+		void Inquired_GetRequest (object sender, InquiredEventArgs e)
 		{
+			GetRequest getReq = (GetRequest)e.InquireMessage;
+			object[] ret = _local.Get (getReq.Key, _typeReg[getReq.TypeID].Type, getReq.NumberOfValues);
+			_sock.RespondToInquiry (e, new GetResponse (ret));
+		}
+
+		void Inquired_PutRequest (object sender, InquiredEventArgs e)
+		{
+			PutRequest putReq = (PutRequest)e.InquireMessage;
+			_sock.RespondToInquiry (e, PutResponse.Instance);
+			_local.Put (putReq.Key, putReq.LifeTime, putReq.Value);
+		}
+		#endregion
+
+		#region Messages
+		[Serializable]
+		[SerializableTypeId (0x300)]
+		sealed class GetRequest
+		{
+			[SerializableFieldId (0)]
 			Key _key;
-			int _typeId, _numOfValues;
+
+			[SerializableFieldId (1)]
+			int _typeId;
+
+			[SerializableFieldId (2)]
+			int _numOfValues;
 
 			public GetRequest (Key key, int typeId, int numOfValues)
 			{
@@ -298,7 +303,7 @@ namespace p2pncs.Net.Overlay.DHT
 				get { return _key; }
 			}
 
-			public int TypeId {
+			public int TypeID {
 				get { return _typeId; }
 			}
 
@@ -307,8 +312,11 @@ namespace p2pncs.Net.Overlay.DHT
 			}
 		}
 
-		class GetResponse
+		[Serializable]
+		[SerializableTypeId (0x301)]
+		sealed class GetResponse
 		{
+			[SerializableFieldId (0)]
 			object[] _values;
 
 			public GetResponse (object[] values)
@@ -321,10 +329,17 @@ namespace p2pncs.Net.Overlay.DHT
 			}
 		}
 
-		class PutRequest
+		[Serializable]
+		[SerializableTypeId (0x302)]
+		sealed class PutRequest
 		{
+			[SerializableFieldId (0)]
 			Key _key;
+
+			[SerializableFieldId (1)]
 			object _value;
+
+			[SerializableFieldId (2)]
 			TimeSpan _lifetime;
 
 			public PutRequest (Key key, object value, TimeSpan lifetime)
@@ -344,6 +359,20 @@ namespace p2pncs.Net.Overlay.DHT
 
 			public TimeSpan LifeTime {
 				get { return _lifetime; }
+			}
+		}
+
+		[Serializable]
+		[SerializableTypeId (0x303)]
+		sealed class PutResponse
+		{
+			static PutResponse _instance = new PutResponse ();
+			PutResponse ()
+			{
+			}
+
+			public static PutResponse Instance {
+				get { return _instance; }
 			}
 		}
 		#endregion

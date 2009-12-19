@@ -70,6 +70,7 @@
     <Compile Include="Net.Overlay.DHT\ILocalHashTable.cs" />
     <Compile Include="Net.Overlay.DHT\IValueMerger.cs" />
     <Compile Include="Net.Overlay.DHT\OnMemoryStore.cs" />
+    <Compile Include="Net.Overlay.DHT\SimpleDHT.cs" />
     <Compile Include="Net.Overlay.DHT\ValueTypeInfo.cs" />
     <Compile Include="Net.Overlay.DHT\ValueTypeRegister.cs" />
     <Compile Include="Net.Overlay\IKeyBasedRouter.cs" />

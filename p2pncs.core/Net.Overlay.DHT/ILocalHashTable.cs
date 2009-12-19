@@ -21,9 +21,9 @@ namespace p2pncs.Net.Overlay.DHT
 {
 	public interface ILocalHashTable
 	{
-		void Put<T> (Key key, TimeSpan lifetime, T value) where T : class;
+		void Put (Key key, TimeSpan lifetime, object value);
 
-		T[] Get<T> (Key key, int maxCount) where T : class;
+		object[] Get (Key key, Type type, int maxCount);
 
 		void Close ();
 	}

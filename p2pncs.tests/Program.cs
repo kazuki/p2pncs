@@ -23,6 +23,7 @@ using System.Net;
 using System.Threading;
 using p2pncs.Net;
 using p2pncs.Net.Overlay;
+using p2pncs.Net.Overlay.DHT;
 using p2pncs.Simulation;
 using p2pncs.Simulation.VirtualNet;
 using p2pncs.Threading;
@@ -34,15 +35,16 @@ namespace p2pncs
 		static void Main (string[] args)
 		{
 			IntervalInterrupter interrupter = new IntervalInterrupter (TimeSpan.FromSeconds (1), "InquirySocket TimeoutCheck");
+			IntervalInterrupter dhtExpireCheckInt = new IntervalInterrupter (TimeSpan.FromSeconds (1), "InquirySocket TimeoutCheck");
 			IRTOAlgorithm rto = new RFC2988BasedRTOCalculator (TimeSpan.FromSeconds (1), TimeSpan.FromMilliseconds (200), 50);
 			RandomIPAddressGenerator rndIpGen = new RandomIPAddressGenerator ();
 			Random rnd = new Random ();
 			bool bypassSerialize = true;
-			const int Nodes = 1 << 16;
+			const int Nodes = 1 << 10;
 			const int Retries = 2;
 			const int RetryBufferSize = 64;
 			const int KeyBytes = 8;
-			const int BucketSize = 1;
+			const int BucketSize = 16;
 			TimeSpan minPingInterval = TimeSpan.FromMinutes (5);
 			Key appId = new Key (new byte[] {0});
 
@@ -50,8 +52,9 @@ namespace p2pncs
 
 			using (VirtualNetwork vnet = new VirtualNetwork (LatencyTypes.Constant (10), 5, PacketLossType.Lossless (), Environment.ProcessorCount)) {
 				List<IPEndPoint> endPoints = new List<IPEndPoint> ();
-				List<InquirySocket> sockets = new List<InquirySocket> ();
-				List<SimpleIterativeRouter> routers = new List<SimpleIterativeRouter> ();
+				List<IInquirySocket> sockets = new List<IInquirySocket> ();
+				List<IKeyBasedRouter> routers = new List<IKeyBasedRouter> ();
+				List<IDistributedHashTable> dhts = new List<IDistributedHashTable> ();
 				for (int i = 0; i < Nodes; i ++) {
 					IPEndPoint ep = new IPEndPoint (rndIpGen.Next (), rnd.Next (1, ushort.MaxValue));
 					VirtualUdpSocket udpSock = new VirtualUdpSocket (vnet, ep.Address, bypassSerialize);
@@ -59,24 +62,46 @@ namespace p2pncs
 					Key key = Key.CreateRandom (KeyBytes);
 					SimpleRoutingAlgorithm algo = new SimpleRoutingAlgorithm (key, sock, BucketSize, minPingInterval);
 					SimpleIterativeRouter router = new SimpleIterativeRouter (algo, sock);
+					ValueTypeRegister typeReg = new ValueTypeRegister ();
+					OnMemoryStore localStore = new OnMemoryStore (typeReg, dhtExpireCheckInt);
+					SimpleDHT dht = new SimpleDHT (sock, router, localStore, typeReg);
+					typeReg.Register (typeof (string), 0, new EqualityValueMerger<string> ());
 					algo.NewApp (appId);
 					udpSock.Bind (new IPEndPoint (IPAddress.Any, ep.Port));
 
 					endPoints.Add (ep);
 					sockets.Add (sock);
 					routers.Add (router);
+					dhts.Add (dht);
 					if (routers.Count > 1)
 						router.Join (appId, new EndPoint[] {endPoints[0]});
 					Thread.Sleep (5);
 					if ((i & 0xff) == 0xff) {
 						Console.WriteLine ("{0:p}", (i + 1) / ((double)Nodes));
 						GC.Collect ();
+
+						int minJitter, maxJitter;
+						double avgJitter, sdJitter;
+						vnet.GetAndResetJitterHistory (out minJitter, out avgJitter, out sdJitter, out maxJitter);
+						Console.WriteLine ("{0}/{1:f2}({2:f2})/{3}", minJitter, avgJitter, sdJitter, maxJitter);
 					}
 				}
 				Console.WriteLine ("OK");
 				Console.ReadLine ();
 
+				Key key2 = Key.CreateRandom (KeyBytes);
 				while (true) {
+					int idx0 = rnd.Next (0, sockets.Count);
+					int idx1 = rnd.Next (0, sockets.Count);
+					dhts[idx0].EndPut (dhts[idx0].BeginPut (appId, key2, TimeSpan.FromHours (1), "Hello from " + routers[idx0].RoutingAlgorithm.SelfNodeHandle.NodeID.ToString (16), null, null));
+					GetResult<string> result = dhts[idx1].EndGet<string> (dhts[idx1].BeginGet<string> (appId, key2, null, null, null));
+					Console.WriteLine ("Result({0}hops):", result.Hops);
+					for (int i = 0; result.Values != null && i < result.Values.Length; i ++)
+						Console.WriteLine ("  {0}", result.Values[i]);
+					Console.ReadLine ();
+				}
+
+				/*while (true) {
 					int idx0 = rnd.Next (0, sockets.Count);
 					int idx1 = rnd.Next (0, sockets.Count);
 					Console.WriteLine ("{0} looking for {1}",
@@ -96,7 +121,7 @@ namespace p2pncs
 						Console.WriteLine ("{0}: {1}", i + 1, rr.RootCandidates[i].NodeID);
 					if (Console.ReadLine () == "exit")
 						break;
-				}
+				}*/
 			}
 
 			interrupter.Dispose ();

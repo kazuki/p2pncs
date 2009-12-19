@@ -58,7 +58,7 @@ namespace p2pncs.Net.Overlay.DHT
 
 		#region ILocalHashTable Members
 
-		public void Put<T> (Key key, TimeSpan lifetime, T value) where T : class
+		public void Put (Key key, TimeSpan lifetime, object value)
 		{
 			if (value == null || key == null)
 				throw new ArgumentNullException ();
@@ -76,11 +76,11 @@ namespace p2pncs.Net.Overlay.DHT
 			}
 		}
 
-		public T[] Get<T> (Key key, int maxCount) where T : class
+		public object[] Get (Key key, Type type, int maxCount)
 		{
 			if (key == null)
 				throw new ArgumentNullException ();
-			ValueTypeInfo vi = _typeRegister[typeof (T)];
+			ValueTypeInfo vi = _typeRegister[type];
 			TypedKey typedKey = new TypedKey (key, vi.ID);
 			object obj;
 			lock (_dic) {
@@ -88,7 +88,7 @@ namespace p2pncs.Net.Overlay.DHT
 					return null;
 			}
 			lock (obj) {
-				return (T[])vi.Merger.GetEntries (obj, maxCount);
+				return vi.Merger.GetEntries (obj, maxCount);
 			}
 		}
 
