@@ -26,7 +26,7 @@ namespace p2pncs.Simulation.VirtualNet
 	{
 		VirtualNetwork _vnet;
 		VirtualNetwork.VirtualNetworkNode _vnet_node = null;
-		EndPoint _bindPubEP;
+		EndPoint _bindPubEP, _localEP;
 		IPAddress _pubIP;
 		long _recvBytes = 0, _sentBytes = 0, _recvDgrams = 0, _sentDgrams = 0;
 		EventHandlers<Type, ReceivedEventArgs> _received = new EventHandlers<Type,ReceivedEventArgs> ();
@@ -67,6 +67,7 @@ namespace p2pncs.Simulation.VirtualNet
 
 		public void Bind (EndPoint localEP)
 		{
+			_localEP = localEP;
 			_bindPubEP = new IPEndPoint (_pubIP, ((IPEndPoint)localEP).Port);
 			_vnet_node = _vnet.AddVirtualNode (this, _bindPubEP);
 		}
@@ -115,6 +116,14 @@ namespace p2pncs.Simulation.VirtualNet
 			vnet.RemoveVirtualNode (_vnet_node);
 			_vnet_node = null;
 			_pubIP = IPAddress.None;
+		}
+
+		public EndPoint LocalEndPoint {
+			get { return _localEP; }
+		}
+
+		public EndPoint RemoteEndPoint {
+			get { throw new System.Net.Sockets.SocketException (); }
 		}
 
 		public int MaxDatagramSize {

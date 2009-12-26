@@ -29,10 +29,9 @@ namespace p2pncs.Utility
 
 		public static void Shuffle<T> (this T[] array, int iterations)
 		{
-			Random rnd = new Random ();
 			for (int i = 0; i < iterations; i ++) {
-				int x = rnd.Next (array.Length);
-				int y = rnd.Next (array.Length);
+				int x = ThreadSafeRandom.Next (array.Length);
+				int y = ThreadSafeRandom.Next (array.Length);
 				T tmp = array[x];
 				array[x] = array[y];
 				array[y] = tmp;
@@ -41,14 +40,37 @@ namespace p2pncs.Utility
 
 		public static T[] RandomSelection<T> (this T[] array, int maxLength)
 		{
+			return array.RandomSelection<T> (maxLength, null);
+		}
+
+		public static T[] RandomSelection<T> (this T[] array, int maxLength, int excludeIndex)
+		{
+			return array.RandomSelection<T> (maxLength, new int[] {excludeIndex});
+		}
+
+		public static T[] RandomSelection<T> (this T[] array, int maxLength, int[] excludeIndexes)
+		{
+			HashSet<int> excludes = (excludeIndexes == null ? new HashSet<int> () : new HashSet<int> (excludeIndexes));
 			if (array.Length <= maxLength)
 				return array;
-			List<T> list = new List<T> (array);
-			Random rnd = new Random ();
-			while (list.Count > maxLength) {
-				list.RemoveAt (rnd.Next (list.Count));
+			List<T> list = new List<T> (array.Length);
+			for (int i = 0; i < array.Length; i ++)
+				if (!excludes.Contains (i))
+					list.Add (array[i]);
+			
+			if (list.Count - maxLength < maxLength * 2) {
+				while (list.Count > maxLength)
+					list.RemoveAt (ThreadSafeRandom.Next (list.Count));
+				return list.ToArray ();
+			} else {
+				List<T> list2 = new List<T> (maxLength);
+				for (int i = 0; i < maxLength; i ++) {
+					int idx = ThreadSafeRandom.Next (list.Count);
+					list2.Add (list[idx]);
+					list.RemoveAt (idx);
+				}
+				return list2.ToArray ();
 			}
-			return list.ToArray ();
 		}
 
 		public static byte[] Join (this byte[] array1, byte[] array2)

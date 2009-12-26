@@ -19,13 +19,13 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using p2pncs.Net;
+using p2pncs.Utility;
 
 namespace p2pncs.Simulation
 {
 	public class RandomIPAddressGenerator
 	{
 		HashSet<IPAddress> _generated = new HashSet<IPAddress> ();
-		Random _rnd = new Random ();
 		byte[] _buffer = new byte[4];
 
 		public IPAddress Next ()
@@ -34,7 +34,7 @@ namespace p2pncs.Simulation
 				byte[] x = _buffer;
 				while (true) {
 					// Generate Random Address
-					_rnd.NextBytes (x);
+					ThreadSafeRandom.NextBytes (x);
 					IPAddress adrs = new IPAddress (x);
 
 					// Check: Private Address

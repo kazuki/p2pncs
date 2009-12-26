@@ -28,7 +28,7 @@ namespace p2pncs.Net
 		int _max_datagram_size, _header_size;
 		Socket _sock;
 		IPAddress _loopbackAdrs, _noneAdrs;
-		ushort _bindPort;
+		IPEndPoint _localEP;
 		long _recvBytes = 0, _sentBytes = 0, _recvDgrams = 0, _sentDgrams = 0;
 		IPublicIPAddressVotingBox _pubIpVotingBox;
 		byte[] _sendBuffer = new byte[ConstantParameters.MaxUdpDatagramSize];
@@ -59,7 +59,6 @@ namespace p2pncs.Net
 		#endregion
 
 		#region ISocket Members
-
 		public ISocket Accept ()
 		{
 			throw new NotSupportedException ();
@@ -67,8 +66,10 @@ namespace p2pncs.Net
 
 		public void Bind (EndPoint localEP)
 		{
+			if (!(localEP is IPEndPoint))
+				throw new ArgumentException ();
+			_localEP = localEP as IPEndPoint;
 			_sock.Bind (localEP);
-			_bindPort = (ushort)((IPEndPoint)localEP).Port;
 		}
 
 		public void Connect (EndPoint remoteEP)
@@ -92,9 +93,9 @@ namespace p2pncs.Net
 				}
 
 				IPEndPoint remoteIPEP = (IPEndPoint)remoteEP;
-				if (remoteIPEP.Port == _bindPort && remoteIPEP.Address.Equals (_pubIpVotingBox.CurrentPublicIPAddress)) {
+				if (remoteIPEP.Port == _localEP.Port && remoteIPEP.Address.Equals (_pubIpVotingBox.CurrentPublicIPAddress)) {
 					// 自分自身が宛先の場合はループバックアドレスに書き換える
-					remoteEP = new IPEndPoint (_loopbackAdrs, _bindPort);
+					remoteEP = new IPEndPoint (_loopbackAdrs, _localEP.Port);
 				}
 #if !DEBUG
 				else if (IPAddressUtility.IsPrivate (remoteIPEP.Address)) {
@@ -140,6 +141,14 @@ namespace p2pncs.Net
 			_noneAdrs = _loopbackAdrs = null;
 		}
 
+		public EndPoint LocalEndPoint {
+			get { return _localEP; }
+		}
+
+		public EndPoint RemoteEndPoint {
+			get { throw new SocketException (); }
+		}
+
 		#endregion
 
 		#region Receive Thread
@@ -161,7 +170,7 @@ namespace p2pncs.Net
 					int receiveSize = _sock.ReceiveFrom (recvBuffer, 0, recvBuffer.Length, SocketFlags.None, ref remoteEP);
 					IPEndPoint remoteIPEP = (IPEndPoint)remoteEP;
 #if !DEBUG
-					if (remoteIPEP.Port == _bindPort && _loopbackAdrs.Equals (remoteIPEP.Address)) {
+					if (remoteIPEP.Port == _localEP.Port && _loopbackAdrs.Equals (remoteIPEP.Address)) {
 						IPAddress new_adrs = _pubIpVotingBox.CurrentPublicIPAddress;
 						if (_noneAdrs.Equals (new_adrs))
 							continue; // パブリックIPが決定していないときはそのパケットを破棄

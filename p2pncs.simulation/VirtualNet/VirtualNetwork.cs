@@ -52,7 +52,6 @@ namespace p2pncs.Simulation.VirtualNet
 
 		ILatency _latency;
 		IPacketLossRate _packetLossrate;
-		Random _rnd = new Random ();
 
 		public VirtualNetwork (ILatency latency, int delayPrecision, IPacketLossRate lossrate, int invokeThreads)
 		{
@@ -209,9 +208,7 @@ namespace p2pncs.Simulation.VirtualNet
 		bool IsLossPacket (EndPoint src, EndPoint dst)
 		{
 			double rate = _packetLossrate.ComputePacketLossRate (src, dst);
-			lock (_rnd) {
-				return _rnd.NextDouble () < rate;
-			}
+			return ThreadSafeRandom.NextDouble () < rate;
 		}
 
 		public void CloseAllSockets ()

@@ -276,6 +276,11 @@ namespace p2pncs.Net.Overlay
 					return false;
 			return true;
 		}
+
+		public string ToShortString ()
+		{
+			return ToString (16).Substring (0, 8);
+		}
 		#endregion
 
 		#region Convert to/from ECKeyPair

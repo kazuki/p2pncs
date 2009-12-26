@@ -19,21 +19,15 @@ using System;
 
 namespace p2pncs.Net.Overlay.Anonymous
 {
-	public abstract class BoundaryNodeReceivedEventArgs : EventArgs
+	public abstract class MCRTerminalNodeReceivedEventArgs : EventArgs
 	{
-		Key _key;
 		object _req;
 		bool _needResponse;
 
-		public BoundaryNodeReceivedEventArgs (Key key, object request, bool needRes)
+		public MCRTerminalNodeReceivedEventArgs (object request, bool needRes)
 		{
-			_key = key;
 			_req = request;
 			_needResponse = needRes;
-		}
-
-		public Key RecipientKey {
-			get { return _key; }
 		}
 
 		public object Request {
@@ -44,8 +38,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 			get { return _needResponse; }
 		}
 
-		public abstract void StartResponse (object response);
+		public abstract void Respond (object response);
 
-		public abstract void SendMessage (object msg);
+		public abstract void Send (object msg);
 	}
 }

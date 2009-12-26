@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright (C) 2009 Kazuki Oikawa
  * 
  * This program is free software: you can redistribute it and/or modify
@@ -15,20 +15,23 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using openCrypto.EllipticCurve;
+using System;
+using System.Net;
 
-namespace p2pncs.Security.Cryptography
+
+namespace p2pncs.Net.Overlay.Anonymous
 {
-	public static class ECKeyPairExtensions
+	public sealed class MCRBindEndPoint : EndPoint
 	{
-		public static ECKeyPair CreatePublic (byte[] publicKey)
+		NodeHandle[] _relays;
+
+		public MCRBindEndPoint (NodeHandle[] relayNodes)
 		{
-			return ECKeyPair.CreatePublic (ConstantParameters.GetDefaultDomainName (publicKey.Length), publicKey);
+			_relays = relayNodes;
 		}
 
-		public static ECKeyPair CreatePrivate (byte[] privateKey)
-		{
-			return ECKeyPair.CreatePrivate (ConstantParameters.GetDefaultDomainName (privateKey.Length + 1), privateKey);
+		public NodeHandle[] RelayNodes {
+			get { return _relays; }
 		}
 	}
 }

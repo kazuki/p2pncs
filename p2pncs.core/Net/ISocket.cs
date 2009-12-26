@@ -35,5 +35,9 @@ namespace p2pncs.Net
 		EventHandlers<Type, ReceivedEventArgs> Received { get; }
 
 		void Close ();
+
+		EndPoint LocalEndPoint { get; }
+
+		EndPoint RemoteEndPoint { get; }
 	}
 }

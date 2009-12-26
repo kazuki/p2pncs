@@ -63,11 +63,17 @@
     <Compile Include="LZMA\Compress\RangeCoder\RangeCoderBit.cs" />
     <Compile Include="LZMA\Compress\RangeCoder\RangeCoderBitTree.cs" />
     <Compile Include="LZMA\ICoder.cs" />
+    <Compile Include="Net.Overlay.Anonymous\MCRBindEndPoint.cs" />
+    <Compile Include="Net.Overlay.Anonymous\MCREndPoint.cs" />
+    <Compile Include="Net.Overlay.Anonymous\MCRManager.cs" />
+    <Compile Include="Net.Overlay.Anonymous\MCRSocket.cs" />
+    <Compile Include="Net.Overlay.Anonymous\MCRTerminalNodeReceivedEventArgs.cs" />
     <Compile Include="Net.Overlay.DHT\EqualityValueMerger.cs" />
     <Compile Include="Net.Overlay.DHT\GetOptions.cs" />
     <Compile Include="Net.Overlay.DHT\GetResult.cs" />
     <Compile Include="Net.Overlay.DHT\IDistributedHashTable.cs" />
     <Compile Include="Net.Overlay.DHT\ILocalHashTable.cs" />
+    <Compile Include="Net.Overlay.DHT\IPutterEndPointStore.cs" />
     <Compile Include="Net.Overlay.DHT\IValueMerger.cs" />
     <Compile Include="Net.Overlay.DHT\OnMemoryStore.cs" />
     <Compile Include="Net.Overlay.DHT\SimpleDHT.cs" />
@@ -93,6 +99,10 @@
     <Compile Include="Net\RFC2988BasedRTOCalculator.cs" />
     <Compile Include="Net\SimplePublicIPAddressVotingBox.cs" />
     <Compile Include="Net\UdpSocket.cs" />
+    <Compile Include="Security.Cryptography\ECKeyPairExtensions.cs" />
+    <Compile Include="Security.Cryptography\IHashComputable.cs" />
+    <Compile Include="Security.Cryptography\SymmetricAlgorithmType.cs" />
+    <Compile Include="Security.Cryptography\SymmetricKey.cs" />
     <Compile Include="StatisticsNoticeEventArgs.cs" />
     <Compile Include="StatisticsNoticeType.cs" />
     <Compile Include="SerializableFieldIndexAttribute.cs" />
@@ -105,8 +115,10 @@
     <Compile Include="Threading\ThreadTracer.cs" />
     <Compile Include="Utility\ArrayExtensions.cs" />
     <Compile Include="Utility\LzmaUtility.cs" />
+    <Compile Include="Utility\MersenneTwister.cs" />
     <Compile Include="Utility\SerializeHelper.cs" />
     <Compile Include="Utility\StandardDeviation.cs" />
+    <Compile Include="Utility\ThreadSafeRandom.cs" />
     <Compile Include="Utility\UriSafeBase64.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -118,9 +130,6 @@
       <Project>{59AD989B-7DD7-400B-B2D5-EFBD0004A749}</Project>
       <Name>openCrypto.NET</Name>
     </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Net.Overlay.Anonymous\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

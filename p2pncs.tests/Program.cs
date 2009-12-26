@@ -23,10 +23,14 @@ using System.Net;
 using System.Threading;
 using p2pncs.Net;
 using p2pncs.Net.Overlay;
+using p2pncs.Net.Overlay.Anonymous;
 using p2pncs.Net.Overlay.DHT;
 using p2pncs.Simulation;
 using p2pncs.Simulation.VirtualNet;
 using p2pncs.Threading;
+using p2pncs.Utility;
+using openCrypto.EllipticCurve;
+using Stopwatch = System.Diagnostics.Stopwatch;
 
 namespace p2pncs
 {
@@ -38,9 +42,8 @@ namespace p2pncs
 			IntervalInterrupter dhtExpireCheckInt = new IntervalInterrupter (TimeSpan.FromSeconds (1), "InquirySocket TimeoutCheck");
 			IRTOAlgorithm rto = new RFC2988BasedRTOCalculator (TimeSpan.FromSeconds (1), TimeSpan.FromMilliseconds (200), 50);
 			RandomIPAddressGenerator rndIpGen = new RandomIPAddressGenerator ();
-			Random rnd = new Random ();
 			bool bypassSerialize = true;
-			const int Nodes = 1 << 10;
+			const int Nodes = 1 << 6;
 			const int Retries = 2;
 			const int RetryBufferSize = 64;
 			const int KeyBytes = 8;
@@ -55,8 +58,10 @@ namespace p2pncs
 				List<IInquirySocket> sockets = new List<IInquirySocket> ();
 				List<IKeyBasedRouter> routers = new List<IKeyBasedRouter> ();
 				List<IDistributedHashTable> dhts = new List<IDistributedHashTable> ();
+				List<NodeHandle> nodeHandles = new List<NodeHandle> ();
+				List<MCRManager> mcrMgrs = new List<MCRManager> ();
 				for (int i = 0; i < Nodes; i ++) {
-					IPEndPoint ep = new IPEndPoint (rndIpGen.Next (), rnd.Next (1, ushort.MaxValue));
+					IPEndPoint ep = new IPEndPoint (rndIpGen.Next (), ThreadSafeRandom.Next (1, ushort.MaxValue));
 					VirtualUdpSocket udpSock = new VirtualUdpSocket (vnet, ep.Address, bypassSerialize);
 					InquirySocket sock = new InquirySocket (udpSock, true, interrupter, rto, Retries, RetryBufferSize);
 					Key key = Key.CreateRandom (KeyBytes);
@@ -65,14 +70,27 @@ namespace p2pncs
 					ValueTypeRegister typeReg = new ValueTypeRegister ();
 					OnMemoryStore localStore = new OnMemoryStore (typeReg, dhtExpireCheckInt);
 					SimpleDHT dht = new SimpleDHT (sock, router, localStore, typeReg);
+					ECKeyPair keyPair = ECKeyPair.Create (ConstantParameters.ECDomainName);
+					MCRManager mcrMgr = new MCRManager (sock, keyPair);
+					NodeHandle nodeHandle = new NodeHandle (Key.Create (keyPair), ep);
 					typeReg.Register (typeof (string), 0, new EqualityValueMerger<string> ());
 					algo.NewApp (appId);
 					udpSock.Bind (new IPEndPoint (IPAddress.Any, ep.Port));
+					mcrMgr.Received.Add (typeof (string), delegate (object sender, MCRTerminalNodeReceivedEventArgs e) {
+						Console.WriteLine ("T:{0} received {1} (NeedResponse={2})",
+							nodeHandle.NodeID.ToShortString (), e.Request, e.NeedsResponse);
+						if (e.NeedsResponse)
+							e.Respond (e.Request.ToString () + "#RESPONSE");
+						else
+							e.Send (e.Request.ToString () + "#SEND");
+					});
 
 					endPoints.Add (ep);
 					sockets.Add (sock);
 					routers.Add (router);
 					dhts.Add (dht);
+					mcrMgrs.Add (mcrMgr);
+					nodeHandles.Add (nodeHandle);
 					if (routers.Count > 1)
 						router.Join (appId, new EndPoint[] {endPoints[0]});
 					Thread.Sleep (5);
@@ -87,9 +105,44 @@ namespace p2pncs
 					}
 				}
 				Console.WriteLine ("OK");
+				//Console.ReadLine ();
+
+				int idx0 = 0;
+				int idx1 = 1;
+				NodeHandle[] relays0 = nodeHandles.ToArray ().RandomSelection (3, idx0);
+				NodeHandle[] relays1 = nodeHandles.ToArray ().RandomSelection (3, idx1);
+				MCRSocket mcrSock0 = new MCRSocket (mcrMgrs[idx0]);
+				MCRSocket mcrSock1 = new MCRSocket (mcrMgrs[idx1]);
+				mcrSock0.Bind (new MCRBindEndPoint (relays0));
+				mcrSock1.Bind (new MCRBindEndPoint (relays1));
+				mcrSock0.Binded += delegate (object sender, EventArgs e) {
+					Console.WriteLine ("Binded#0 ({0})", mcrSock0.LocalEndPoint);
+				};
+				mcrSock1.Binded += delegate (object sender, EventArgs e) {
+					Console.WriteLine ("Binded#1 ({0})", mcrSock1.LocalEndPoint);
+				};
+				mcrSock0.Disconnected += delegate (object sender, EventArgs e) {
+					Console.WriteLine ("Disconnected#0");
+				};
+				mcrSock1.Disconnected += delegate (object sender, EventArgs e) {
+					Console.WriteLine ("Disconnected#1");
+				};
+				while (!mcrSock0.IsBinded || !mcrSock1.IsBinded)
+					Thread.Sleep (10);
+				mcrSock0.Received.Add (typeof (string), delegate (object sender, ReceivedEventArgs e) {
+					Console.WriteLine ("{0}: Received {1} from {2}",
+						nodeHandles[idx0].NodeID.ToShortString (), e.Message, e.RemoteEndPoint);
+				});
+				mcrSock1.Received.Add (typeof (string), delegate (object sender, ReceivedEventArgs e) {
+					Console.WriteLine ("{0}: Received {1} from {2}",
+						nodeHandles[idx1].NodeID.ToShortString (), e.Message, e.RemoteEndPoint);
+				});
+				mcrSock0.SendToTerminalNode ("HOGE");
+				mcrSock1.SendToTerminalNode ("foo");
+				mcrSock0.SendTo ("TEST!", mcrSock1.LocalEndPoint);
 				Console.ReadLine ();
 
-				Key key2 = Key.CreateRandom (KeyBytes);
+				/*Key key2 = Key.CreateRandom (KeyBytes);
 				while (true) {
 					int idx0 = rnd.Next (0, sockets.Count);
 					int idx1 = rnd.Next (0, sockets.Count);
@@ -99,7 +152,7 @@ namespace p2pncs
 					for (int i = 0; result.Values != null && i < result.Values.Length; i ++)
 						Console.WriteLine ("  {0}", result.Values[i]);
 					Console.ReadLine ();
-				}
+				}*/
 
 				/*while (true) {
 					int idx0 = rnd.Next (0, sockets.Count);

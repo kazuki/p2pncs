@@ -20,6 +20,7 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using p2pncs.Threading;
+using ThreadSafeRandom = p2pncs.Utility.ThreadSafeRandom;
 
 namespace p2pncs.Net.Overlay
 {
@@ -431,10 +432,9 @@ namespace p2pncs.Net.Overlay
 			if (list.Count <= maxNum)
 				return list.ToArray ();
 
-			Random rnd = new Random ();
 			NodeHandle[] array = new NodeHandle[maxNum];
 			for (int i = 0; i < array.Length; i ++) {
-				int idx = rnd.Next (0, list.Count);
+				int idx = ThreadSafeRandom.Next (0, list.Count);
 				array[i] = list[idx];
 				list.RemoveAt (idx);
 			}

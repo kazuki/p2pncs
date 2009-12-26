@@ -20,6 +20,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Threading;
 using p2pncs.Threading;
+using p2pncs.Utility;
 using MsgLabel = System.UInt32;
 
 namespace p2pncs.Net
@@ -119,7 +120,6 @@ namespace p2pncs.Net
 		#endregion
 
 		#region ISocket Members
-
 		public ISocket Accept ()
 		{
 			throw new NotSupportedException ();
@@ -160,6 +160,14 @@ namespace p2pncs.Net
 				_sock.Close ();
 		}
 
+		public EndPoint LocalEndPoint {
+			get { return _sock.LocalEndPoint; }
+		}
+
+		public EndPoint RemoteEndPoint {
+			get { return _sock.RemoteEndPoint; }
+		}
+
 		#endregion
 
 		#region IInquirySocket Members
@@ -171,7 +179,7 @@ namespace p2pncs.Net
 
 		public IAsyncResult BeginInquire (object obj, EndPoint remoteEP, IRTOAlgorithm rto, int retries, AsyncCallback callback, object state)
 		{
-			InquiryRequest req = new InquiryRequest (BitConverter.ToUInt32 (openCrypto.RNG.GetBytes (4), 0), obj);
+			InquiryRequest req = new InquiryRequest (ThreadSafeRandom.NextUInt32 (), obj);
 			InquiredAsyncResult ar = new InquiredAsyncResult (req, remoteEP, rto.GetRTO (remoteEP), retries, callback, state);
 			ar.Transmit (_sock);
 			Interlocked.Increment (ref _numInquiries);
