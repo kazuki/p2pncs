@@ -22,14 +22,15 @@ namespace p2pncs.Simulation.VirtualNet
 {
 	public static class PacketLossType
 	{
+		static IPacketLossRate _lossless = new ConstantLossRate (0.0);
+
 		public static IPacketLossRate Constant (double rate)
 		{
 			return new ConstantLossRate (rate);
 		}
 
-		public static IPacketLossRate Lossless ()
-		{
-			return new ConstantLossRate (0.0);
+		public static IPacketLossRate Lossless {
+			get { return _lossless; }
 		}
 
 		class ConstantLossRate : IPacketLossRate

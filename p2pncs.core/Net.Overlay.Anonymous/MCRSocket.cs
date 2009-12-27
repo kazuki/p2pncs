@@ -34,6 +34,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 		EventHandlers<Type, ReceivedEventArgs> _received = new EventHandlers<Type,ReceivedEventArgs> ();
 		MCRBindEndPoint _bindEP = null;
 		MCREndPoint _localEP = null;
+		DateTime _nextPingTime = DateTime.MaxValue;
+		DateTime _pingRecvExpire = DateTime.MaxValue;
 
 		public event EventHandler Binded;
 		public event EventHandler Disconnected;
@@ -42,6 +44,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 		{
 			_mgr = mgr;
 			_reliableMode = reliableMode;
+
+			mgr.TimeoutCheckInterrupter.AddInterruption ((this as MCRManager.IRouteInfo).CheckTimeout);
 		}
 
 		#region ISocket Members
@@ -94,13 +98,15 @@ namespace p2pncs.Net.Overlay.Anonymous
 			MCREndPoint mcrRemoteEP = remoteEP as MCREndPoint;
 			if (remoteEP != null && mcrRemoteEP == null)
 				throw new ArgumentException ();
+			bool forceReliableMode = (message is MCRManager.PingMessage);
 			
 			uint seq = (uint)Interlocked.Increment (ref _seq);
 			if (mcrRemoteEP != null)
 				message = new MCRManager.InterTerminalRequestMessage (mcrRemoteEP, _localEP, message);
 			byte[] payload = MCRManager.CipherUtility.CreateRoutedPayload (_relayKeys, seq, message, MCRManager.FixedMessageSize);
 			message = new MCRManager.RoutedMessage (_firstHop.Label, payload);
-			if (IsReliableMode) {
+			_nextPingTime = DateTime.Now + MCRManager.PingInterval;
+			if (IsReliableMode || forceReliableMode) {
 				_mgr.Socket.BeginInquire (message, _firstHop.EndPoint, delegate (IAsyncResult ar) {
 					if (_mgr.Socket.EndInquire (ar) != null)
 						return;
@@ -123,6 +129,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_active = false;
 			}
 
+			_mgr.TimeoutCheckInterrupter.RemoveInterruption ((this as MCRManager.IRouteInfo).CheckTimeout);
 			if (_firstHop != null) {
 				_mgr.RemoveRouteInfo (_firstHop);
 				RaiseDisconnectedEvent ();
@@ -167,9 +174,14 @@ namespace p2pncs.Net.Overlay.Anonymous
 				}
 				_localEP = new MCREndPoint (_bindEP.RelayNodes[_bindEP.RelayNodes.Length - 1].EndPoint,
 					((MCRManager.EstablishedRouteMessage)payload).Label);
+				_nextPingTime = DateTime.Now + MCRManager.PingInterval;
+				_pingRecvExpire = DateTime.Now + MCRManager.MaxPingInterval;
 				RaiseBindedEvent ();
 				return;
 			}
+
+			// EstablishRouteMessageÇÕ_pingRecvExpireÇ…âeãøÇó^Ç¶Ç»Ç¢ÇÃÇ≈Ç±Ç±Ç≈ílÇçXêV
+			_pingRecvExpire = DateTime.Now + MCRManager.MaxPingInterval;
 
 			if (payload is MCRManager.InterTerminalPayload) {
 				MCRManager.InterTerminalPayload itp = payload as MCRManager.InterTerminalPayload;
@@ -177,9 +189,25 @@ namespace p2pncs.Net.Overlay.Anonymous
 				return;
 			}
 
+			if (payload is MCRManager.PingMessage)
+				return;
+
 			try {
 				Received.Invoke (payload.GetType (), this, new MCRReceivedEventArgs (payload, isReliableMode));
 			} catch {}
+		}
+
+		void MCRManager.IRouteInfo.CheckTimeout ()
+		{
+			if (_pingRecvExpire < DateTime.Now) {
+				Close ();
+				return;
+			}
+
+			if (_nextPingTime < DateTime.Now) {
+				SendTo (MCRManager.PingMessage.Instance, null);
+				Console.WriteLine ("S: Send Ping...");
+			}
 		}
 
 		#endregion

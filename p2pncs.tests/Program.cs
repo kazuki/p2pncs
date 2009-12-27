@@ -38,8 +38,9 @@ namespace p2pncs
 	{
 		static void Main (string[] args)
 		{
-			IntervalInterrupter interrupter = new IntervalInterrupter (TimeSpan.FromSeconds (1), "InquirySocket TimeoutCheck");
-			IntervalInterrupter dhtExpireCheckInt = new IntervalInterrupter (TimeSpan.FromSeconds (1), "InquirySocket TimeoutCheck");
+			IntervalInterrupter interrupter = new IntervalInterrupter (TimeSpan.FromMilliseconds (50), "InquirySocket TimeoutCheck");
+			IntervalInterrupter dhtExpireCheckInt = new IntervalInterrupter (TimeSpan.FromSeconds (1), "DHT TimeoutCheck");
+			IntervalInterrupter mcrTimeoutCheckInt = new IntervalInterrupter (TimeSpan.FromSeconds (1), "MCR TimeoutCheck");
 			IRTOAlgorithm rto = new RFC2988BasedRTOCalculator (TimeSpan.FromSeconds (1), TimeSpan.FromMilliseconds (200), 50);
 			RandomIPAddressGenerator rndIpGen = new RandomIPAddressGenerator ();
 			bool bypassSerialize = true;
@@ -52,8 +53,10 @@ namespace p2pncs
 			Key appId = new Key (new byte[] {0});
 
 			interrupter.Start ();
+			dhtExpireCheckInt.Start ();
+			mcrTimeoutCheckInt.Start ();
 
-			using (VirtualNetwork vnet = new VirtualNetwork (LatencyTypes.Constant (10), 5, PacketLossType.Lossless (), Environment.ProcessorCount)) {
+			using (VirtualNetwork vnet = new VirtualNetwork (LatencyTypes.Constant (10), 5, PacketLossType.Lossless, Environment.ProcessorCount)) {
 				List<IPEndPoint> endPoints = new List<IPEndPoint> ();
 				List<IInquirySocket> sockets = new List<IInquirySocket> ();
 				List<IKeyBasedRouter> routers = new List<IKeyBasedRouter> ();
@@ -71,7 +74,7 @@ namespace p2pncs
 					OnMemoryStore localStore = new OnMemoryStore (typeReg, dhtExpireCheckInt);
 					SimpleDHT dht = new SimpleDHT (sock, router, localStore, typeReg);
 					ECKeyPair keyPair = ECKeyPair.Create (ConstantParameters.ECDomainName);
-					MCRManager mcrMgr = new MCRManager (sock, keyPair);
+					MCRManager mcrMgr = new MCRManager (sock, keyPair, mcrTimeoutCheckInt);
 					NodeHandle nodeHandle = new NodeHandle (Key.Create (keyPair), ep);
 					typeReg.Register (typeof (string), 0, new EqualityValueMerger<string> ());
 					algo.NewApp (appId);
@@ -180,6 +183,8 @@ namespace p2pncs
 			}
 
 			interrupter.Dispose ();
+			dhtExpireCheckInt.Dispose ();
+			mcrTimeoutCheckInt.Dispose ();
 		}
 
 		static void Main1 (string[] args)

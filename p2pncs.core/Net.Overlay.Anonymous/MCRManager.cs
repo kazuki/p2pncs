@@ -24,6 +24,7 @@ using System.Threading;
 using openCrypto;
 using openCrypto.EllipticCurve;
 using p2pncs.Security.Cryptography;
+using p2pncs.Threading;
 using p2pncs.Utility;
 using ECDiffieHellman = openCrypto.EllipticCurve.KeyAgreement.ECDiffieHellman;
 using RouteLabel = System.UInt32;
@@ -35,25 +36,45 @@ namespace p2pncs.Net.Overlay.Anonymous
 		IInquirySocket _sock;
 		ECKeyPair _privateKeyPair;
 		int _pubKeySize;
+		IntervalInterrupter _int;
+		HashSet<IRouteInfo> _timeoutCheckList = new HashSet<IRouteInfo> ();
 		Dictionary<MCREndPoint, IRouteInfo> _routes = new Dictionary<MCREndPoint,IRouteInfo> ();
 		Dictionary<RouteLabel, TerminalRouteInfo> _terms = new Dictionary<uint,TerminalRouteInfo> ();
 		EventHandlers<Type, MCRTerminalNodeReceivedEventArgs> _received = new EventHandlers<Type, MCRTerminalNodeReceivedEventArgs> ();
 		internal readonly static SymmetricKeyOption DefaultSymmetricKeyOption = new SymmetricKeyOption ();
 		internal const int FixedMessageSize = 512; /// TODO:
+		internal static readonly TimeSpan PingInterval = TimeSpan.FromMinutes (1);
+		internal static readonly TimeSpan MaxPingInterval = PingInterval + PingInterval;
 		static readonly object ACK = "ACK";
 
-		public MCRManager (IInquirySocket sock, ECKeyPair keyPair)
+		public MCRManager (IInquirySocket sock, ECKeyPair keyPair, IntervalInterrupter timeoutCheckInt)
 		{
 			_sock = sock;
 			_privateKeyPair = keyPair;
 			_pubKeySize = keyPair.ExportPublicKey (true).Length;
+			_int = timeoutCheckInt;
 
 			_sock.Inquired.Add (typeof (EstablishRouteMessage), EstablishRouteMessage_Inquired);
 			_sock.Inquired.Add (typeof (RoutedMessage), RoutedMessage_Inquired);
 			_sock.Inquired.Add (typeof (InterTerminalMessage), InterTerminalMessage_Inquired);
+			_sock.Inquired.Add (typeof (DisconnectMessage), DisconnectMessage_Inquired);
 			_sock.Received.Add (typeof (RoutedMessage), RoutedMessage_Received);
 			_sock.Received.Add (typeof (InterTerminalMessage), InterTerminalMessage_Received);
+
+			_int.AddInterruption (CheckTimeout);
 		}
+
+		#region Timeout Check
+		void CheckTimeout ()
+		{
+			List<IRouteInfo> list;
+			lock (_routes) {
+				list = new List<IRouteInfo> (_timeoutCheckList);
+			}
+			for (int i = 0; i < list.Count; i ++)
+				list[i].CheckTimeout ();
+		}
+		#endregion
 
 		#region Socket Received/Inquired Handlers
 		void EstablishRouteMessage_Inquired (object sender, InquiredEventArgs e)
@@ -88,6 +109,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 						info = new RelayRouteInfo (this, key, prevEP, nextEP);
 						_routes.Add (prevEP, info);
 						_routes.Add (nextEP, info);
+						_timeoutCheckList.Add (info);
 						break;
 					}
 				}
@@ -95,9 +117,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_sock.BeginInquire (msg, nextEP.EndPoint, delegate (IAsyncResult ar) {
 					if (_sock.EndInquire (ar) != null)
 						return;
-					/// TODO: disconnect message‚ð”­s‚·‚é?
-					RemoveRouteInfo (prevEP);
-					RemoveRouteInfo (nextEP);
+					info.Close ();
 				}, null);
 			} else {
 				// terminal
@@ -107,12 +127,14 @@ namespace p2pncs.Net.Overlay.Anonymous
 					if (_routes.ContainsKey (prevEP))
 						return;
 					_routes.Add (prevEP, info);
+					_timeoutCheckList.Add (info);
 				}
 				lock (_terms) {
 					while (true) {
 						lbl = GenerateRouteLabel ();
 						if (_terms.ContainsKey (lbl))
 							continue;
+						info.Label = lbl;
 						_terms.Add (lbl, info);
 						break;
 					}
@@ -149,6 +171,25 @@ namespace p2pncs.Net.Overlay.Anonymous
 			if (e != null)
 				_sock.RespondToInquiry (e, ACK);
 			routeInfo.Received (_sock, ep, msg, e != null);
+		}
+
+		void DisconnectMessage_Inquired (object sender, InquiredEventArgs e)
+		{
+			DisconnectMessage msg = (DisconnectMessage)e.InquireMessage;
+			MCREndPoint ep = new MCREndPoint (e.EndPoint, msg.Label);
+			IRouteInfo routeInfo;
+			lock (_routes) {
+				_routes.TryGetValue (ep, out routeInfo);
+			}
+			_sock.RespondToInquiry (e, ACK);
+			if (routeInfo == null)
+				return;
+
+			if (routeInfo is RelayRouteInfo) {
+				(routeInfo as RelayRouteInfo).RelayDisconnectMessage (_sock, ep);
+			} else {
+				routeInfo.Close ();
+			}
 		}
 
 		void InterTerminalMessage_Inquired (object sender, InquiredEventArgs e)
@@ -193,6 +234,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_privateKeyPair = null;
 			}
 
+			_int.RemoveInterruption (CheckTimeout);
 			_sock.Inquired.Remove (typeof (EstablishRouteMessage), EstablishRouteMessage_Inquired);
 			_sock.Inquired.Remove (typeof (RoutedMessage), RoutedMessage_Inquired);
 			_sock.Inquired.Remove (typeof (InterTerminalMessage), InterTerminalMessage_Inquired);
@@ -242,6 +284,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 			get { return _privateKeyPair; }
 		}
 
+		internal IntervalInterrupter TimeoutCheckInterrupter {
+			get { return _int; }
+		}
+
 		public EventHandlers<Type, MCRTerminalNodeReceivedEventArgs> Received {
 			get { return _received; }
 		}
@@ -251,6 +297,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 		internal interface IRouteInfo
 		{
 			void Received (IInquirySocket sock, MCREndPoint ep, RoutedMessage msg, bool isReliableMode);
+			void CheckTimeout ();
+			void Close ();
 		}
 		sealed class RelayRouteInfo : IRouteInfo
 		{
@@ -258,6 +306,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 			SymmetricKey _key;
 			MCREndPoint _prev;
 			MCREndPoint _next;
+			DateTime _expiryFromPrev = DateTime.Now + MaxPingInterval;
+			DateTime _expiryFromNext = DateTime.Now + MaxPingInterval;
 
 			public RelayRouteInfo (MCRManager mgr, SymmetricKey key, MCREndPoint prev, MCREndPoint next)
 			{
@@ -267,10 +317,11 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_next = next;
 			}
 
-			void Close ()
+			public void RelayDisconnectMessage (IInquirySocket sock, MCREndPoint src)
 			{
-				_mgr.RemoveRouteInfo (_prev);
-				_mgr.RemoveRouteInfo (_next);
+				if (!src.Equals (_next))
+					return;
+				sock.BeginInquire (new DisconnectMessage (_prev.Label), _prev.EndPoint, null, null);
 			}
 
 			#region IRouteInfo Members
@@ -282,19 +333,40 @@ namespace p2pncs.Net.Overlay.Anonymous
 				if (ep.Equals (_prev)) {
 					next = _next;
 					new_payload = _key.Decrypt (msg.Payload, 0, msg.Payload.Length);
+					_expiryFromPrev = DateTime.Now + MaxPingInterval;
 				} else {
 					next = _prev;
 					new_payload = _key.Encrypt (msg.Payload, 0, msg.Payload.Length);
+					_expiryFromNext = DateTime.Now + MaxPingInterval;
 				}
 				RoutedMessage new_msg = new RoutedMessage (next.Label, new_payload);
 				if (isReliableMode) {
 					sock.BeginInquire (new_msg, next.EndPoint, delegate (IAsyncResult ar) {
 						if (sock.EndInquire (ar) != null)
 							return;
+						if (ep.Equals (_prev))
+							sock.BeginInquire (new DisconnectMessage (_prev.Label), _prev.EndPoint, null, null);
 						Close ();
 					}, null);
 				} else {
 					sock.SendTo (new_msg, next.EndPoint);
+				}
+			}
+
+			public void CheckTimeout ()
+			{
+				if (_expiryFromNext < DateTime.Now || _expiryFromPrev < DateTime.Now) {
+					Close ();
+					Console.WriteLine ("Relay: Timeout...");
+				}
+			}
+
+			public void Close ()
+			{
+				lock (_mgr._routes) {
+					_mgr._routes.Remove (_prev);
+					_mgr._routes.Remove (_next);
+					_mgr._timeoutCheckList.Remove (this);
 				}
 			}
 
@@ -306,6 +378,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 			int _seq = -1;
 			SymmetricKey _key;
 			MCREndPoint _prev;
+			DateTime _nextPingTime = DateTime.Now + PingInterval;
+			DateTime _pingRecvExpire = DateTime.Now + MaxPingInterval;
 
 			public TerminalRouteInfo (MCRManager mgr, SymmetricKey key, MCREndPoint prev)
 			{
@@ -320,6 +394,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				uint seq = (uint)Interlocked.Increment (ref _seq);
 				byte[] payload = CipherUtility.CreateRoutedPayload (_key, seq, msg, FixedMessageSize);
 				RoutedMessage routedMsg = new RoutedMessage (_prev.Label, payload);
+				_nextPingTime = DateTime.Now + PingInterval;
 				if (isReliableMode) {
 					sock.BeginInquire (routedMsg, _prev.EndPoint, delegate (IAsyncResult ar) {
 						if (sock.EndInquire (ar) != null)
@@ -331,10 +406,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				}
 			}
 
-			public void Close ()
-			{
-				_mgr.RemoveRouteInfo (_prev);
-			}
+			public RouteLabel Label { get; set; }
 
 			#region IRouteInfo Members
 
@@ -343,6 +415,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				uint seq;
 				object payload = CipherUtility.DecryptRoutedPayload (_key, out seq, msg.Payload);
 				InterTerminalRequestMessage interTermReqMsg = payload as InterTerminalRequestMessage;
+				_pingRecvExpire = DateTime.Now + MaxPingInterval;
 				if (interTermReqMsg == null) {
 					TerminalNodeReceivedEventArgs args = new TerminalNodeReceivedEventArgs (this, payload);
 					_mgr.RaiseReceivedEvent (payload.GetType (), args);
@@ -360,6 +433,30 @@ namespace p2pncs.Net.Overlay.Anonymous
 							sock.SendTo (interTermMsg, mcrEp.EndPoint);
 						}
 					}
+				}
+			}
+
+			public void CheckTimeout ()
+			{
+				if (_pingRecvExpire < DateTime.Now) {
+					Close ();
+					return;
+				}
+
+				if (_nextPingTime < DateTime.Now) {
+					Send (MCRManager.PingMessage.Instance, true);
+					Console.WriteLine ("T: Send Ping...");
+				}
+			}
+
+			public void Close ()
+			{
+				lock (_mgr._routes) {
+					_mgr._routes.Remove (_prev);
+					_mgr._timeoutCheckList.Remove (this);
+				}
+				lock (_mgr._terms) {
+					_mgr._terms.Remove (Label);
 				}
 			}
 
