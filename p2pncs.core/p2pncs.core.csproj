@@ -66,6 +66,7 @@
     <Compile Include="Net.Overlay.Anonymous\MCRBindEndPoint.cs" />
     <Compile Include="Net.Overlay.Anonymous\MCREndPoint.cs" />
     <Compile Include="Net.Overlay.Anonymous\MCRManager.cs" />
+    <Compile Include="Net.Overlay.Anonymous\MCRReceivedEventArgs.cs" />
     <Compile Include="Net.Overlay.Anonymous\MCRSocket.cs" />
     <Compile Include="Net.Overlay.Anonymous\MCRTerminalNodeReceivedEventArgs.cs" />
     <Compile Include="Net.Overlay.DHT\EqualityValueMerger.cs" />

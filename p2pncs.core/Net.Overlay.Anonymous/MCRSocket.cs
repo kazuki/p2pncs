@@ -157,9 +157,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 				return;
 			}
 
-			if (payload is MCRManager.InterTerminalMessage) {
-				MCRManager.InterTerminalMessage interTermMsg = payload as MCRManager.InterTerminalMessage;
-				Received.Invoke (interTermMsg.Payload.GetType (), this, new ReceivedEventArgs (interTermMsg.Payload, interTermMsg.SrcEndPoints[0]));
+			if (payload is MCRManager.InterTerminalPayload) {
+				MCRManager.InterTerminalPayload itp = payload as MCRManager.InterTerminalPayload;
+				Received.Invoke (itp.Payload.GetType (), this, new MCRReceivedEventArgs (itp.Payload, itp.SrcEndPoints));
 				return;
 			}
 
