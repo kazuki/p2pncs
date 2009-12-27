@@ -28,8 +28,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 	{
 		int _seq = -1;
 		MCRManager _mgr;
-		bool _binding = false, _binded = false;
-		bool _active = true;
+		bool _binding = false, _binded = false, _active = true, _reliableMode = true;
 		MCREndPoint _firstHop;
 		SymmetricKey[] _relayKeys;
 		EventHandlers<Type, ReceivedEventArgs> _received = new EventHandlers<Type,ReceivedEventArgs> ();
@@ -39,9 +38,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 		public event EventHandler Binded;
 		public event EventHandler Disconnected;
 
-		public MCRSocket (MCRManager mgr)
+		public MCRSocket (MCRManager mgr, bool reliableMode)
 		{
 			_mgr = mgr;
+			_reliableMode = reliableMode;
 		}
 
 		#region ISocket Members
@@ -94,7 +94,21 @@ namespace p2pncs.Net.Overlay.Anonymous
 			MCREndPoint mcrRemoteEP = remoteEP as MCREndPoint;
 			if (remoteEP != null && mcrRemoteEP == null)
 				throw new ArgumentException ();
-			SendToInternal (message, mcrRemoteEP);
+			
+			uint seq = (uint)Interlocked.Increment (ref _seq);
+			if (mcrRemoteEP != null)
+				message = new MCRManager.InterTerminalRequestMessage (mcrRemoteEP, _localEP, message);
+			byte[] payload = MCRManager.CipherUtility.CreateRoutedPayload (_relayKeys, seq, message, MCRManager.FixedMessageSize);
+			message = new MCRManager.RoutedMessage (_firstHop.Label, payload);
+			if (IsReliableMode) {
+				_mgr.Socket.BeginInquire (message, _firstHop.EndPoint, delegate (IAsyncResult ar) {
+					if (_mgr.Socket.EndInquire (ar) != null)
+						return;
+					Close ();
+				}, null);
+			} else {
+				_mgr.Socket.SendTo (message, _firstHop.EndPoint);
+			}
 		}
 
 		public EventHandlers<Type, ReceivedEventArgs> Received {
@@ -140,7 +154,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 		#region IRouteInfo Members
 
-		void MCRManager.IRouteInfo.Received (IInquirySocket sock, InquiredEventArgs e, MCREndPoint ep, MCRManager.RoutedMessage msg)
+		void MCRManager.IRouteInfo.Received (IInquirySocket sock, MCREndPoint ep, MCRManager.RoutedMessage msg, bool isReliableMode)
 		{
 			uint seq;
 			object payload = MCRManager.CipherUtility.DecryptRoutedPayload (_relayKeys, out seq, msg.Payload);
@@ -159,18 +173,13 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			if (payload is MCRManager.InterTerminalPayload) {
 				MCRManager.InterTerminalPayload itp = payload as MCRManager.InterTerminalPayload;
-				Received.Invoke (itp.Payload.GetType (), this, new MCRReceivedEventArgs (itp.Payload, itp.SrcEndPoints));
+				Received.Invoke (itp.Payload.GetType (), this, new MCRReceivedEventArgs (itp.Payload, itp.SrcEndPoints, isReliableMode));
 				return;
 			}
 
 			try {
-				Received.Invoke (payload.GetType (), this, new ReceivedEventArgs (payload, null));
+				Received.Invoke (payload.GetType (), this, new MCRReceivedEventArgs (payload, isReliableMode));
 			} catch {}
-		}
-
-		void MCRManager.IRouteInfo.Received (IInquirySocket sock, ReceivedEventArgs e, MCREndPoint ep, MCRManager.RoutedMessage msg)
-		{
-			throw new NotImplementedException ();
 		}
 
 		#endregion
@@ -179,21 +188,12 @@ namespace p2pncs.Net.Overlay.Anonymous
 		public bool IsBinded {
 			get { return _binded; }
 		}
-		#endregion
 
-		void SendToInternal (object msg, MCREndPoint ep)
-		{
-			uint seq = (uint)Interlocked.Increment (ref _seq);
-			if (ep != null)
-				msg = new MCRManager.InterTerminalRequestMessage (ep, _localEP, msg);
-			byte[] payload = MCRManager.CipherUtility.CreateRoutedPayload (_relayKeys, seq, msg, MCRManager.FixedMessageSize);
-			msg = new MCRManager.RoutedMessage (_firstHop.Label, payload);
-			_mgr.Socket.BeginInquire (msg, _firstHop.EndPoint, delegate (IAsyncResult ar) {
-				if (_mgr.Socket.EndInquire (ar) != null)
-					return;
-				Close ();
-			}, null);
+		public bool IsReliableMode {
+			get { return _reliableMode; }
+			set { _reliableMode = value;}
 		}
+		#endregion
 
 		#region Misc
 		void RaiseDisconnectedEvent ()

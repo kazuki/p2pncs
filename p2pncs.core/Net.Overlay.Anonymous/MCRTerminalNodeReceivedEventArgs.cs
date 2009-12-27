@@ -32,6 +32,6 @@ namespace p2pncs.Net.Overlay.Anonymous
 			get { return _msg; }
 		}
 
-		public abstract void Send (object msg);
+		public abstract void Send (object msg, bool reliableMode);
 	}
 }

@@ -78,7 +78,7 @@ namespace p2pncs
 					udpSock.Bind (new IPEndPoint (IPAddress.Any, ep.Port));
 					mcrMgr.Received.Add (typeof (string), delegate (object sender, MCRTerminalNodeReceivedEventArgs e) {
 						Console.WriteLine ("T:{0} received {1}", nodeHandle.NodeID.ToShortString (), e.Message);
-						e.Send (e.Message.ToString () + "#RESPONSE");
+						e.Send (e.Message.ToString () + "#RESPONSE", true);
 					});
 
 					endPoints.Add (ep);
@@ -107,8 +107,8 @@ namespace p2pncs
 				int idx1 = 1;
 				NodeHandle[] relays0 = nodeHandles.ToArray ().RandomSelection (3, idx0);
 				NodeHandle[] relays1 = nodeHandles.ToArray ().RandomSelection (3, idx1);
-				MCRSocket mcrSock0 = new MCRSocket (mcrMgrs[idx0]);
-				MCRSocket mcrSock1 = new MCRSocket (mcrMgrs[idx1]);
+				MCRSocket mcrSock0 = new MCRSocket (mcrMgrs[idx0], true);
+				MCRSocket mcrSock1 = new MCRSocket (mcrMgrs[idx1], true);
 				mcrSock0.Bind (new MCRBindEndPoint (relays0));
 				mcrSock1.Bind (new MCRBindEndPoint (relays1));
 				mcrSock0.Binded += delegate (object sender, EventArgs e) {
@@ -130,14 +130,18 @@ namespace p2pncs
 						nodeHandles[idx0].NodeID.ToShortString (), e.Message, e.RemoteEndPoint);
 				});
 				mcrSock1.Received.Add (typeof (string), delegate (object sender, ReceivedEventArgs e) {
+					MCRReceivedEventArgs e2 = (MCRReceivedEventArgs)e;
 					Console.WriteLine ("{0}: Received {1} from {2}",
 						nodeHandles[idx1].NodeID.ToShortString (), e.Message, e.RemoteEndPoint);
 					if (e.RemoteEndPoint != null)
-						mcrSock1.SendTo ("WORLD!", e.RemoteEndPoint);
+						mcrSock1.SendTo ("WORLD!" + (e2.IsReliableMode ? "" : " with Unreliable"), e.RemoteEndPoint);
 				});
 				mcrSock0.SendTo ("HOGE", null);
 				mcrSock1.SendTo ("foo", null);
 				mcrSock0.SendTo ("HELLO!", mcrSock1.LocalEndPoint);
+				Thread.Sleep (100);
+				mcrSock0.IsReliableMode = false;
+				mcrSock0.SendTo ("HELLO! with Unreliable", mcrSock1.LocalEndPoint);
 				Console.ReadLine ();
 
 				/*Key key2 = Key.CreateRandom (KeyBytes);

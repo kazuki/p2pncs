@@ -48,12 +48,15 @@ namespace p2pncs.Net.Overlay.Anonymous
 			_privateKeyPair = keyPair;
 			_pubKeySize = keyPair.ExportPublicKey (true).Length;
 
-			_sock.Inquired.Add (typeof (EstablishRouteMessage), Inquired_EstablishRouteMessage);
-			_sock.Inquired.Add (typeof (RoutedMessage), Inquired_RoutedMessage);
-			_sock.Inquired.Add (typeof (InterTerminalMessage), Inquired_InterTerminalMessage2);
+			_sock.Inquired.Add (typeof (EstablishRouteMessage), EstablishRouteMessage_Inquired);
+			_sock.Inquired.Add (typeof (RoutedMessage), RoutedMessage_Inquired);
+			_sock.Inquired.Add (typeof (InterTerminalMessage), InterTerminalMessage_Inquired);
+			_sock.Received.Add (typeof (RoutedMessage), RoutedMessage_Received);
+			_sock.Received.Add (typeof (InterTerminalMessage), InterTerminalMessage_Received);
 		}
 
-		void Inquired_EstablishRouteMessage (object sender, InquiredEventArgs e)
+		#region Socket Received/Inquired Handlers
+		void EstablishRouteMessage_Inquired (object sender, InquiredEventArgs e)
 		{
 			EstablishRouteMessage msg = (EstablishRouteMessage)e.InquireMessage;
 			SymmetricKey key = null;
@@ -114,42 +117,71 @@ namespace p2pncs.Net.Overlay.Anonymous
 						break;
 					}
 				}
-				info.Send (new EstablishedRouteMessage (lbl, "WORLD"));
+				info.Send (new EstablishedRouteMessage (lbl, "WORLD"), true);
 			}
 		}
 
-		void Inquired_RoutedMessage (object sender, InquiredEventArgs e)
+		void RoutedMessage_Inquired (object sender, InquiredEventArgs e)
 		{
 			RoutedMessage msg = (RoutedMessage)e.InquireMessage;
 			MCREndPoint ep = new MCREndPoint (e.EndPoint, msg.Label);
+			RoutedMessage_Handler (msg, ep, e);
+		}
+
+		void RoutedMessage_Received (object sender, ReceivedEventArgs e)
+		{
+			RoutedMessage msg = (RoutedMessage)e.Message;
+			MCREndPoint ep = new MCREndPoint (e.RemoteEndPoint, msg.Label);
+			RoutedMessage_Handler (msg, ep, null);
+		}
+
+		void RoutedMessage_Handler (RoutedMessage msg, MCREndPoint ep, InquiredEventArgs e)
+		{
 			IRouteInfo routeInfo;
 			lock (_routes) {
 				_routes.TryGetValue (ep, out routeInfo);
 			}
 			if (routeInfo == null) {
-				_sock.RespondToInquiry (e, null);
+				if (e != null)
+					_sock.RespondToInquiry (e, null);
 				return;
 			}
-			_sock.RespondToInquiry (e, ACK);
-			routeInfo.Received (_sock, e, ep, msg);
+			if (e != null)
+				_sock.RespondToInquiry (e, ACK);
+			routeInfo.Received (_sock, ep, msg, e != null);
 		}
 
-		void Inquired_InterTerminalMessage2 (object sender, InquiredEventArgs e)
+		void InterTerminalMessage_Inquired (object sender, InquiredEventArgs e)
 		{
 			InterTerminalMessage msg = (InterTerminalMessage)e.InquireMessage;
 			MCREndPoint ep = new MCREndPoint (e.EndPoint, msg.Label);
+			InterTerminalMessage_Handler (msg, ep, e);
+		}
+
+		void InterTerminalMessage_Received (object sender, ReceivedEventArgs e)
+		{
+			InterTerminalMessage msg = (InterTerminalMessage)e.Message;
+			MCREndPoint ep = new MCREndPoint (e.RemoteEndPoint, msg.Label);
+			InterTerminalMessage_Handler (msg, ep, null);
+		}
+
+		void InterTerminalMessage_Handler (InterTerminalMessage msg, MCREndPoint ep, InquiredEventArgs e)
+		{
 			TerminalRouteInfo routeInfo;
 			lock (_terms) {
 				_terms.TryGetValue (msg.Label, out routeInfo);
 			}
 			if (routeInfo == null) {
-				_sock.RespondToInquiry (e, null);
+				if (e != null)
+					_sock.RespondToInquiry (e, null);
 				return;
 			}
-			_sock.RespondToInquiry (e, ACK);
+			if (e != null)
+				_sock.RespondToInquiry (e, ACK);
 			InterTerminalPayload itp = new InterTerminalPayload (msg.SrcEndPoints, msg.Payload);
-			routeInfo.Send (itp);
+			routeInfo.Send (itp, e != null);
 		}
+		#endregion
 
 		#region IDisposable Members
 
@@ -161,8 +193,11 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_privateKeyPair = null;
 			}
 
-			_sock.Inquired.Remove (typeof (EstablishRouteMessage), Inquired_EstablishRouteMessage);
-			_sock.Inquired.Remove (typeof (RoutedMessage), Inquired_RoutedMessage);
+			_sock.Inquired.Remove (typeof (EstablishRouteMessage), EstablishRouteMessage_Inquired);
+			_sock.Inquired.Remove (typeof (RoutedMessage), RoutedMessage_Inquired);
+			_sock.Inquired.Remove (typeof (InterTerminalMessage), InterTerminalMessage_Inquired);
+			_sock.Received.Remove (typeof (RoutedMessage), RoutedMessage_Received);
+			_sock.Received.Remove (typeof (InterTerminalMessage), InterTerminalMessage_Received);
 		}
 
 		#endregion
@@ -215,8 +250,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 		#region Internal Class
 		internal interface IRouteInfo
 		{
-			void Received (IInquirySocket sock, InquiredEventArgs e, MCREndPoint ep, RoutedMessage msg);
-			void Received (IInquirySocket sock, ReceivedEventArgs e, MCREndPoint ep, RoutedMessage msg);
+			void Received (IInquirySocket sock, MCREndPoint ep, RoutedMessage msg, bool isReliableMode);
 		}
 		sealed class RelayRouteInfo : IRouteInfo
 		{
@@ -241,7 +275,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			#region IRouteInfo Members
 
-			public void Received (IInquirySocket sock, InquiredEventArgs e, MCREndPoint ep, RoutedMessage msg)
+			public void Received (IInquirySocket sock, MCREndPoint ep, RoutedMessage msg, bool isReliableMode)
 			{
 				byte[] new_payload;
 				MCREndPoint next;
@@ -253,16 +287,15 @@ namespace p2pncs.Net.Overlay.Anonymous
 					new_payload = _key.Encrypt (msg.Payload, 0, msg.Payload.Length);
 				}
 				RoutedMessage new_msg = new RoutedMessage (next.Label, new_payload);
-				sock.BeginInquire (new_msg, next.EndPoint, delegate (IAsyncResult ar) {
-					if (sock.EndInquire (ar) != null)
-						return;
-					Close ();
-				}, null);
-			}
-
-			public void Received (IInquirySocket sock, ReceivedEventArgs e, MCREndPoint ep, RoutedMessage msg)
-			{
-				throw new NotImplementedException ();
+				if (isReliableMode) {
+					sock.BeginInquire (new_msg, next.EndPoint, delegate (IAsyncResult ar) {
+						if (sock.EndInquire (ar) != null)
+							return;
+						Close ();
+					}, null);
+				} else {
+					sock.SendTo (new_msg, next.EndPoint);
+				}
 			}
 
 			#endregion
@@ -281,16 +314,21 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_prev = prev;
 			}
 
-			public void Send (object msg)
+			public void Send (object msg, bool isReliableMode)
 			{
 				IInquirySocket sock = _mgr._sock;
 				uint seq = (uint)Interlocked.Increment (ref _seq);
 				byte[] payload = CipherUtility.CreateRoutedPayload (_key, seq, msg, FixedMessageSize);
-				sock.BeginInquire (new RoutedMessage (_prev.Label, payload), _prev.EndPoint, delegate (IAsyncResult ar) {
-					if (sock.EndInquire (ar) != null)
-						return;
-					Close ();
-				}, null);
+				RoutedMessage routedMsg = new RoutedMessage (_prev.Label, payload);
+				if (isReliableMode) {
+					sock.BeginInquire (routedMsg, _prev.EndPoint, delegate (IAsyncResult ar) {
+						if (sock.EndInquire (ar) != null)
+							return;
+						Close ();
+					}, null);
+				} else {
+					sock.SendTo (routedMsg, _prev.EndPoint);
+				}
 			}
 
 			public void Close ()
@@ -300,7 +338,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			#region IRouteInfo Members
 
-			public void Received (IInquirySocket sock, InquiredEventArgs e, MCREndPoint ep, RoutedMessage msg)
+			public void Received (IInquirySocket sock, MCREndPoint ep, RoutedMessage msg, bool isReliableMode)
 			{
 				uint seq;
 				object payload = CipherUtility.DecryptRoutedPayload (_key, out seq, msg.Payload);
@@ -312,18 +350,17 @@ namespace p2pncs.Net.Overlay.Anonymous
 					for (int i = 0; i < interTermReqMsg.DestEndPoints.Length; i ++) {
 						MCREndPoint mcrEp = interTermReqMsg.DestEndPoints[i];
 						InterTerminalMessage interTermMsg = new InterTerminalMessage (mcrEp.Label, interTermReqMsg.SrcEndPoints, interTermReqMsg.Payload);
-						sock.BeginInquire (interTermMsg, mcrEp.EndPoint, delegate (IAsyncResult ar) {
-							if (sock.EndInquire (ar) != null)
-								return;
-							/// TODO: Ž¸”s‚µ‚½‚ç‚Ç‚¤‚·‚é ?
-						}, null);
+						if (isReliableMode) {
+							sock.BeginInquire (interTermMsg, mcrEp.EndPoint, delegate (IAsyncResult ar) {
+								if (sock.EndInquire (ar) != null)
+									return;
+								/// TODO: Ž¸”s‚µ‚½‚ç‚Ç‚¤‚·‚é ?
+							}, null);
+						} else {
+							sock.SendTo (interTermMsg, mcrEp.EndPoint);
+						}
 					}
 				}
-			}
-
-			public void Received (IInquirySocket sock, ReceivedEventArgs e, MCREndPoint ep, RoutedMessage msg)
-			{
-				throw new NotImplementedException ();
 			}
 
 			#endregion
@@ -338,9 +375,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_ti = ti;
 			}
 
-			public override void Send (object msg)
+			public override void Send (object msg, bool reliableMode)
 			{
-				_ti.Send (msg);
+				_ti.Send (msg, reliableMode);
 			}
 		}
 		#endregion
