@@ -306,7 +306,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				object payload = CipherUtility.DecryptRoutedPayload (_key, out seq, msg.Payload);
 				InterTerminalRequestMessage interTermReqMsg = payload as InterTerminalRequestMessage;
 				if (interTermReqMsg == null) {
-					TerminalNodeReceivedEventArgs args = new TerminalNodeReceivedEventArgs (this, payload, true);
+					TerminalNodeReceivedEventArgs args = new TerminalNodeReceivedEventArgs (this, payload);
 					_mgr.RaiseReceivedEvent (payload.GetType (), args);
 				} else {
 					for (int i = 0; i < interTermReqMsg.DestEndPoints.Length; i ++) {
@@ -332,15 +332,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 		{
 			TerminalRouteInfo _ti;
 
-			public TerminalNodeReceivedEventArgs (TerminalRouteInfo ti, object msg, bool needres)
-				: base (msg, needres)
+			public TerminalNodeReceivedEventArgs (TerminalRouteInfo ti, object msg)
+				: base (msg)
 			{
 				_ti = ti;
-			}
-
-			public override void Respond (object response)
-			{
-				_ti.Send (response);
 			}
 
 			public override void Send (object msg)

@@ -77,12 +77,8 @@ namespace p2pncs
 					algo.NewApp (appId);
 					udpSock.Bind (new IPEndPoint (IPAddress.Any, ep.Port));
 					mcrMgr.Received.Add (typeof (string), delegate (object sender, MCRTerminalNodeReceivedEventArgs e) {
-						Console.WriteLine ("T:{0} received {1} (NeedResponse={2})",
-							nodeHandle.NodeID.ToShortString (), e.Request, e.NeedsResponse);
-						if (e.NeedsResponse)
-							e.Respond (e.Request.ToString () + "#RESPONSE");
-						else
-							e.Send (e.Request.ToString () + "#SEND");
+						Console.WriteLine ("T:{0} received {1}", nodeHandle.NodeID.ToShortString (), e.Message);
+						e.Send (e.Message.ToString () + "#RESPONSE");
 					});
 
 					endPoints.Add (ep);
@@ -137,11 +133,11 @@ namespace p2pncs
 					Console.WriteLine ("{0}: Received {1} from {2}",
 						nodeHandles[idx1].NodeID.ToShortString (), e.Message, e.RemoteEndPoint);
 					if (e.RemoteEndPoint != null)
-						mcrSock1.SendTo ("HELLO!", e.RemoteEndPoint);
+						mcrSock1.SendTo ("WORLD!", e.RemoteEndPoint);
 				});
 				mcrSock0.SendTo ("HOGE", null);
 				mcrSock1.SendTo ("foo", null);
-				mcrSock0.SendTo ("TEST!", mcrSock1.LocalEndPoint);
+				mcrSock0.SendTo ("HELLO!", mcrSock1.LocalEndPoint);
 				Console.ReadLine ();
 
 				/*Key key2 = Key.CreateRandom (KeyBytes);

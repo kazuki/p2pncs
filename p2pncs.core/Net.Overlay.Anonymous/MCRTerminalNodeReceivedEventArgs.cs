@@ -21,24 +21,16 @@ namespace p2pncs.Net.Overlay.Anonymous
 {
 	public abstract class MCRTerminalNodeReceivedEventArgs : EventArgs
 	{
-		object _req;
-		bool _needResponse;
+		object _msg;
 
-		public MCRTerminalNodeReceivedEventArgs (object request, bool needRes)
+		public MCRTerminalNodeReceivedEventArgs (object msg)
 		{
-			_req = request;
-			_needResponse = needRes;
+			_msg = msg;
 		}
 
-		public object Request {
-			get { return _req; }
+		public object Message {
+			get { return _msg; }
 		}
-
-		public bool NeedsResponse {
-			get { return _needResponse; }
-		}
-
-		public abstract void Respond (object response);
 
 		public abstract void Send (object msg);
 	}
