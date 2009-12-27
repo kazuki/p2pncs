@@ -86,12 +86,13 @@ namespace p2pncs.Net.Overlay.Anonymous
 			throw new NotSupportedException ();
 		}
 
+		/// <param name="remoteEP">nullを指定した場合、MCR終端に配送する</param>
 		public void SendTo (object message, EndPoint remoteEP)
 		{
-			if (message == null || remoteEP == null)
+			if (message == null)
 				throw new ArgumentNullException ();
 			MCREndPoint mcrRemoteEP = remoteEP as MCREndPoint;
-			if (mcrRemoteEP == null)
+			if (remoteEP != null && mcrRemoteEP == null)
 				throw new ArgumentException ();
 			SendToInternal (message, mcrRemoteEP);
 		}
@@ -143,13 +144,6 @@ namespace p2pncs.Net.Overlay.Anonymous
 		{
 			uint seq;
 			object payload = MCRManager.CipherUtility.DecryptRoutedPayload (_relayKeys, out seq, msg.Payload);
-			MCREndPoint endPoint = msg.EndPoint as MCREndPoint;
-			if (endPoint != null) {
-				try {
-					Received.Invoke (payload.GetType (), this, new ReceivedEventArgs (payload, endPoint));
-				} catch {}
-				return;
-			}
 
 			if (payload is MCRManager.EstablishedRouteMessage) {
 				lock (this) {
@@ -162,6 +156,16 @@ namespace p2pncs.Net.Overlay.Anonymous
 				RaiseBindedEvent ();
 				return;
 			}
+
+			if (payload is MCRManager.InterTerminalMessage) {
+				MCRManager.InterTerminalMessage interTermMsg = payload as MCRManager.InterTerminalMessage;
+				Received.Invoke (interTermMsg.Payload.GetType (), this, new ReceivedEventArgs (interTermMsg.Payload, interTermMsg.SrcEndPoints[0]));
+				return;
+			}
+
+			try {
+				Received.Invoke (payload.GetType (), this, new ReceivedEventArgs (payload, null));
+			} catch {}
 		}
 
 		void MCRManager.IRouteInfo.Received (IInquirySocket sock, ReceivedEventArgs e, MCREndPoint ep, MCRManager.RoutedMessage msg)
@@ -177,18 +181,14 @@ namespace p2pncs.Net.Overlay.Anonymous
 		}
 		#endregion
 
-		public void SendToTerminalNode (object msg)
-		{
-			if (msg == null)
-				throw new ArgumentNullException ();
-			SendToInternal (msg, null);
-		}
-
 		void SendToInternal (object msg, MCREndPoint ep)
 		{
 			uint seq = (uint)Interlocked.Increment (ref _seq);
+			if (ep != null)
+				msg = new MCRManager.InterTerminalRequestMessage (ep, _localEP, msg);
 			byte[] payload = MCRManager.CipherUtility.CreateRoutedPayload (_relayKeys, seq, msg, MCRManager.FixedMessageSize);
-			_mgr.Socket.BeginInquire (new MCRManager.RoutedMessage (_firstHop.Label, ep, payload), _firstHop.EndPoint, delegate (IAsyncResult ar) {
+			msg = new MCRManager.RoutedMessage (_firstHop.Label, payload);
+			_mgr.Socket.BeginInquire (msg, _firstHop.EndPoint, delegate (IAsyncResult ar) {
 				if (_mgr.Socket.EndInquire (ar) != null)
 					return;
 				Close ();

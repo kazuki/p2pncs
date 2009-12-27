@@ -21,6 +21,9 @@ p2pncs.Net.Overlay.Anonymous (0x400-0x4ff):
   0x400: MCRManager.EstablishRouteMessage
   0x401: MCRManager.EstablishedRouteMessage
   0x402: MCRManager.RoutedMessage
-  0x403: MCRManager.DisconnectMessage
-  0x404: MCRManager.PingMessage
-  0x405: MCREndPoint
+  0x403: MCRManager.InterTerminalRequestMessage
+  0x404: MCRManager.InterTerminalMessage2
+  0x405: MCRManager.InterTerminalMessage
+  0x406: MCRManager.DisconnectMessage
+  0x407: MCRManager.PingMessage
+  0x410: MCREndPoint

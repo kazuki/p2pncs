@@ -50,6 +50,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			_sock.Inquired.Add (typeof (EstablishRouteMessage), Inquired_EstablishRouteMessage);
 			_sock.Inquired.Add (typeof (RoutedMessage), Inquired_RoutedMessage);
+			_sock.Inquired.Add (typeof (InterTerminalMessage2), Inquired_InterTerminalMessage2);
 		}
 
 		void Inquired_EstablishRouteMessage (object sender, InquiredEventArgs e)
@@ -131,6 +132,23 @@ namespace p2pncs.Net.Overlay.Anonymous
 			}
 			_sock.RespondToInquiry (e, ACK);
 			routeInfo.Received (_sock, e, ep, msg);
+		}
+
+		void Inquired_InterTerminalMessage2 (object sender, InquiredEventArgs e)
+		{
+			InterTerminalMessage2 msg = (InterTerminalMessage2)e.InquireMessage;
+			MCREndPoint ep = new MCREndPoint (e.EndPoint, msg.Label);
+			TerminalRouteInfo routeInfo;
+			lock (_terms) {
+				_terms.TryGetValue (msg.Label, out routeInfo);
+			}
+			if (routeInfo == null) {
+				_sock.RespondToInquiry (e, null);
+				return;
+			}
+			_sock.RespondToInquiry (e, ACK);
+			InterTerminalMessage itm = new InterTerminalMessage (msg.SrcEndPoints, msg.Payload);
+			routeInfo.Send (itm);
 		}
 
 		#region IDisposable Members
@@ -286,13 +304,20 @@ namespace p2pncs.Net.Overlay.Anonymous
 			{
 				uint seq;
 				object payload = CipherUtility.DecryptRoutedPayload (_key, out seq, msg.Payload);
-				MCREndPoint mcrEP = msg.EndPoint as MCREndPoint;
-				if (mcrEP == null) {
+				InterTerminalRequestMessage interTermReqMsg = payload as InterTerminalRequestMessage;
+				if (interTermReqMsg == null) {
 					TerminalNodeReceivedEventArgs args = new TerminalNodeReceivedEventArgs (this, payload, true);
 					_mgr.RaiseReceivedEvent (payload.GetType (), args);
 				} else {
-					/// TODO:
-					Console.WriteLine ("Termianl received {0}. Relay to {1}", payload, msg.EndPoint);
+					for (int i = 0; i < interTermReqMsg.DestEndPoints.Length; i ++) {
+						MCREndPoint mcrEp = interTermReqMsg.DestEndPoints[i];
+						InterTerminalMessage2 interTermMsg = new InterTerminalMessage2 (mcrEp.Label, interTermReqMsg.SrcEndPoints, interTermReqMsg.Payload);
+						sock.BeginInquire (interTermMsg, mcrEp.EndPoint, delegate (IAsyncResult ar) {
+							if (sock.EndInquire (ar) != null)
+								return;
+							/// TODO: Ž¸”s‚µ‚½‚ç‚Ç‚¤‚·‚é ?
+						}, null);
+					}
 				}
 			}
 
@@ -561,28 +586,16 @@ namespace p2pncs.Net.Overlay.Anonymous
 			RouteLabel _label;
 
 			[SerializableFieldId (1)]
-			MCREndPoint _ep;
-
-			[SerializableFieldId (2)]
 			byte[] _payload;
 
-			public RoutedMessage (RouteLabel label, byte[] payload) : this (label, null, payload)
-			{
-			}
-
-			public RoutedMessage (RouteLabel label, MCREndPoint ep, byte[] payload)
+			public RoutedMessage (RouteLabel label, byte[] payload)
 			{
 				_label = label;
-				_ep = ep;
 				_payload = payload;
 			}
 
 			public RouteLabel Label {
 				get { return _label; }
-			}
-
-			public MCREndPoint EndPoint {
-				get { return _ep; }
 			}
 
 			public byte[] Payload {
@@ -591,6 +604,99 @@ namespace p2pncs.Net.Overlay.Anonymous
 		}
 
 		[SerializableTypeId (0x403)]
+		internal sealed class InterTerminalRequestMessage
+		{
+			[SerializableFieldId (0)]
+			MCREndPoint[] _dstEPs;
+
+			[SerializableFieldId (1)]
+			MCREndPoint[] _srcEPs;
+
+			[SerializableFieldId (2)]
+			object _payload;
+
+			public InterTerminalRequestMessage (MCREndPoint dstEP, MCREndPoint srcEP, object payload)
+				: this (new MCREndPoint[] {dstEP}, new MCREndPoint[] {srcEP}, payload)
+			{
+			}
+
+			public InterTerminalRequestMessage (MCREndPoint[] dstEPs, MCREndPoint[] srcEPs, object payload)
+			{
+				_dstEPs = dstEPs;
+				_srcEPs = srcEPs;
+				_payload = payload;
+			}
+
+			public MCREndPoint[] DestEndPoints {
+				get { return _dstEPs; }
+			}
+
+			public MCREndPoint[] SrcEndPoints {
+				get { return _srcEPs; }
+			}
+
+			public object Payload {
+				get { return _payload; }
+			}
+		}
+
+		[SerializableTypeId (0x404)]
+		internal sealed class InterTerminalMessage2
+		{
+			[SerializableFieldId (0)]
+			RouteLabel _label;
+
+			[SerializableFieldId (1)]
+			MCREndPoint[] _srcEPs;
+
+			[SerializableFieldId (2)]
+			object _payload;
+
+			public InterTerminalMessage2 (RouteLabel label, MCREndPoint[] srcEPs, object payload)
+			{
+				_label = label;
+				_srcEPs = srcEPs;
+				_payload = payload;
+			}
+
+			public RouteLabel Label {
+				get { return _label; }
+			}
+
+			public MCREndPoint[] SrcEndPoints {
+				get { return _srcEPs; }
+			}
+
+			public object Payload {
+				get { return _payload; }
+			}
+		}
+
+		[SerializableTypeId (0x405)]
+		internal sealed class InterTerminalMessage
+		{
+			[SerializableFieldId (0)]
+			MCREndPoint[] _srcEPs;
+
+			[SerializableFieldId (1)]
+			object _payload;
+
+			public InterTerminalMessage (MCREndPoint[] srcEPs, object payload)
+			{
+				_srcEPs = srcEPs;
+				_payload = payload;
+			}
+
+			public MCREndPoint[] SrcEndPoints {
+				get { return _srcEPs; }
+			}
+
+			public object Payload {
+				get { return _payload; }
+			}
+		}
+
+		[SerializableTypeId (0x406)]
 		internal sealed class DisconnectMessage
 		{
 			[SerializableFieldId (0)]
@@ -606,7 +712,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			}
 		}
 
-		[SerializableTypeId (0x404)]
+		[SerializableTypeId (0x407)]
 		internal sealed class PingMessage
 		{
 			static PingMessage _instance = new PingMessage ();

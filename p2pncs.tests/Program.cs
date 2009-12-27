@@ -136,9 +136,11 @@ namespace p2pncs
 				mcrSock1.Received.Add (typeof (string), delegate (object sender, ReceivedEventArgs e) {
 					Console.WriteLine ("{0}: Received {1} from {2}",
 						nodeHandles[idx1].NodeID.ToShortString (), e.Message, e.RemoteEndPoint);
+					if (e.RemoteEndPoint != null)
+						mcrSock1.SendTo ("HELLO!", e.RemoteEndPoint);
 				});
-				mcrSock0.SendToTerminalNode ("HOGE");
-				mcrSock1.SendToTerminalNode ("foo");
+				mcrSock0.SendTo ("HOGE", null);
+				mcrSock1.SendTo ("foo", null);
 				mcrSock0.SendTo ("TEST!", mcrSock1.LocalEndPoint);
 				Console.ReadLine ();
 

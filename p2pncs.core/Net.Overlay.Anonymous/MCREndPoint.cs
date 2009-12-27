@@ -20,7 +20,7 @@ using System.Net;
 
 namespace p2pncs.Net.Overlay.Anonymous
 {
-	[SerializableTypeId (0x405)]
+	[SerializableTypeId (0x410)]
 	public sealed class MCREndPoint : EndPoint, IEquatable<MCREndPoint>
 	{
 		[SerializableFieldId (0)]
