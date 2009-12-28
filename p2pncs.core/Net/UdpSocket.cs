@@ -135,6 +135,7 @@ namespace p2pncs.Net
 			}
 			_sock.Close ();
 
+			_received.Clear ();
 			_sock = null;
 			_pubIpVotingBox = null;
 			_sendBuffer = null;

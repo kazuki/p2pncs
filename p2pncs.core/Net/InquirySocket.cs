@@ -158,6 +158,11 @@ namespace p2pncs.Net
 			}
 			if (_ownSocket)
 				_sock.Close ();
+			_inquired.Clear ();
+			_retryList.Clear ();
+			_sock.Received.Remove (typeof (InquiryRequest), Received_InquiryRequest);
+			_sock.Received.Remove (typeof (InquiryResponse), Received_InquiryResponse);
+			_int.RemoveInterruption (CheckTimeout);
 		}
 
 		public EndPoint LocalEndPoint {

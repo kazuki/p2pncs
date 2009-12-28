@@ -94,12 +94,7 @@ namespace p2pncs.Net.Overlay.DHT
 
 		public void Close ()
 		{
-			lock (this) {
-				if (_dic == null)
-					return;
-				_dic.Clear ();
-				_dic = null;
-			}
+			_dic.Clear ();
 			_int.RemoveInterruption (CheckExpiry);
 		}
 

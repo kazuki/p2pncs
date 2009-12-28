@@ -78,6 +78,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 					return;
 				Close ();
 			}, null);
+
+			// MCR確立タイムアウトを指定: 1s * 中継ノード数 * 2(往復) * 1.5(再送考慮ファクタ)
+			_pingRecvExpire = DateTime.Now + TimeSpan.FromSeconds (bindEP.RelayNodes.Length * 3);
 		}
 
 		public void Connect (EndPoint remoteEP)
@@ -129,6 +132,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_active = false;
 			}
 
+			_received.Clear ();
 			_mgr.TimeoutCheckInterrupter.RemoveInterruption ((this as MCRManager.IRouteInfo).CheckTimeout);
 			if (_firstHop != null) {
 				_mgr.RemoveRouteInfo (_firstHop);

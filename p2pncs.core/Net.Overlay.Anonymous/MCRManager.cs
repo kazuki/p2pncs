@@ -234,10 +234,15 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_privateKeyPair = null;
 			}
 
+			_timeoutCheckList.Clear ();
+			_received.Clear ();
+			_routes.Clear ();
+			_terms.Clear ();
 			_int.RemoveInterruption (CheckTimeout);
 			_sock.Inquired.Remove (typeof (EstablishRouteMessage), EstablishRouteMessage_Inquired);
 			_sock.Inquired.Remove (typeof (RoutedMessage), RoutedMessage_Inquired);
 			_sock.Inquired.Remove (typeof (InterTerminalMessage), InterTerminalMessage_Inquired);
+			_sock.Inquired.Remove (typeof (DisconnectMessage), DisconnectMessage_Inquired);
 			_sock.Received.Remove (typeof (RoutedMessage), RoutedMessage_Received);
 			_sock.Received.Remove (typeof (InterTerminalMessage), InterTerminalMessage_Received);
 		}

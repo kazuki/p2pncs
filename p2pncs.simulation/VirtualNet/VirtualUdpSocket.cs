@@ -113,6 +113,7 @@ namespace p2pncs.Simulation.VirtualNet
 				_vnet = null;
 			}
 			
+			_received.Clear ();
 			vnet.RemoveVirtualNode (_vnet_node);
 			_vnet_node = null;
 			_pubIP = IPAddress.None;
