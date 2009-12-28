@@ -45,7 +45,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 		internal const int FixedMessageSize = 512; /// TODO:
 		internal static readonly TimeSpan PingInterval = TimeSpan.FromMinutes (1);
 		internal static readonly TimeSpan MaxPingInterval = PingInterval + PingInterval;
-		static readonly object ACK = "ACK";
+		internal static readonly string ACK = "ACK";
+		internal static readonly string FAILED = "FAILED";
+
+		public event EventHandler<FailedEventArgs> InquiryFailed;
 
 		public MCRManager (IInquirySocket sock, ECKeyPair keyPair, IntervalInterrupter timeoutCheckInt)
 		{
@@ -89,7 +92,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					_pubKeySize, DefaultSymmetricKeyOption, out key, out nextHop, out payload);
 			} catch { nextPayload = null; payload = null; }
 			if (nextPayload == null && payload == null) {
-				_sock.RespondToInquiry (e, null); // decrypt failed
+				_sock.RespondToInquiry (e, FAILED); // decrypt failed
 				return;
 			}
 			_sock.RespondToInquiry (e, ACK);
@@ -115,9 +118,12 @@ namespace p2pncs.Net.Overlay.Anonymous
 				}
 				msg = new EstablishRouteMessage (nextEP.Label, nextPayload);
 				_sock.BeginInquire (msg, nextEP.EndPoint, delegate (IAsyncResult ar) {
-					if (_sock.EndInquire (ar) != null)
+					object res = _sock.EndInquire (ar);
+					if (ACK.Equals (res))
 						return;
 					info.Close ();
+					if (res == null)
+						RaiseInquiryFailedEvent (nextEP.EndPoint);
 				}, null);
 			} else {
 				// terminal
@@ -165,7 +171,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			}
 			if (routeInfo == null) {
 				if (e != null)
-					_sock.RespondToInquiry (e, null);
+					_sock.RespondToInquiry (e, FAILED);
 				return;
 			}
 			if (e != null)
@@ -214,7 +220,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			}
 			if (routeInfo == null) {
 				if (e != null)
-					_sock.RespondToInquiry (e, null);
+					_sock.RespondToInquiry (e, FAILED);
 				return;
 			}
 			if (e != null)
@@ -276,6 +282,15 @@ namespace p2pncs.Net.Overlay.Anonymous
 		{
 			try {
 				_received.Invoke (type, this, e);
+			} catch {}
+		}
+
+		internal void RaiseInquiryFailedEvent (EndPoint ep)
+		{
+			if (InquiryFailed == null)
+				return;
+			try {
+				InquiryFailed (this, new FailedEventArgs (ep));
 			} catch {}
 		}
 		#endregion
@@ -347,11 +362,14 @@ namespace p2pncs.Net.Overlay.Anonymous
 				RoutedMessage new_msg = new RoutedMessage (next.Label, new_payload);
 				if (isReliableMode) {
 					sock.BeginInquire (new_msg, next.EndPoint, delegate (IAsyncResult ar) {
-						if (sock.EndInquire (ar) != null)
+						object res = sock.EndInquire (ar);
+						if (ACK.Equals (res))
 							return;
 						if (ep.Equals (_prev))
 							sock.BeginInquire (new DisconnectMessage (_prev.Label), _prev.EndPoint, null, null);
 						Close ();
+						if (res == null)
+							_mgr.RaiseInquiryFailedEvent (next.EndPoint);
 					}, null);
 				} else {
 					sock.SendTo (new_msg, next.EndPoint);
@@ -402,9 +420,12 @@ namespace p2pncs.Net.Overlay.Anonymous
 				_nextPingTime = DateTime.Now + PingInterval;
 				if (isReliableMode) {
 					sock.BeginInquire (routedMsg, _prev.EndPoint, delegate (IAsyncResult ar) {
-						if (sock.EndInquire (ar) != null)
+						object res = sock.EndInquire (ar);
+						if (ACK.Equals (res))
 							return;
 						Close ();
+						if (res == null)
+							_mgr.RaiseInquiryFailedEvent (_prev.EndPoint);
 					}, null);
 				} else {
 					sock.SendTo (routedMsg, _prev.EndPoint);
@@ -430,9 +451,12 @@ namespace p2pncs.Net.Overlay.Anonymous
 						InterTerminalMessage interTermMsg = new InterTerminalMessage (mcrEp.Label, interTermReqMsg.SrcEndPoints, interTermReqMsg.Payload);
 						if (isReliableMode) {
 							sock.BeginInquire (interTermMsg, mcrEp.EndPoint, delegate (IAsyncResult ar) {
-								if (sock.EndInquire (ar) != null)
+								object res = sock.EndInquire (ar);
+								if (ACK.Equals (res))
 									return;
 								/// TODO: Ž¸”s‚µ‚½‚ç‚Ç‚¤‚·‚é ?
+								if (res == null)
+									_mgr.RaiseInquiryFailedEvent (mcrEp.EndPoint);
 							}, null);
 						} else {
 							sock.SendTo (interTermMsg, mcrEp.EndPoint);
@@ -480,6 +504,19 @@ namespace p2pncs.Net.Overlay.Anonymous
 			public override void Send (object msg, bool reliableMode)
 			{
 				_ti.Send (msg, reliableMode);
+			}
+		}
+		public class FailedEventArgs : EventArgs
+		{
+			EndPoint _ep;
+
+			public FailedEventArgs (EndPoint ep)
+			{
+				_ep = ep;
+			}
+
+			public EndPoint EndPoint {
+				get { return _ep; }
 			}
 		}
 		#endregion

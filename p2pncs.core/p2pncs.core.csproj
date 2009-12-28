@@ -63,6 +63,8 @@
     <Compile Include="LZMA\Compress\RangeCoder\RangeCoderBit.cs" />
     <Compile Include="LZMA\Compress\RangeCoder\RangeCoderBitTree.cs" />
     <Compile Include="LZMA\ICoder.cs" />
+    <Compile Include="Net.Overlay.Anonymous\MCRAggregatedEndPoint.cs" />
+    <Compile Include="Net.Overlay.Anonymous\MCRAggregator.cs" />
     <Compile Include="Net.Overlay.Anonymous\MCRBindEndPoint.cs" />
     <Compile Include="Net.Overlay.Anonymous\MCREndPoint.cs" />
     <Compile Include="Net.Overlay.Anonymous\MCRManager.cs" />

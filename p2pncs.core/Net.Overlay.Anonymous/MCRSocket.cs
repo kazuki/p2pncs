@@ -74,9 +74,12 @@ namespace p2pncs.Net.Overlay.Anonymous
 			MCRManager.EstablishRouteMessage msg = new MCRManager.EstablishRouteMessage (routeLabel, encrypted);
 			_mgr.AddRouteInfo (_firstHop, this);
 			_mgr.Socket.BeginInquire (msg, _firstHop.EndPoint, delegate (IAsyncResult ar) {
-				if (_mgr.Socket.EndInquire (ar) != null)
+				object res = _mgr.Socket.EndInquire (ar);
+				if (MCRManager.ACK.Equals (res))
 					return;
 				Close ();
+				if (res == null)
+					_mgr.RaiseInquiryFailedEvent (_firstHop.EndPoint);
 			}, null);
 
 			// MCR確立タイムアウトを指定: 1s * 中継ノード数 * 2(往復) * 1.5(再送考慮ファクタ)
@@ -111,9 +114,12 @@ namespace p2pncs.Net.Overlay.Anonymous
 			_nextPingTime = DateTime.Now + MCRManager.PingInterval;
 			if (IsReliableMode || forceReliableMode) {
 				_mgr.Socket.BeginInquire (message, _firstHop.EndPoint, delegate (IAsyncResult ar) {
-					if (_mgr.Socket.EndInquire (ar) != null)
+					object res = _mgr.Socket.EndInquire (ar);
+					if (MCRManager.ACK.Equals (res))
 						return;
 					Close ();
+					if (res == null)
+						_mgr.RaiseInquiryFailedEvent (_firstHop.EndPoint);
 				}, null);
 			} else {
 				_mgr.Socket.SendTo (message, _firstHop.EndPoint);
