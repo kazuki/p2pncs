@@ -17,35 +17,43 @@
 
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Net;
 using System.Threading;
-using Kazuki.Net.HttpServer;
-using Kazuki.Net.HttpServer.Middlewares;
 using openCrypto.EllipticCurve;
 using p2pncs.Net;
 using p2pncs.Net.Overlay;
-using p2pncs.Security.Cryptography;
+using p2pncs.Net.Overlay.Anonymous;
+using p2pncs.Net.Overlay.DHT;
+using p2pncs.Simulation;
 using p2pncs.Simulation.VirtualNet;
 using p2pncs.Threading;
+using p2pncs.Utility;
 
 namespace p2pncs.debug
 {
 	class Program : IDisposable
 	{
-		const int NODES = 10;
+		const int NODES = 1024;
+
+		const int InquiryRetries = 2;
+		const int InquiryRetryBufferSize = 64;
+		const int KeyBytes = 8;
+		const int KBRBucketSize = 16;
+		static TimeSpan MinimumPingInterval = TimeSpan.FromMinutes (5);
+		static Key AppID0 = new Key (new byte[] {0});
+		static RandomIPAddressGenerator RndIpGen = new RandomIPAddressGenerator ();
+
 		VirtualNetwork _network;
-		Interrupters _ints;
 		IntervalInterrupter _churnInt;
 		List<DebugNode> _list = new List<DebugNode> ();
+		List<Key> _kbrKeys = new List<Key> ();
 		List<IPEndPoint> _eps = new List<IPEndPoint> ();
+		HashSet<DebugNode> _selectedNodes = new HashSet<DebugNode> ();
 		IPEndPoint[] _init_nodes;
 		int _nodeIdx = -1;
-		Random _rnd = new Random ();
 
 		static void Main ()
 		{
-			p2pncs.Simulation.OSTimerPrecision.SetCurrentThreadToHighPrecision ();
 			using (Program prog = new Program ()) {
 				prog.Run ();
 			}
@@ -53,23 +61,42 @@ namespace p2pncs.debug
 
 		public Program ()
 		{
-			_ints = new Interrupters ();
+			Interrupters.Start ();
 			_churnInt = new IntervalInterrupter (TimeSpan.FromSeconds (500.0 / NODES), "Churn Timer");
-			Directory.CreateDirectory ("db");
+
+			ILatency latency = LatencyTypes.Constant (25);
+			IPacketLossRate lossrate = PacketLossType.Constant (0.05);
+			_network = new VirtualNetwork (latency, 5, lossrate, Environment.ProcessorCount);
 		}
 
 		public void Run ()
 		{
-			int gw_port = 8080;
-
-			_network = new VirtualNetwork (LatencyTypes.Constant (20), 5, PacketLossType.Constant (0.05), Environment.ProcessorCount);
-
 			int step = Math.Max (1, NODES / 10);
 			for (int i = 0; i < NODES; i++) {
-				AddNode ((i % step) == 0 ? gw_port++ : -1);
-				Thread.Sleep (100);
+				AddNode ();
+				Thread.Sleep (10);
 			}
 			Console.WriteLine ("{0} Nodes Inserted", NODES);
+			lock (_list) {
+				_selectedNodes.Add (_list[0]);
+				_selectedNodes.Add (_list[1]);
+			}
+			MCRAggregator mcrAg0 = new MCRAggregator (_list[0].MCRManager, 3, 3, 2, Interrupters.ForMCR, Interrupters.ForMCR, _list[0].SelectRelayNodes);
+			MCRAggregator mcrAg1 = new MCRAggregator (_list[1].MCRManager, 3, 3, 2, Interrupters.ForMCR, Interrupters.ForMCR, _list[1].SelectRelayNodes);
+			mcrAg0.Received.AddUnknownKeyHandler (delegate (object sender, ReceivedEventArgs e) {
+				MCRReceivedEventArgs e2 = (MCRReceivedEventArgs)e;
+				string tmp = "";
+				for (int i = 0; e2.SrcEndPoints != null && i < e2.SrcEndPoints.Length; i++)
+					tmp += e2.SrcEndPoints[i].ToString () + "\r\n";
+				Console.WriteLine ("AG0: {0} received from {1} (id={2})", e.Message, tmp, e2.ID);
+			});
+			mcrAg1.Received.AddUnknownKeyHandler (delegate (object sender, ReceivedEventArgs e) {
+				MCRReceivedEventArgs e2 = (MCRReceivedEventArgs)e;
+				string tmp = "";
+				for (int i = 0; e2.SrcEndPoints != null && i < e2.SrcEndPoints.Length; i++)
+					tmp += e2.SrcEndPoints[i].ToString () + "\r\n";
+				Console.WriteLine ("AG1: {0} received from {1} (id={2})", e.Message, tmp, e2.ID);
+			});
 
 			_churnInt.AddInterruption (delegate () {
 				lock (_list) {
@@ -78,9 +105,9 @@ namespace p2pncs.debug
 					int idx;
 					DebugNode removed;
 					while (true) {
-						idx = _rnd.Next (0, _list.Count);
+						idx = ThreadSafeRandom.Next (0, _list.Count);
 						removed = _list[idx];
-						if (!removed.IsGateway)
+						if (!_selectedNodes.Contains (removed))
 							break;
 					}
 					try {
@@ -88,34 +115,45 @@ namespace p2pncs.debug
 					} catch {}
 					_list.RemoveAt (idx);
 					_eps.RemoveAt (idx);
-					AddNode (-1);
+					AddNode ();
+					GC.Collect ();
 				}
 			});
 			_churnInt.Start ();
 
-			_list[0].WaitOne ();
+			for (int i = 0;; i ++) {
+				string line = Console.ReadLine ();
+				if (line.Length == 0)
+					break;
+				switch (i % 4) {
+					case 0:
+						mcrAg0.SendTo (line, mcrAg1.LocalEndPoint);
+						break;
+					case 1:
+						mcrAg1.SendTo (line, mcrAg0.LocalEndPoint);
+						break;
+					case 2:
+						mcrAg0.SendTo (line, null);
+						break;
+					case 3:
+						mcrAg1.SendTo (line, null);
+						break;
+				}
+			}
 		}
 
-		DebugNode AddNode (int gw_port)
+		DebugNode AddNode ()
 		{
 			int nodeIdx = Interlocked.Increment (ref _nodeIdx);
-			IPAddress adrs = IPAddress.Loopback;
-			VirtualDatagramEventSocket sock = new VirtualDatagramEventSocket (_network, adrs);
-			IPEndPoint pubEP = new IPEndPoint (adrs, 1 + nodeIdx);
-			IPEndPoint bindTcpEP = new IPEndPoint (IPAddress.Loopback, 30000 + nodeIdx);
-			sock.Bind (new IPEndPoint (IPAddress.Any, pubEP.Port));
-			DebugNode node = DebugNode.Create (nodeIdx, _ints, sock, bindTcpEP, pubEP, gw_port);
+			DebugNode node = new DebugNode (_network);
+			if (_init_nodes == null || _init_nodes.Length < 2)
+				_init_nodes = _eps.ToArray ();
+			if (_init_nodes.Length > 0)
+				node.KeyBasedRouter.Join (AppID0, _init_nodes);
 			lock (_list) {
 				_list.Add (node);
-				_eps.Add (pubEP);
-			}
-			if (_init_nodes == null) {
-				node.PortOpenChecker.Join (_eps.ToArray ());
-				_eps.Add (pubEP);
-				if (_eps.Count == 4)
-					_init_nodes = _eps.ToArray ();
-			} else {
-				node.PortOpenChecker.Join (_init_nodes);
+				_eps.Add (node.PublicEndPoint);
+				_kbrKeys.Add (node.KeyBasedRouter.RoutingAlgorithm.SelfNodeHandle.NodeID);
 			}
 			return node;
 		}
@@ -123,7 +161,7 @@ namespace p2pncs.debug
 		public void Dispose ()
 		{
 			_churnInt.Dispose ();
-			_ints.Dispose ();
+			Interrupters.Close ();
 			_network.Close ();
 			lock (_list) {
 				for (int i = 0; i < _list.Count; i++) {
@@ -134,70 +172,121 @@ namespace p2pncs.debug
 			}
 		}
 
-		class DebugNode : Node
+		sealed class DebugNode : IDisposable
 		{
-			ECKeyPair _imPrivateKey;
-			Key _imPublicKey;
-			string _name;
-			IHttpServer _server = null;
-			WebApp _app;
-			SessionMiddleware _sessionMiddleware;
-			int _idx;
-			bool _is_gw;
-			IPEndPoint _bindTcpEP;
+			IPEndPoint _pubEP;
+			VirtualUdpSocket _udpSock;
+			InquirySocket _sock;
+			SimpleRoutingAlgorithm _algo;
+			SimpleIterativeRouter _router;
+			OnMemoryStore _localStore;
+			SimpleDHT _dht;
+			ECKeyPair _keyPair;
+			MCRManager _mcrMgr;
+			bool _disposed = false;
 
-			public static DebugNode Create (int idx, Interrupters ints, IDatagramEventSocket bindedDgramSock, IPEndPoint bindTcpEp, IPEndPoint bindUdpEp, int gw_port)
+			public DebugNode (VirtualNetwork network)
 			{
-				string db_path = string.Format ("db{0}{1}.sqlite", Path.DirectorySeparatorChar, idx);
-				ITcpListener listener = new p2pncs.Net.TcpListener ();
-				listener.Bind (bindTcpEp);
-				listener.ListenStart ();
-				return new DebugNode (idx, ints, listener, bindedDgramSock, bindTcpEp, bindUdpEp, gw_port, db_path);
+				_pubEP = new IPEndPoint (RndIpGen.Next (), ThreadSafeRandom.Next (1, ushort.MaxValue));
+				_keyPair = ECKeyPair.Create (ConstantParameters.ECDomainName);
+				NodeHandle nodeHandle = new NodeHandle (Key.Create (_keyPair), _pubEP);
+				_udpSock = new VirtualUdpSocket (network, _pubEP.Address, true);
+				IRTOAlgorithm rto = new RFC2988BasedRTOCalculator (TimeSpan.FromSeconds (1), TimeSpan.FromMilliseconds (200), 50);
+				_sock = new InquirySocket (_udpSock, true, Interrupters.ForMessaging, rto, InquiryRetries, InquiryRetryBufferSize);
+				_algo = new SimpleRoutingAlgorithm (nodeHandle.NodeID, _sock, KBRBucketSize, MinimumPingInterval);
+				_router = new SimpleIterativeRouter (_algo, _sock);
+				ValueTypeRegister typeReg = new ValueTypeRegister ();
+				_localStore = new OnMemoryStore (typeReg, Interrupters.ForDHT);
+				_dht = new SimpleDHT (_sock, _router, _localStore, typeReg);
+				_mcrMgr = new MCRManager (_sock, _keyPair, Interrupters.ForMCR);
+				typeReg.Register (typeof (string), 0, new EqualityValueMerger<string> ());
+				_algo.NewApp (AppID0);
+				Interrupters.ForKBR.AddInterruption (Stabilize);
+				_udpSock.Bind (new IPEndPoint (IPAddress.Any, _pubEP.Port));
+				_mcrMgr.Received.Add (typeof (string), delegate (object sender, MCRTerminalNodeReceivedEventArgs e) {
+					Console.WriteLine ("T:{0} received {1}", nodeHandle.NodeID.ToShortString (), e.Message);
+					e.Send (e.Message.ToString () + "#RESPONSE", true);
+				});
+				_mcrMgr.InquiryFailed += delegate (object sender, MCRManager.FailedEventArgs e) {
+					_algo.Fail (e.EndPoint);
+				};
 			}
 
-			DebugNode (int idx, Interrupters ints, ITcpListener listener, IDatagramEventSocket bindedDgramSock, IPEndPoint bindTcpEp, IPEndPoint bindUdpEp, int gw_port, string dbpath)
-				: base (ints, bindedDgramSock, listener, dbpath, (ushort)bindUdpEp.Port, (ushort)bindTcpEp.Port)
+			void Stabilize ()
 			{
-				_idx = idx;
-				_bindTcpEP = bindTcpEp;
-				_imPrivateKey = ECKeyPair.Create (DefaultAlgorithm.ECDomainName);
-				_imPublicKey = Key.Create (_imPrivateKey);
-				_name = "Node-" + idx.ToString ("x");
-				_app = new WebApp (this, ints);
-				_is_gw = gw_port > 0;
-				if (_is_gw) {
-					_sessionMiddleware = new SessionMiddleware (MMLC.CreateDBConnection, _app);
-					_server = HttpServer.CreateEmbedHttpServer (_sessionMiddleware, null, true, true, false, gw_port, 16);
-				}
+				_algo.Stabilize (AppID0);
 			}
 
-			public void WaitOne ()
+			public NodeHandle[] SelectRelayNodes (int maxNum)
 			{
-				_app.ExitWaitHandle.WaitOne ();
+				return _algo.GetRandomNodes (AppID0, maxNum);
 			}
 
-			public override IPAddress GetCurrentPublicIPAddress ()
-			{
-				if (_dgramSock is VirtualDatagramEventSocket)
-					return (_dgramSock as VirtualDatagramEventSocket).PublicIPAddress;
-				return base.GetCurrentPublicIPAddress ();
+			public IPEndPoint PublicEndPoint {
+				get { return _pubEP; }
 			}
 
-			public bool IsGateway {
-				get { return _is_gw; }
+			public IKeyBasedRouter KeyBasedRouter {
+				get { return _router; }
 			}
 
-			public override void Dispose ()
+			public MCRManager MCRManager {
+				get { return _mcrMgr; }
+			}
+
+			public bool IsDisposed {
+				get { return _disposed; }
+			}
+
+			public void Dispose ()
 			{
-				lock (this) {
-					base.Dispose ();
-					if (_server != null) _server.Dispose ();
-					if (_app != null) _app.Dispose ();
-					if (_sessionMiddleware != null) _sessionMiddleware.Dispose ();
-					_server = null;
-					_app = null;
-					_sessionMiddleware = null;
-				}
+				_disposed = true;
+				Interrupters.ForKBR.RemoveInterruption (Stabilize);
+				_mcrMgr.Dispose ();
+				_dht.Dispose ();
+				_localStore.Close ();
+				_router.Close ();
+				_algo.Close ();
+				_sock.Dispose ();
+				_udpSock.Dispose ();
+			}
+		}
+
+		static class Interrupters
+		{
+			static IntervalInterrupter _messaging = new IntervalInterrupter (TimeSpan.FromMilliseconds (100), "Messaging Retry Timer");
+			static IntervalInterrupter _kbr = new IntervalInterrupter (TimeSpan.FromSeconds (30), "KBR Stabilize Timer");
+			static IntervalInterrupter _dht = new IntervalInterrupter (TimeSpan.FromSeconds (5), "DHT Expire Check Timer");
+			static IntervalInterrupter _mcr = new IntervalInterrupter (TimeSpan.FromSeconds (1), "MCR Timeout Timer");
+
+			public static void Start ()
+			{
+				_messaging.Start ();
+				_dht.Start ();
+				_mcr.Start ();
+			}
+
+			public static void Close ()
+			{
+				_messaging.Dispose ();
+				_dht.Dispose ();
+				_mcr.Dispose ();
+			}
+
+			public static IntervalInterrupter ForMessaging {
+				get { return _messaging; }
+			}
+
+			public static IntervalInterrupter ForKBR {
+				get { return _kbr; }
+			}
+
+			public static IntervalInterrupter ForDHT {
+				get { return _dht; }
+			}
+
+			public static IntervalInterrupter ForMCR {
+				get { return _mcr; }
 			}
 		}
 	}

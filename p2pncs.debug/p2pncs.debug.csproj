@@ -59,10 +59,6 @@
       <Project>{A7ABCCD1-20B9-41A7-8C54-7E2B4C958B23}</Project>
       <Name>p2pncs.simulation</Name>
     </ProjectReference>
-    <ProjectReference Include="..\p2pncs\p2pncs.csproj">
-      <Project>{C7128775-37B2-4DB3-8CCA-159C76F12CE1}</Project>
-      <Name>p2pncs</Name>
-    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
