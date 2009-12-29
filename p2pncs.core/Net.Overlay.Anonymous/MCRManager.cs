@@ -228,10 +228,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 			if (e != null)
 				_sock.RespondToInquiry (e, ACK);
 
-			if (!routeInfo.DuplicationChecker.Check (msg.ID)) {
-				Console.WriteLine ("Terminal Drop#2 id={0}", msg.ID);
+			if (!routeInfo.DuplicationChecker.Check (msg.ID))
 				return;
-			}
 
 			InterTerminalPayload itp = new InterTerminalPayload (msg.SrcEndPoints, msg.Payload, msg.ID);
 			routeInfo.Send (itp, e != null);
@@ -386,10 +384,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public void CheckTimeout ()
 			{
-				if (_expiryFromNext < DateTime.Now || _expiryFromPrev < DateTime.Now) {
+				if (_expiryFromNext < DateTime.Now || _expiryFromPrev < DateTime.Now)
 					Close ();
-					Console.WriteLine ("Relay: Timeout...");
-				}
 			}
 
 			public void Close ()
@@ -455,20 +451,16 @@ namespace p2pncs.Net.Overlay.Anonymous
 				uint seq;
 				object payload = CipherUtility.DecryptRoutedPayload (_key, out seq, msg.Payload);
 				_pingRecvExpire = DateTime.Now + MaxPingInterval;
-				if (!_antiReplay.Check (seq)) {
-					Console.WriteLine ("Terminal Drop seq={0}", seq);
+				if (!_antiReplay.Check (seq))
 					return;
-				}
 
 				InterTerminalRequestMessage interTermReqMsg = payload as InterTerminalRequestMessage;
 				if (interTermReqMsg == null) {
 					TerminalNodeReceivedEventArgs args = new TerminalNodeReceivedEventArgs (this, payload);
 					_mgr.RaiseReceivedEvent (payload.GetType (), args);
 				} else {
-					if (!_dupChecker.Check (interTermReqMsg.ID)) {
-						Console.WriteLine ("Terminal Drop#1 id={0}", interTermReqMsg.ID);
+					if (!_dupChecker.Check (interTermReqMsg.ID))
 						return;
-					}
 					for (int i = 0; i < interTermReqMsg.DestEndPoints.Length; i ++) {
 						MCREndPoint mcrEp = interTermReqMsg.DestEndPoints[i];
 						InterTerminalMessage interTermMsg = new InterTerminalMessage (mcrEp.Label, interTermReqMsg.SrcEndPoints, interTermReqMsg.Payload, interTermReqMsg.ID);
@@ -495,10 +487,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 					return;
 				}
 
-				if (_nextPingTime < DateTime.Now) {
+				if (_nextPingTime < DateTime.Now)
 					Send (MCRManager.PingMessage.Instance, true);
-					Console.WriteLine ("T: Send Ping...");
-				}
 			}
 
 			public void Close ()

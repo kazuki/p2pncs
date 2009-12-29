@@ -119,10 +119,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 		void MCRSocket_Received (object sender, ReceivedEventArgs e)
 		{
 			MCRReceivedEventArgs e2 = (MCRReceivedEventArgs)e;
-			if (!_dupChecker.Check (e2.ID)) {
-				Console.WriteLine ("Aggregator Drop id={0}", e2.ID);
+			if (e2.ID != 0 && !_dupChecker.Check (e2.ID))
 				return;
-			}
 			_received.Invoke (e2.Message.GetType (), this, e2);
 		}
 		#endregion
@@ -151,7 +149,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 		public void SendTo (object message, EndPoint remoteEP)
 		{
-			if (!(remoteEP is MCREndPoint || remoteEP is MCRAggregatedEndPoint))
+			if (remoteEP != null && !(remoteEP is MCREndPoint || remoteEP is MCRAggregatedEndPoint))
 				throw new ArgumentException ();
 			if (_localEP == null)
 				throw new System.Net.Sockets.SocketException ();
@@ -160,8 +158,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 			lock (_sockets) {
 				sockets = new List<MCRSocket> (_sockets);
 			}
-			ulong id = ThreadSafeRandom.NextUInt64 ();
-			Console.WriteLine ("Send! ID={0}", id);
+			ulong id;
+			do {
+				id = ThreadSafeRandom.NextUInt64 ();
+			} while (id == 0);
 			for (int i = 0; i < sockets.Count; i ++)
 				if (sockets[i].IsBinded)
 					sockets[i].SendTo (message, id, remoteEP, _localEP.EndPoints);

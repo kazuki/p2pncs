@@ -101,7 +101,11 @@ namespace p2pncs.Net.Overlay.Anonymous
 		/// <param name="remoteEP">nullを指定した場合、MCR終端に配送する</param>
 		public void SendTo (object message, EndPoint remoteEP)
 		{
-			SendTo (message, ThreadSafeRandom.NextUInt64 (), remoteEP, null);
+			ulong id;
+			do {
+				id = ThreadSafeRandom.NextUInt64 ();
+			} while (id == 0);
+			SendTo (message, id, remoteEP, null);
 		}
 
 		/// <param name="remoteEP">nullを指定した場合、MCR終端に配送する</param>
@@ -207,11 +211,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 			// EstablishRouteMessageは_pingRecvExpireに影響を与えないのでここで値を更新
 			_pingRecvExpire = DateTime.Now + MCRManager.MaxPingInterval;
 
-			if (!_antiReplay.Check (seq)) {
-				Console.WriteLine ("MCRSocket Drop seq={0}", seq);
-				return;
-			}
-			if (payload is MCRManager.PingMessage)
+			if (!_antiReplay.Check (seq) || payload is MCRManager.PingMessage)
 				return;
 
 			if (payload is MCRManager.InterTerminalPayload) {
@@ -232,10 +232,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 				return;
 			}
 
-			if (_nextPingTime < DateTime.Now) {
+			if (_nextPingTime < DateTime.Now)
 				SendTo (MCRManager.PingMessage.Instance, null);
-				Console.WriteLine ("S: Send Ping...");
-			}
 		}
 
 		#endregion
