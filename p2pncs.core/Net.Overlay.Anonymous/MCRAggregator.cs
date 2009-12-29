@@ -127,10 +127,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 		#region ISocket Members
 
-		public ISocket Accept ()
-		{
-			throw new NotSupportedException ();
-		}
+#pragma warning disable 67
+		public event EventHandler<AcceptingEventHandler> Accepting;
+		public event EventHandler<AcceptedEventHandler> Accepted;
+#pragma warning restore 67
 
 		public void Bind (EndPoint localEP)
 		{

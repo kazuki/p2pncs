@@ -20,25 +20,38 @@ using System.Net;
 
 namespace p2pncs.Net
 {
-	public interface ISocket : IDisposable
+	public class AcceptingEventHandler : EventArgs
 	{
-		event EventHandler<AcceptingEventHandler> Accepting;
-		event EventHandler<AcceptedEventHandler> Accepted;
+		EndPoint _remoteEP;
+		object _aux;
+		bool _accept = false;
 
-		void Bind (EndPoint localEP);
+		public AcceptingEventHandler (EndPoint remoteEP, object aux)
+		{
+			_remoteEP = remoteEP;
+			_aux = aux;
+		}
 
-		void Connect (EndPoint remoteEP);
+		public EndPoint RemoteEndPoint {
+			get { return _remoteEP; }
+		}
 
-		void Send (object message);
+		public object AuxiliaryInfo {
+			get { return _aux; }
+		}
 
-		void SendTo (object message, EndPoint remoteEP);
+		public bool IsAccepted {
+			get { return _accept; }
+		}
 
-		EventHandlers<Type, ReceivedEventArgs> Received { get; }
+		public void Accept ()
+		{
+			_accept = true;
+		}
 
-		void Close ();
-
-		EndPoint LocalEndPoint { get; }
-
-		EndPoint RemoteEndPoint { get; }
+		public void Reject ()
+		{
+			_accept = false;
+		}
 	}
 }

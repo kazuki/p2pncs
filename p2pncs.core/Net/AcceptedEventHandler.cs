@@ -16,29 +16,26 @@
  */
 
 using System;
-using System.Net;
 
 namespace p2pncs.Net
 {
-	public interface ISocket : IDisposable
+	public class AcceptedEventHandler : EventArgs
 	{
-		event EventHandler<AcceptingEventHandler> Accepting;
-		event EventHandler<AcceptedEventHandler> Accepted;
+		ISocket _sock;
+		object _aux;
 
-		void Bind (EndPoint localEP);
+		public AcceptedEventHandler (ISocket sock, object aux)
+		{
+			_sock = sock;
+			_aux = aux;
+		}
 
-		void Connect (EndPoint remoteEP);
+		public ISocket Socket {
+			get { return _sock; }
+		}
 
-		void Send (object message);
-
-		void SendTo (object message, EndPoint remoteEP);
-
-		EventHandlers<Type, ReceivedEventArgs> Received { get; }
-
-		void Close ();
-
-		EndPoint LocalEndPoint { get; }
-
-		EndPoint RemoteEndPoint { get; }
+		public object AuxiliaryInfo {
+			get { return _aux; }
+		}
 	}
 }
