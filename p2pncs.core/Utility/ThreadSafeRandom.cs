@@ -31,6 +31,16 @@ namespace p2pncs.Utility
 			}
 		}
 
+		public static ulong NextUInt64 ()
+		{
+			uint x, y;
+			lock (_rng) {
+				x = _rng.NextUInt32 ();
+				y = _rng.NextUInt32 ();
+			}
+			return (((ulong)x) << 32) | y;
+		}
+
 		public static int Next ()
 		{
 			lock (_rng) {

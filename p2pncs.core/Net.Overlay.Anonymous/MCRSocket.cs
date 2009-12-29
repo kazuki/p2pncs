@@ -21,12 +21,13 @@ using System.Net;
 using System.Threading;
 using openCrypto.EllipticCurve;
 using p2pncs.Security.Cryptography;
+using p2pncs.Utility;
 
 namespace p2pncs.Net.Overlay.Anonymous
 {
 	public class MCRSocket : ISocket, MCRManager.IRouteInfo
 	{
-		int _seq = -1;
+		int _seq = 0;
 		MCRManager _mgr;
 		bool _binding = false, _binded = false, _active = true, _reliableMode = true;
 		MCREndPoint _firstHop;
@@ -36,6 +37,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 		MCREndPoint _localEP = null;
 		DateTime _nextPingTime = DateTime.MaxValue;
 		DateTime _pingRecvExpire = DateTime.MaxValue;
+		AntiReplayWindow _antiReplay = new AntiReplayWindow (MCRManager.AntiReplayWindowSize);
 
 		public event EventHandler Binded;
 		public event EventHandler Disconnected;
@@ -99,16 +101,28 @@ namespace p2pncs.Net.Overlay.Anonymous
 		/// <param name="remoteEP">nullを指定した場合、MCR終端に配送する</param>
 		public void SendTo (object message, EndPoint remoteEP)
 		{
+			SendTo (message, ThreadSafeRandom.NextUInt64 (), remoteEP, null);
+		}
+
+		/// <param name="remoteEP">nullを指定した場合、MCR終端に配送する</param>
+		internal void SendTo (object message, ulong id, EndPoint remoteEP, MCREndPoint[] srcEP)
+		{
 			if (message == null)
 				throw new ArgumentNullException ();
-			MCREndPoint mcrRemoteEP = remoteEP as MCREndPoint;
-			if (remoteEP != null && mcrRemoteEP == null)
+			MCREndPoint[] mcrRemoteEPs = null;
+			if (remoteEP is MCREndPoint)
+				mcrRemoteEPs = new MCREndPoint[] {(MCREndPoint)remoteEP};
+			else if (remoteEP is MCRAggregatedEndPoint)
+				mcrRemoteEPs = ((MCRAggregatedEndPoint)remoteEP).EndPoints;
+			if (remoteEP != null && mcrRemoteEPs == null)
 				throw new ArgumentException ();
+			if (srcEP == null || srcEP.Length == 0)
+				srcEP = new MCREndPoint[] {_localEP};
 			bool forceReliableMode = (message is MCRManager.PingMessage);
 			
 			uint seq = (uint)Interlocked.Increment (ref _seq);
-			if (mcrRemoteEP != null)
-				message = new MCRManager.InterTerminalRequestMessage (mcrRemoteEP, _localEP, message);
+			if (mcrRemoteEPs != null)
+				message = new MCRManager.InterTerminalRequestMessage (mcrRemoteEPs, srcEP, message, id);
 			byte[] payload = MCRManager.CipherUtility.CreateRoutedPayload (_relayKeys, seq, message, MCRManager.FixedMessageSize);
 			message = new MCRManager.RoutedMessage (_firstHop.Label, payload);
 			_nextPingTime = DateTime.Now + MCRManager.PingInterval;
@@ -193,17 +207,21 @@ namespace p2pncs.Net.Overlay.Anonymous
 			// EstablishRouteMessageは_pingRecvExpireに影響を与えないのでここで値を更新
 			_pingRecvExpire = DateTime.Now + MCRManager.MaxPingInterval;
 
-			if (payload is MCRManager.InterTerminalPayload) {
-				MCRManager.InterTerminalPayload itp = payload as MCRManager.InterTerminalPayload;
-				Received.Invoke (itp.Payload.GetType (), this, new MCRReceivedEventArgs (itp.Payload, itp.SrcEndPoints, isReliableMode));
+			if (!_antiReplay.Check (seq)) {
+				Console.WriteLine ("MCRSocket Drop seq={0}", seq);
 				return;
 			}
-
 			if (payload is MCRManager.PingMessage)
 				return;
 
+			if (payload is MCRManager.InterTerminalPayload) {
+				MCRManager.InterTerminalPayload itp = payload as MCRManager.InterTerminalPayload;
+				Received.Invoke (itp.Payload.GetType (), this, new MCRReceivedEventArgs (itp.Payload, itp.ID, itp.SrcEndPoints, isReliableMode));
+				return;
+			}
+
 			try {
-				Received.Invoke (payload.GetType (), this, new MCRReceivedEventArgs (payload, isReliableMode));
+				Received.Invoke (payload.GetType (), this, new MCRReceivedEventArgs (payload, 0, isReliableMode));
 			} catch {}
 		}
 

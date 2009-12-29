@@ -116,7 +116,9 @@
     <Compile Include="Threading\ReaderWriterLockWrapper.cs" />
     <Compile Include="Threading\ThreadTraceInfo.cs" />
     <Compile Include="Threading\ThreadTracer.cs" />
+    <Compile Include="Utility\AntiReplayWindow.cs" />
     <Compile Include="Utility\ArrayExtensions.cs" />
+    <Compile Include="Utility\DuplicationChecker.cs" />
     <Compile Include="Utility\LzmaUtility.cs" />
     <Compile Include="Utility\MersenneTwister.cs" />
     <Compile Include="Utility\SerializeHelper.cs" />

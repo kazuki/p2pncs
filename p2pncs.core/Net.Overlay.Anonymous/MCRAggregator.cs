@@ -33,6 +33,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 		RelayNodeSelectorDelegate _selector;
 		List<MCRSocket> _sockets;
 		MCRAggregatedEndPoint _localEP = null;
+		EventHandlers<Type, ReceivedEventArgs> _received = new EventHandlers<Type,ReceivedEventArgs> ();
+		DuplicationChecker<ulong> _dupChecker = new DuplicationChecker<ulong> (MCRManager.DuplicationCheckSize);
 		bool _checking = false;
 
 		public MCRAggregator (MCRManager mgr, int minRelays, int maxRelays, int numOfRoutes, IntervalInterrupter mcrTimeoutCheck, IntervalInterrupter routeCheckTimer, RelayNodeSelectorDelegate selector)
@@ -74,6 +76,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					MCRSocket sock = new MCRSocket (_mgr, true);
 					sock.Binded += MCRSocket_Binded;
 					sock.Disconnected += MCRSocket_Disconnected;
+					sock.Received.AddUnknownKeyHandler (MCRSocket_Received);
 					lock (_sockets) {
 						_sockets.Add (sock);
 					}
@@ -112,6 +115,16 @@ namespace p2pncs.Net.Overlay.Anonymous
 				CheckRoutes ();
 			}
 		}
+
+		void MCRSocket_Received (object sender, ReceivedEventArgs e)
+		{
+			MCRReceivedEventArgs e2 = (MCRReceivedEventArgs)e;
+			if (!_dupChecker.Check (e2.ID)) {
+				Console.WriteLine ("Aggregator Drop id={0}", e2.ID);
+				return;
+			}
+			_received.Invoke (e2.Message.GetType (), this, e2);
+		}
 		#endregion
 
 		#region ISocket Members
@@ -138,11 +151,24 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 		public void SendTo (object message, EndPoint remoteEP)
 		{
-			throw new NotImplementedException ();
+			if (!(remoteEP is MCREndPoint || remoteEP is MCRAggregatedEndPoint))
+				throw new ArgumentException ();
+			if (_localEP == null)
+				throw new System.Net.Sockets.SocketException ();
+
+			List<MCRSocket> sockets;
+			lock (_sockets) {
+				sockets = new List<MCRSocket> (_sockets);
+			}
+			ulong id = ThreadSafeRandom.NextUInt64 ();
+			Console.WriteLine ("Send! ID={0}", id);
+			for (int i = 0; i < sockets.Count; i ++)
+				if (sockets[i].IsBinded)
+					sockets[i].SendTo (message, id, remoteEP, _localEP.EndPoints);
 		}
 
 		public EventHandlers<Type, ReceivedEventArgs> Received {
-			get { throw new NotImplementedException (); }
+			get { return _received; }
 		}
 
 		public void Close ()

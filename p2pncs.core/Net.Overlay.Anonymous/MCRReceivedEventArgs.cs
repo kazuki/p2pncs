@@ -21,17 +21,24 @@ namespace p2pncs.Net.Overlay.Anonymous
 	{
 		bool _reliableMode;
 		MCREndPoint[] _srcEPs;
+		ulong _id;
 
-		public MCRReceivedEventArgs (object msg, bool reliableMode) : base (msg, null)
+		public MCRReceivedEventArgs (object msg, ulong id, bool reliableMode) : base (msg, null)
 		{
+			_id = id;
 			_srcEPs = null;
 			_reliableMode = reliableMode;
 		}
 
-		public MCRReceivedEventArgs (object msg, MCREndPoint[] srcEPs, bool reliableMode) : base (msg, srcEPs[0])
+		public MCRReceivedEventArgs (object msg, ulong id, MCREndPoint[] srcEPs, bool reliableMode) : base (msg, srcEPs[0])
 		{
+			_id = id;
 			_srcEPs = srcEPs;
 			_reliableMode = reliableMode;
+		}
+
+		public ulong ID {
+			get { return _id; }
 		}
 
 		public MCREndPoint[] SrcEndPoints {

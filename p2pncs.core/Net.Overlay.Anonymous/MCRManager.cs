@@ -43,6 +43,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 		EventHandlers<Type, MCRTerminalNodeReceivedEventArgs> _received = new EventHandlers<Type, MCRTerminalNodeReceivedEventArgs> ();
 		internal readonly static SymmetricKeyOption DefaultSymmetricKeyOption = new SymmetricKeyOption ();
 		internal const int FixedMessageSize = 512; /// TODO:
+		internal const int AntiReplayWindowSize = 128;
+		internal const int DuplicationCheckSize = 128;
 		internal static readonly TimeSpan PingInterval = TimeSpan.FromMinutes (1);
 		internal static readonly TimeSpan MaxPingInterval = PingInterval + PingInterval;
 		internal static readonly string ACK = "ACK";
@@ -225,7 +227,13 @@ namespace p2pncs.Net.Overlay.Anonymous
 			}
 			if (e != null)
 				_sock.RespondToInquiry (e, ACK);
-			InterTerminalPayload itp = new InterTerminalPayload (msg.SrcEndPoints, msg.Payload);
+
+			if (!routeInfo.DuplicationChecker.Check (msg.ID)) {
+				Console.WriteLine ("Terminal Drop#2 id={0}", msg.ID);
+				return;
+			}
+
+			InterTerminalPayload itp = new InterTerminalPayload (msg.SrcEndPoints, msg.Payload, msg.ID);
 			routeInfo.Send (itp, e != null);
 		}
 		#endregion
@@ -398,11 +406,13 @@ namespace p2pncs.Net.Overlay.Anonymous
 		sealed class TerminalRouteInfo : IRouteInfo
 		{
 			MCRManager _mgr;
-			int _seq = -1;
+			int _seq = 0;
 			SymmetricKey _key;
 			MCREndPoint _prev;
 			DateTime _nextPingTime = DateTime.Now + PingInterval;
 			DateTime _pingRecvExpire = DateTime.Now + MaxPingInterval;
+			AntiReplayWindow _antiReplay = new AntiReplayWindow (AntiReplayWindowSize);
+			DuplicationChecker<ulong> _dupChecker = new DuplicationChecker<ulong> (DuplicationCheckSize);
 
 			public TerminalRouteInfo (MCRManager mgr, SymmetricKey key, MCREndPoint prev)
 			{
@@ -434,21 +444,34 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public RouteLabel Label { get; set; }
 
+			public DuplicationChecker<ulong> DuplicationChecker {
+				get { return _dupChecker; }
+			}
+
 			#region IRouteInfo Members
 
 			public void Received (IInquirySocket sock, MCREndPoint ep, RoutedMessage msg, bool isReliableMode)
 			{
 				uint seq;
 				object payload = CipherUtility.DecryptRoutedPayload (_key, out seq, msg.Payload);
-				InterTerminalRequestMessage interTermReqMsg = payload as InterTerminalRequestMessage;
 				_pingRecvExpire = DateTime.Now + MaxPingInterval;
+				if (!_antiReplay.Check (seq)) {
+					Console.WriteLine ("Terminal Drop seq={0}", seq);
+					return;
+				}
+
+				InterTerminalRequestMessage interTermReqMsg = payload as InterTerminalRequestMessage;
 				if (interTermReqMsg == null) {
 					TerminalNodeReceivedEventArgs args = new TerminalNodeReceivedEventArgs (this, payload);
 					_mgr.RaiseReceivedEvent (payload.GetType (), args);
 				} else {
+					if (!_dupChecker.Check (interTermReqMsg.ID)) {
+						Console.WriteLine ("Terminal Drop#1 id={0}", interTermReqMsg.ID);
+						return;
+					}
 					for (int i = 0; i < interTermReqMsg.DestEndPoints.Length; i ++) {
 						MCREndPoint mcrEp = interTermReqMsg.DestEndPoints[i];
-						InterTerminalMessage interTermMsg = new InterTerminalMessage (mcrEp.Label, interTermReqMsg.SrcEndPoints, interTermReqMsg.Payload);
+						InterTerminalMessage interTermMsg = new InterTerminalMessage (mcrEp.Label, interTermReqMsg.SrcEndPoints, interTermReqMsg.Payload, interTermReqMsg.ID);
 						if (isReliableMode) {
 							sock.BeginInquire (interTermMsg, mcrEp.EndPoint, delegate (IAsyncResult ar) {
 								object res = sock.EndInquire (ar);
@@ -784,18 +807,17 @@ namespace p2pncs.Net.Overlay.Anonymous
 			MCREndPoint[] _srcEPs;
 
 			[SerializableFieldId (2)]
+			ulong _id;
+
+			[SerializableFieldId (3)]
 			object _payload;
 
-			public InterTerminalRequestMessage (MCREndPoint dstEP, MCREndPoint srcEP, object payload)
-				: this (new MCREndPoint[] {dstEP}, new MCREndPoint[] {srcEP}, payload)
-			{
-			}
-
-			public InterTerminalRequestMessage (MCREndPoint[] dstEPs, MCREndPoint[] srcEPs, object payload)
+			public InterTerminalRequestMessage (MCREndPoint[] dstEPs, MCREndPoint[] srcEPs, object payload, ulong id)
 			{
 				_dstEPs = dstEPs;
 				_srcEPs = srcEPs;
 				_payload = payload;
+				_id = id;
 			}
 
 			public MCREndPoint[] DestEndPoints {
@@ -809,6 +831,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 			public object Payload {
 				get { return _payload; }
 			}
+
+			public ulong ID {
+				get { return _id; }
+			}
 		}
 
 		[SerializableTypeId (0x404)]
@@ -821,13 +847,17 @@ namespace p2pncs.Net.Overlay.Anonymous
 			MCREndPoint[] _srcEPs;
 
 			[SerializableFieldId (2)]
+			ulong _id;
+
+			[SerializableFieldId (3)]
 			object _payload;
 
-			public InterTerminalMessage (RouteLabel label, MCREndPoint[] srcEPs, object payload)
+			public InterTerminalMessage (RouteLabel label, MCREndPoint[] srcEPs, object payload, ulong id)
 			{
 				_label = label;
 				_srcEPs = srcEPs;
 				_payload = payload;
+				_id = id;
 			}
 
 			public RouteLabel Label {
@@ -841,6 +871,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 			public object Payload {
 				get { return _payload; }
 			}
+
+			public ulong ID {
+				get { return _id; }
+			}
 		}
 
 		[SerializableTypeId (0x405)]
@@ -850,12 +884,16 @@ namespace p2pncs.Net.Overlay.Anonymous
 			MCREndPoint[] _srcEPs;
 
 			[SerializableFieldId (1)]
+			ulong _id;
+
+			[SerializableFieldId (2)]
 			object _payload;
 
-			public InterTerminalPayload (MCREndPoint[] srcEPs, object payload)
+			public InterTerminalPayload (MCREndPoint[] srcEPs, object payload, ulong id)
 			{
 				_srcEPs = srcEPs;
 				_payload = payload;
+				_id = id;
 			}
 
 			public MCREndPoint[] SrcEndPoints {
@@ -864,6 +902,10 @@ namespace p2pncs.Net.Overlay.Anonymous
 
 			public object Payload {
 				get { return _payload; }
+			}
+
+			public ulong ID {
+				get { return _id; }
 			}
 		}
 
