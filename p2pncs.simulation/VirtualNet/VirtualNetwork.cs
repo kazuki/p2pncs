@@ -113,9 +113,7 @@ namespace p2pncs.Simulation.VirtualNet
 
 			while (_active) {
 				_invokeStartHandles[idx].WaitOne ();
-				if (!_active) return;
-
-				while (true) {
+				while (_active) {
 					int i = Interlocked.Increment (ref _dgramListIndex);
 					if (i >= _dgramList.Count)
 						break;
