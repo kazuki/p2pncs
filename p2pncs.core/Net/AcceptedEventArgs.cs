@@ -19,12 +19,12 @@ using System;
 
 namespace p2pncs.Net
 {
-	public class AcceptedEventHandler : EventArgs
+	public class AcceptedEventArgs : EventArgs
 	{
 		ISocket _sock;
 		object _aux;
 
-		public AcceptedEventHandler (ISocket sock, object aux)
+		public AcceptedEventArgs (ISocket sock, object aux)
 		{
 			_sock = sock;
 			_aux = aux;

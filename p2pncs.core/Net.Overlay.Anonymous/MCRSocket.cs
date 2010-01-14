@@ -53,8 +53,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 		#region ISocket Members
 
 #pragma warning disable 67
-		public event EventHandler<AcceptingEventHandler> Accepting;
-		public event EventHandler<AcceptedEventHandler> Accepted;
+		public event EventHandler<AcceptingEventArgs> Accepting;
+		public event EventHandler<AcceptedEventArgs> Accepted;
 #pragma warning restore 67
 
 		public void Bind (EndPoint localEP)

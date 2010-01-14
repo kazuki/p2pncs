@@ -25,7 +25,7 @@ namespace p2pncs.Net
 		void Bind (EndPoint bindEP);
 		void ListenStart ();
 
-		void Register (Type firstMessageType, EventHandler<AcceptedEventHandler> handler);
+		void Register (Type firstMessageType, EventHandler<AcceptedEventArgs> handler);
 		void Unregister (Type firstMessageType);
 
 		IAsyncResult BeginConnect (EndPoint remoteEP, AsyncCallback callback, object state);

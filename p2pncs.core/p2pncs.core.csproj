@@ -91,8 +91,8 @@
     <Compile Include="Net.Overlay\RoutingResult.cs" />
     <Compile Include="Net.Overlay\SimpleIterativeRouter.cs" />
     <Compile Include="Net.Overlay\SimpleRoutingAlgorithm.cs" />
-    <Compile Include="Net\AcceptedEventHandler.cs" />
-    <Compile Include="Net\AcceptingEventHandler.cs" />
+    <Compile Include="Net\AcceptedEventArgs.cs" />
+    <Compile Include="Net\AcceptingEventArgs.cs" />
     <Compile Include="Net\IConnectionDispatcher.cs" />
     <Compile Include="Net\IInquirySocket.cs" />
     <Compile Include="Net\InquiredEventArgs.cs" />

@@ -22,8 +22,8 @@ namespace p2pncs.Net
 {
 	public interface ISocket : IDisposable
 	{
-		event EventHandler<AcceptingEventHandler> Accepting;
-		event EventHandler<AcceptedEventHandler> Accepted;
+		event EventHandler<AcceptingEventArgs> Accepting;
+		event EventHandler<AcceptedEventArgs> Accepted;
 
 		void Bind (EndPoint localEP);
 

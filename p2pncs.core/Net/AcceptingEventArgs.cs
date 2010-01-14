@@ -20,13 +20,13 @@ using System.Net;
 
 namespace p2pncs.Net
 {
-	public class AcceptingEventHandler : EventArgs
+	public class AcceptingEventArgs : EventArgs
 	{
 		EndPoint _remoteEP;
 		object _aux;
 		bool _accept = false;
 
-		public AcceptingEventHandler (EndPoint remoteEP, object aux)
+		public AcceptingEventArgs (EndPoint remoteEP, object aux)
 		{
 			_remoteEP = remoteEP;
 			_aux = aux;
