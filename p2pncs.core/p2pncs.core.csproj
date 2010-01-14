@@ -93,6 +93,7 @@
     <Compile Include="Net.Overlay\SimpleRoutingAlgorithm.cs" />
     <Compile Include="Net\AcceptedEventHandler.cs" />
     <Compile Include="Net\AcceptingEventHandler.cs" />
+    <Compile Include="Net\IConnectionDispatcher.cs" />
     <Compile Include="Net\IInquirySocket.cs" />
     <Compile Include="Net\InquiredEventArgs.cs" />
     <Compile Include="Net\InquirySocket.cs" />

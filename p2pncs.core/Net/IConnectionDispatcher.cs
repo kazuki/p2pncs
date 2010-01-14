@@ -16,24 +16,19 @@
  */
 
 using System;
-using System.Collections.Generic;
-using System.Text;
 using System.Net;
-using System.Net.Sockets;
 
 namespace p2pncs.Net
 {
-	public interface ITcpListener : IDisposable
+	public interface IConnectionDispatcher : IDisposable
 	{
-		void Bind (IPEndPoint bindEP);
+		void Bind (EndPoint bindEP);
 		void ListenStart ();
-		void RegisterAcceptHandler (Type firstMessageType, EventHandler<TcpListenerAcceptedEventArgs> handler);
-		void UnregisterAcceptHandler (Type firstMessageType);
 
-		void SendMessage (Socket sock, object msg);
-		object ReceiveMessage (Socket sock, int max_size);
+		void Register (Type firstMessageType, EventHandler<AcceptedEventHandler> handler);
+		void Unregister (Type firstMessageType);
 
-		long ReceivedBytes { get; }
-		long SentBytes { get; }
+		IAsyncResult BeginConnect (EndPoint remoteEP, AsyncCallback callback, object state);
+		ISocket EndConnect (IAsyncResult ar);
 	}
 }
