@@ -104,6 +104,7 @@
     <Compile Include="Net\ReceivedEventArgs.cs" />
     <Compile Include="Net\RFC2988BasedRTOCalculator.cs" />
     <Compile Include="Net\SimplePublicIPAddressVotingBox.cs" />
+    <Compile Include="Net\TcpConnectionDispatcher.cs" />
     <Compile Include="Net\UdpSocket.cs" />
     <Compile Include="Security.Cryptography\ECKeyPairExtensions.cs" />
     <Compile Include="Security.Cryptography\IHashComputable.cs" />
