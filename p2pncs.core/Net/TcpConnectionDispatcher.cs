@@ -31,8 +31,7 @@ namespace p2pncs.Net
 		Socket _listener;
 		Thread _recvThread;
 		long _recvBytes = 0, _sentBytes = 0;
-		ManualResetEvent _done = new ManualResetEvent (false);
-		object _lock = new object (); // _recvWaits, _sockMap
+		object _lock = new object (); // _recvWaits, _sockMap用のロックオブジェクト
 		List<Socket> _recvWaits = new List<Socket> ();
 		Dictionary<Socket, TcpSocket> _sockMap = new Dictionary<Socket, TcpSocket> ();
 		const int DefaultAllocSize = 1024 * 64; // 64KB
@@ -89,10 +88,7 @@ namespace p2pncs.Net
 			Socket raw_sock = info.EndConnect ();
 			TcpSocket sock = new TcpSocket (this, raw_sock);
 			sock.IsFirstMessage = false;
-			lock (_lock) {
-				_recvWaits.Add (raw_sock);
-				_sockMap.Add (raw_sock, sock);
-			}
+			AddSocket (sock);
 			return sock;
 		}
 
@@ -112,10 +108,7 @@ namespace p2pncs.Net
 						try {
 							if (list[i] == _listener) {
 								Socket client = _listener.Accept ();
-								lock (_lock) {
-									_recvWaits.Add (client);
-									_sockMap.Add (client, new TcpSocket (this, client));
-								}
+								AddSocket (new TcpSocket (this, client));
 							} else {
 								TcpSocket info;
 								lock (_lock) {
@@ -144,8 +137,11 @@ namespace p2pncs.Net
 											lock (_handlers) {
 												handler = _handlers[msg.GetType ()];
 											}
+											RemoveSocket (info.Socket);
 											ThreadTracer.QueueToThreadPool (delegate (object o) {
 												handler (this, new AcceptedEventArgs (info, msg));
+												if (info.IsActive)
+													AddSocket (info);
 											}, "TCP: Handling FirstMessage (" + msg.GetType ().ToString () + ")");
 										} else {
 											info.ReceiveMessage (msg);
@@ -189,6 +185,14 @@ namespace p2pncs.Net
 			}
 		}
 
+		void AddSocket (TcpSocket sock)
+		{
+			lock (_lock) {
+				_sockMap.Add (sock.Socket, sock);
+				_recvWaits.Add (sock.Socket);
+			}
+		}
+
 		void RemoveSocket (Socket sock)
 		{
 			lock (_lock) {
@@ -221,6 +225,10 @@ namespace p2pncs.Net
 				ThreadTracer.QueueToThreadPool (delegate (object o) {
 					_received.Invoke (type, this, new ReceivedEventArgs (msg, null));
 				}, "TCP: Handling " + type.ToString ());
+			}
+
+			public bool IsActive {
+				get { return _active; }
 			}
 
 			#region ISocket Members
