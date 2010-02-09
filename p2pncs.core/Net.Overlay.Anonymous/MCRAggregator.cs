@@ -37,6 +37,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 		DuplicationChecker<ulong> _dupChecker = new DuplicationChecker<ulong> (MCRManager.DuplicationCheckSize);
 		bool _checking = false;
 
+		public event EventHandler ChangedActiveRoutes;
+
 		public MCRAggregator (MCRManager mgr, int minRelays, int maxRelays, int numOfRoutes, IntervalInterrupter mcrTimeoutCheck, IntervalInterrupter routeCheckTimer, RelayNodeSelectorDelegate selector)
 		{
 			if (numOfRoutes <= 0 || (minRelays <= 0 || maxRelays <= 0 || minRelays > maxRelays))
@@ -93,12 +95,9 @@ namespace p2pncs.Net.Overlay.Anonymous
 		{
 			Interlocked.Increment (ref _active);
 			lock (_sockets) {
-				List<MCREndPoint> eps = new List<MCREndPoint> (_sockets.Count);
-				for (int i = 0; i < _sockets.Count; i ++)
-					if (_sockets[i].IsBinded)
-						eps.Add ((MCREndPoint)_sockets[i].LocalEndPoint);
-				_localEP = new MCRAggregatedEndPoint (eps.ToArray ());
+				UpdateLocalEndPoints ();
 			}
+			RaiseChangedActiveRoutesEvent ();
 		}
 
 		void MCRSocket_Disconnected (object sender, EventArgs e)
@@ -107,6 +106,8 @@ namespace p2pncs.Net.Overlay.Anonymous
 			bool removed;
 			lock (_sockets) {
 				removed = _sockets.Remove (sock);
+				if (removed)
+					UpdateLocalEndPoints ();
 			}
 			sock.Dispose ();
 			if (removed) {
@@ -114,6 +115,7 @@ namespace p2pncs.Net.Overlay.Anonymous
 					Interlocked.Decrement (ref _active);
 				CheckRoutes ();
 			}
+			RaiseChangedActiveRoutesEvent ();
 		}
 
 		void MCRSocket_Received (object sender, ReceivedEventArgs e)
@@ -203,6 +205,26 @@ namespace p2pncs.Net.Overlay.Anonymous
 			Close ();
 		}
 
+		#endregion
+
+		#region Misc
+		void RaiseChangedActiveRoutesEvent ()
+		{
+			if (ChangedActiveRoutes == null)
+				return;
+			try {
+				ChangedActiveRoutes (this, EventArgs.Empty);
+			} catch {}
+		}
+
+		void UpdateLocalEndPoints ()
+		{
+			List<MCREndPoint> eps = new List<MCREndPoint> (_sockets.Count);
+			for (int i = 0; i < _sockets.Count; i++)
+				if (_sockets[i].IsBinded)
+					eps.Add ((MCREndPoint)_sockets[i].LocalEndPoint);
+			_localEP = new MCRAggregatedEndPoint (eps.ToArray ());
+		}
 		#endregion
 
 		public delegate NodeHandle[] RelayNodeSelectorDelegate (int maxNum);

@@ -97,6 +97,16 @@ namespace p2pncs.debug
 					tmp += e2.SrcEndPoints[i].ToString () + "\r\n";
 				Console.WriteLine ("AG1: {0} received from {1} (id={2})", e.Message, tmp, e2.ID);
 			});
+			EventHandler changedRoutesHandler = delegate (object sender, EventArgs e) {
+				MCRAggregator mcrAg = (MCRAggregator)sender;
+				MCRAggregatedEndPoint mcrAgLocalEP = (MCRAggregatedEndPoint)mcrAg.LocalEndPoint;
+				Console.WriteLine ("# Changed MCR-Ag{0}. |BindedEPs|={1}",
+					sender == mcrAg0 ? "0" : "1", mcrAgLocalEP.EndPoints.Length);
+			};
+			mcrAg0.ChangedActiveRoutes += changedRoutesHandler;
+			mcrAg1.ChangedActiveRoutes += changedRoutesHandler;
+			while (mcrAg0.LocalEndPoint == null || mcrAg1.LocalEndPoint == null)
+				Thread.Sleep (500);
 
 			_churnInt.AddInterruption (delegate () {
 				lock (_list) {
@@ -116,8 +126,8 @@ namespace p2pncs.debug
 					_list.RemoveAt (idx);
 					_eps.RemoveAt (idx);
 					AddNode ();
-					GC.Collect ();
 				}
+				GC.Collect ();
 			});
 			_churnInt.Start ();
 
