@@ -20,6 +20,7 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using p2pncs.Threading;
 
 namespace p2pncs.Net
 {
@@ -45,7 +46,7 @@ namespace p2pncs.Net
 			_sock = new Socket (addressFamily, SocketType.Dgram, ProtocolType.Udp);
 			_header_size = (addressFamily == AddressFamily.InterNetwork ? 4 : 16) + 2;
 			_max_datagram_size = ConstantParameters.MaxUdpDatagramSize - _header_size;
-			_recvThread = new Thread (ReceiveThread);
+			_recvThread = ThreadTracer.CreateThread (ReceiveThread, "UdpSocket.ReceiveThread");
 			_recvThread.Start ();
 		}
 		public static UdpSocket CreateIPv4 ()
