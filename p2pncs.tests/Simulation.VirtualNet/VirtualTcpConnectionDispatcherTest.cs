@@ -56,11 +56,12 @@ namespace p2pncs.tests.Simulation.VirtualNet
 			const string HelloMessage = "Hello";
 			const string SimpleTest0 = "SimpleTest0";
 			const string SimpleTest1 = "SimpleTest1";
+			const int NumOfMassMessages = 1000;
 
 			using (VirtualNetwork vnet = CreateVirtualNetwork ()) {
 				VirtualTcpConnectionDispatcher[] dispatchers;
 				IPEndPoint[] remoteEPs;
-				CreateNodes (vnet, 3, out dispatchers, out remoteEPs);
+				CreateNodes (vnet, 2, out dispatchers, out remoteEPs);
 				ISocket sock0 = null, sock1 = null;
 				List<string> list0 = new List<string> (), list1 = new List<string> ();
 
@@ -102,6 +103,19 @@ namespace p2pncs.tests.Simulation.VirtualNet
 					Assert.AreEqual (SimpleTest1, list0[0]);
 					Assert.AreEqual (SimpleTest0, list1[0]);
 					list0.Clear (); list1.Clear ();
+
+					// Mass Message Test
+					{
+						ISocket sock = (loop == 0 ? sock0 : sock1);
+						List<string> list = (loop == 0 ? list1 : list0);
+						for (int i = 0; i < NumOfMassMessages; i ++)
+							sock.Send (i.ToString ());
+						while (list.Count < NumOfMassMessages) Thread.Sleep (50);
+						Assert.AreEqual (NumOfMassMessages, list.Count);
+						for (int i = 0; i < NumOfMassMessages; i ++)
+							Assert.AreEqual (i.ToString (), list[i]);
+						list.Clear ();
+					}
 
 					// Close Test
 					if (loop == 0) {
