@@ -22,7 +22,7 @@ using p2pncs.Net;
 
 namespace p2pncs.Simulation.VirtualNet
 {
-	public class VirtualUdpSocket : ISocket
+	public class VirtualUdpSocket : ISocket, VirtualNetwork.ISocketDeliver
 	{
 		VirtualNetwork _vnet;
 		VirtualNetwork.VirtualNetworkNode _vnet_node = null;
@@ -41,16 +41,16 @@ namespace p2pncs.Simulation.VirtualNet
 			_bypassSerialize = bypassSerialize;
 		}
 
-		internal void Deliver (EndPoint remoteEP, object msg)
+		void VirtualNetwork.ISocketDeliver.Deliver (EndPoint remoteEP, object msg)
 		{
 			_received.Invoke (msg.GetType (), this, new ReceivedEventArgs (msg, remoteEP));
 			Interlocked.Increment (ref _recvDgrams);
 		}
 
-		internal void Deliver (EndPoint remoteEP, byte[] buf, int offset, int size)
+		void VirtualNetwork.ISocketDeliver.Deliver (EndPoint remoteEP, byte[] buf, int offset, int size)
 		{
 			object msg = Serializer.Instance.Deserialize (buf, offset, size);
-			Deliver (remoteEP, msg);
+			(this as VirtualNetwork.ISocketDeliver).Deliver (remoteEP, msg);
 			Interlocked.Add (ref _recvBytes, size);
 		}
 
@@ -89,12 +89,12 @@ namespace p2pncs.Simulation.VirtualNet
 			if (remoteEP == null)
 				throw new ArgumentNullException ();
 			if (_bypassSerialize) {
-				_vnet.AddSendQueue (_bindPubEP, remoteEP, message);
+				_vnet.AddSendQueue (_bindPubEP, remoteEP, message, false);
 			} else {
 				byte[] buf = Serializer.Instance.Serialize (message);
 				if (buf.Length > ConstantParameters.MaxUdpDatagramSize)
 					throw new System.Net.Sockets.SocketException ();
-				_vnet.AddSendQueue (_bindPubEP, remoteEP, buf, 0, buf.Length);
+				_vnet.AddSendQueue (_bindPubEP, remoteEP, buf, 0, buf.Length, false);
 				Interlocked.Add (ref _sentBytes, buf.Length);
 			}
 			Interlocked.Increment (ref _sentDgrams);

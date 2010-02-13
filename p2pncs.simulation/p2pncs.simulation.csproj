@@ -47,6 +47,7 @@
     <Compile Include="VirtualNet\LatencyTypes.cs" />
     <Compile Include="VirtualNet\PacketLossType.cs" />
     <Compile Include="VirtualNet\VirtualNetwork.cs" />
+    <Compile Include="VirtualNet\VirtualTcpConnectionDispatcher.cs" />
     <Compile Include="VirtualNet\VirtualUdpSocket.cs" />
   </ItemGroup>
   <ItemGroup>

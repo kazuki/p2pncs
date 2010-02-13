@@ -118,7 +118,7 @@ namespace p2pncs.Simulation.VirtualNet
 					if (i >= _dgramList.Count)
 						break;
 					DatagramInfo dgram = _dgramList[i];
-					if (IsLossPacket (dgram.SourceEndPoint, dgram.DestinationEndPoint))
+					if (!dgram.IsTcp && IsLossPacket (dgram.SourceEndPoint, dgram.DestinationEndPoint))
 						continue;
 					VirtualNetworkNode node;
 					if (!_mapping.TryGetValue (dgram.DestinationEndPoint, out node)) {
@@ -142,13 +142,18 @@ namespace p2pncs.Simulation.VirtualNet
 			}
 		}
 
-		internal VirtualNetworkNode AddVirtualNode (VirtualUdpSocket sock, EndPoint bindEP)
+		internal VirtualNetworkNode AddVirtualNode (ISocketDeliver sock, EndPoint bindEP)
+		{
+			using (_nodeLock.EnterWriteLock ()) {
+				return AddVirtualNodeWithoutLock (sock, bindEP);
+			}
+		}
+
+		VirtualNetworkNode AddVirtualNodeWithoutLock (ISocketDeliver sock, EndPoint bindEP)
 		{
 			VirtualNetworkNode node = new VirtualNetworkNode (sock, bindEP);
-			using (_nodeLock.EnterWriteLock ()) {
-				_mapping[bindEP] = node;
-				_nodes.Add (node);
-			}
+			_mapping[node.BindedPublicEndPoint] = node;
+			_nodes.Add (node);
 			return node;
 		}
 
@@ -157,6 +162,30 @@ namespace p2pncs.Simulation.VirtualNet
 			using (_nodeLock.EnterWriteLock ()) {
 				_mapping.Remove (node.BindedPublicEndPoint);
 				_nodes.Remove (node);
+			}
+		}
+
+		internal VirtualNetworkNode LookupVirtualNode (EndPoint bindEP)
+		{
+			VirtualNetworkNode node;
+			using (_nodeLock.EnterReadLock ()) {
+				_mapping.TryGetValue (bindEP, out node);
+			}
+			return node;
+		}
+
+		internal delegate ISocketDeliver CreateTcpSocketDelegate (VirtualNetworkNode remoteNode);
+		internal VirtualNetworkNode EstablishTcpConnection (EndPoint remoteEP, IPAddress localPubIP, CreateTcpSocketDelegate func)
+		{
+			using (_nodeLock.EnterWriteLock ()) {
+				VirtualNetworkNode remoteNode;
+				if (!_mapping.TryGetValue (remoteEP, out remoteNode))
+					return null;
+				while (true) {
+					IPEndPoint ephemeralEP = new IPEndPoint (localPubIP, ThreadSafeRandom.Next (49152, ushort.MaxValue));
+					if (!_mapping.ContainsKey (ephemeralEP))
+						return AddVirtualNodeWithoutLock (func (remoteNode), ephemeralEP);
+				}
 			}
 		}
 
@@ -170,14 +199,14 @@ namespace p2pncs.Simulation.VirtualNet
 			}
 		}
 
-		internal void AddSendQueue (EndPoint srcEP, EndPoint destEP, byte[] buffer, int offset, int size)
+		internal void AddSendQueue (EndPoint srcEP, EndPoint destEP, byte[] buffer, int offset, int size, bool isTcp)
 		{
-			MessageScheduling (new DatagramInfo (srcEP, destEP, buffer, offset, size));
+			MessageScheduling (new DatagramInfo (srcEP, destEP, buffer, offset, size, isTcp));
 		}
 
-		internal void AddSendQueue (EndPoint srcEP, EndPoint destEP, object msg)
+		internal void AddSendQueue (EndPoint srcEP, EndPoint destEP, object msg, bool isTcp)
 		{
-			MessageScheduling (new DatagramInfo (srcEP, destEP, msg));
+			MessageScheduling (new DatagramInfo (srcEP, destEP, msg, isTcp));
 		}
 
 		public long Packets {
@@ -249,10 +278,10 @@ namespace p2pncs.Simulation.VirtualNet
 		#region Internal Classes
 		internal class VirtualNetworkNode
 		{
-			VirtualUdpSocket _sock;
+			ISocketDeliver _sock;
 			EndPoint _bindEP;
 
-			public VirtualNetworkNode (VirtualUdpSocket sock, EndPoint bindEP)
+			public VirtualNetworkNode (ISocketDeliver sock, EndPoint bindEP)
 			{
 				_sock = sock;
 				_bindEP = bindEP;
@@ -262,7 +291,7 @@ namespace p2pncs.Simulation.VirtualNet
 				get { return _bindEP; }
 			}
 
-			public VirtualUdpSocket Socket {
+			public ISocketDeliver Socket {
 				get { return _sock; }
 			}
 		}
@@ -274,16 +303,18 @@ namespace p2pncs.Simulation.VirtualNet
 			object _msg;
 			DateTime _start;
 			TimeSpan _expectedDelay;
+			bool _isTcp;
 
-			DatagramInfo (EndPoint srcEP, EndPoint destEP)
+			DatagramInfo (EndPoint srcEP, EndPoint destEP, bool isTcp)
 			{
 				_srcEP = srcEP;
 				_destEP = destEP;
 				_start = DateTime.Now;
+				_isTcp = isTcp;
 			}
 
-			public DatagramInfo (EndPoint srcEP, EndPoint destEP, byte[] buffer, int offset, int size)
-				: this (srcEP, destEP)
+			public DatagramInfo (EndPoint srcEP, EndPoint destEP, byte[] buffer, int offset, int size, bool isTcp)
+				: this (srcEP, destEP, isTcp)
 			{
 				if (offset != 0 || size != buffer.Length) {
 					_buffer = new byte[size];
@@ -293,8 +324,8 @@ namespace p2pncs.Simulation.VirtualNet
 				}
 			}
 
-			public DatagramInfo (EndPoint srcEP, EndPoint destEP, object msg)
-				: this (srcEP, destEP)
+			public DatagramInfo (EndPoint srcEP, EndPoint destEP, object msg, bool isTcp)
+				: this (srcEP, destEP, isTcp)
 			{
 				_msg = msg;
 			}
@@ -323,6 +354,16 @@ namespace p2pncs.Simulation.VirtualNet
 				get { return _expectedDelay; }
 				set { _expectedDelay = value;}
 			}
+
+			public bool IsTcp {
+				get { return _isTcp; }
+			}
+		}
+
+		internal interface ISocketDeliver
+		{
+			void Deliver (EndPoint remoteEP, object msg);
+			void Deliver (EndPoint remoteEP, byte[] buf, int offset, int size);
 		}
 		#endregion
 	}

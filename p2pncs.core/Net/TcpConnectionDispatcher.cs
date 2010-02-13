@@ -35,8 +35,8 @@ namespace p2pncs.Net
 		List<Socket> _recvWaits = new List<Socket> ();
 		Dictionary<Socket, TcpSocket> _sockMap = new Dictionary<Socket, TcpSocket> ();
 		const int DefaultAllocSize = 1024 * 64; // 64KB
-		const int MaxFirstMessageSize = MaxMessageSize;
-		const int MaxMessageSize = 1024 * 1024; // 1MB
+		public const int MaxFirstMessageSize = MaxMessageSize;
+		public const int MaxMessageSize = 1024 * 1024; // 1MB
 
 		public TcpConnectionDispatcher ()
 		{
