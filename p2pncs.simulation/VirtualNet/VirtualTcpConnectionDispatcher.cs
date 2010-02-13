@@ -21,6 +21,7 @@ using System.Linq;
 using System.Text;
 using p2pncs.Net;
 using System.Net;
+using System.Net.Sockets;
 using System.Threading;
 using p2pncs.Threading;
 
@@ -124,6 +125,16 @@ namespace p2pncs.Simulation.VirtualNet
 			(this as VirtualNetwork.ISocketDeliver).Deliver (remoteEP, Serializer.Instance.Deserialize (buf, offset, size));
 		}
 
+		void VirtualNetwork.ISocketDeliver.FailedDeliver (EndPoint remoteEP)
+		{
+			AcceptedTcpSocket sock;
+			lock (_acceptedSockets) {
+				_acceptedSockets.TryGetValue (remoteEP, out sock);
+			}
+			if (sock != null)
+				sock.FailedDeliver (remoteEP);
+		}
+
 		#endregion
 
 		#region IDisposable Members
@@ -188,6 +199,7 @@ namespace p2pncs.Simulation.VirtualNet
 			EventHandlers<Type, ReceivedEventArgs> _received = new EventHandlers<Type,ReceivedEventArgs> ();
 			List<SequencedMessage> _recvBuffer = new List<SequencedMessage> ();
 			int _nextRecvSeq = 1, _sendSeq = 0;
+			bool _closed = false;
 
 			public InitiatorTcpSocket (VirtualNetwork vnet, VirtualNetwork.VirtualNetworkNode remoteNode)
 			{
@@ -202,7 +214,7 @@ namespace p2pncs.Simulation.VirtualNet
 
 			public void ClosedByRemoteHost ()
 			{
-				throw new NotImplementedException ();
+				_closed = true;
 			}
 
 			public VirtualNetwork.VirtualNetworkNode LocalNode {
@@ -231,6 +243,8 @@ namespace p2pncs.Simulation.VirtualNet
 
 			public void Send (object message)
 			{
+				if (_closed)
+					throw new SocketException ();
 				_vnet.AddSendQueue (_localNode.BindedPublicEndPoint, _remoteNode.BindedPublicEndPoint, new SequencedMessage (Interlocked.Increment (ref _sendSeq), message), true);
 			}
 
@@ -316,6 +330,11 @@ namespace p2pncs.Simulation.VirtualNet
 				Deliver (remoteEP, Serializer.Instance.Deserialize (buf, offset, size));
 			}
 
+			public void FailedDeliver (EndPoint remoteEP)
+			{
+				ClosedByRemoteHost ();
+			}
+
 			#endregion
 		}
 		class AcceptedTcpSocket : ISocket, VirtualNetwork.ISocketDeliver
@@ -327,6 +346,7 @@ namespace p2pncs.Simulation.VirtualNet
 
 			object _lock = new object ();
 			bool _waitingFirstMessage = true;
+			bool _closed = false;
 
 			int _nextRecvSeq = 1, _sendSeq = 0;
 
@@ -355,6 +375,8 @@ namespace p2pncs.Simulation.VirtualNet
 
 			public void Send (object message)
 			{
+				if (_closed)
+					throw new SocketException ();
 				_dispatcher._vnet.AddSendQueue (_localEP, _remoteEP, new SequencedMessage (Interlocked.Increment (ref _sendSeq), message), true);
 			}
 
@@ -369,7 +391,10 @@ namespace p2pncs.Simulation.VirtualNet
 
 			public void Close ()
 			{
-				throw new NotImplementedException ();
+				_closed = true;
+				lock (_dispatcher._acceptedSockets) {
+					_dispatcher._acceptedSockets.Remove (_remoteEP);
+				}
 			}
 
 			public EndPoint LocalEndPoint {
@@ -386,7 +411,7 @@ namespace p2pncs.Simulation.VirtualNet
 
 			public void Dispose ()
 			{
-				throw new NotImplementedException ();
+				Close ();
 			}
 
 			#endregion
@@ -455,6 +480,11 @@ namespace p2pncs.Simulation.VirtualNet
 			public void Deliver (EndPoint remoteEP, byte[] buf, int offset, int size)
 			{
 				throw new NotSupportedException ();
+			}
+
+			public void FailedDeliver (EndPoint remoteEP)
+			{
+				_closed = true;
 			}
 
 			#endregion

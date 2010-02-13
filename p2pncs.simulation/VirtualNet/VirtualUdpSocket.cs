@@ -54,6 +54,10 @@ namespace p2pncs.Simulation.VirtualNet
 			Interlocked.Add (ref _recvBytes, size);
 		}
 
+		void VirtualNetwork.ISocketDeliver.FailedDeliver (EndPoint remoteEP)
+		{
+		}
+
 		internal VirtualNetwork.VirtualNetworkNode VirtualNodeInfo {
 			get { return _vnet_node; }
 		}

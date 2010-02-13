@@ -123,6 +123,8 @@ namespace p2pncs.Simulation.VirtualNet
 					VirtualNetworkNode node;
 					if (!_mapping.TryGetValue (dgram.DestinationEndPoint, out node)) {
 						Interlocked.Increment (ref _noDestPackets);
+						if (_mapping.TryGetValue (dgram.SourceEndPoint, out node))
+							node.Socket.FailedDeliver (dgram.DestinationEndPoint);
 						continue;
 					}
 
@@ -364,6 +366,7 @@ namespace p2pncs.Simulation.VirtualNet
 		{
 			void Deliver (EndPoint remoteEP, object msg);
 			void Deliver (EndPoint remoteEP, byte[] buf, int offset, int size);
+			void FailedDeliver (EndPoint remoteEP);
 		}
 		#endregion
 	}
